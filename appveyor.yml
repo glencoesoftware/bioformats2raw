@@ -1,0 +1,13 @@
+version: 0.1.0.{build}
+
+build:
+    verbosity: minimal
+
+build_script:
+    - gradlew build
+
+after_test:
+    - gradlew disZip
+
+artifacts:
+    - path: 'build\distributions\*.zip'

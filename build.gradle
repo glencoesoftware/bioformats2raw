@@ -1,0 +1,29 @@
+plugins {
+    id 'application'
+    id 'java'
+}
+
+group = 'com.glencoesoftware'
+version = '0.1.0-SNAPSHOT'
+
+mainClassName = 'com.glencoesoftware.mrxs.Converter'
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+repositories {
+    jcenter()
+    mavenCentral()
+    maven {
+        url 'https://artifacts.openmicroscopy.org/artifactory/repo/'
+    }
+}
+
+dependencies {
+    compile ('ome:bio-formats-tools:6.2.1')
+    compile ('info.picocli:picocli:3.9.6')
+}
+
+applicationDistribution.from("$projectDir") {
+    include 'LICENSE.txt'
+    include 'bin/*'
+}
