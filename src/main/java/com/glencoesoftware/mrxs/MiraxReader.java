@@ -493,7 +493,6 @@ public class MiraxReader extends FormatReader {
             List<TilePointer> resolutionOffsets =
               getOrCreateResolutionOffsets(key);
             resolutionOffsets.add(new TilePointer(i, fileNumber, nextOffset, nextCounter));
-            /* debug */ System.out.println("added resolution offset (i=" + i + ") = "+ resolutionOffsets.get(resolutionOffsets.size() - 1));
             firstLevelOffsets.add(nextOffset);
           }
           nextCounter = indexData.readInt();
@@ -950,8 +949,6 @@ public class MiraxReader extends FormatReader {
         }
       }
     }
-
-    /* debug */ System.out.println("files = " + files);
   }
 
   /**
@@ -983,7 +980,6 @@ public class MiraxReader extends FormatReader {
       tileFile = file;
     }
     tileStream.seek(offset);
-    /* debug */ System.out.println("reading from offset = " + offset + ", file = " + file);
 
     byte[] tile = null;
     int compressedByteCount = (int) (nextOffset - offset);
