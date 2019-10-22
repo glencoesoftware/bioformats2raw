@@ -19,7 +19,7 @@ repositories {
 }
 
 dependencies {
-    compile ('ome:bio-formats-tools:6.2.1')
+    compile ('ome:formats-gpl:6.2.1')
     compile ('info.picocli:picocli:3.9.6')
 }
 
