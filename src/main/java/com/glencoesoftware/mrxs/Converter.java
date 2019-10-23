@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.util.concurrent.Callable;
 
 import loci.common.DebugTools;
+import loci.common.RandomAccessInputStream;
+import loci.common.RandomAccessOutputStream;
 import loci.common.image.IImageScaler;
 import loci.common.image.SimpleImageScaler;
 import loci.common.services.DependencyException;
@@ -14,12 +16,16 @@ import loci.formats.FormatException;
 import loci.formats.FormatTools;
 import loci.formats.IFormatReader;
 import loci.formats.ImageReader;
+import loci.formats.MetadataTools;
 import loci.formats.MissingLibraryException;
+import loci.formats.meta.IMetadata;
 import loci.formats.ome.OMEPyramidStore;
 import loci.formats.out.PyramidOMETiffWriter;
+import loci.formats.out.TiffWriter;
 import loci.formats.services.OMEXMLService;
 import loci.formats.services.OMEXMLServiceImpl;
 import loci.formats.tiff.IFD;
+import loci.formats.tiff.TiffSaver;
 
 import ome.xml.model.primitives.PositiveInteger;
 
@@ -132,14 +138,23 @@ public class Converter implements Callable<Void> {
       // set up extra resolutions to be generated
       // assume first series is the largest resolution
 
-      // TODO: need extra Images if legacy
       OMEPyramidStore meta = (OMEPyramidStore) reader.getMetadataStore();
       int width = meta.getPixelsSizeX(0).getValue();
       int height = meta.getPixelsSizeY(0).getValue();
       for (int i=1; i<=pyramidResolutions; i++) {
         int scale = (int) Math.pow(PYRAMID_SCALE, i);
-        meta.setResolutionSizeX(new PositiveInteger(width / scale), 0, i);
-        meta.setResolutionSizeY(new PositiveInteger(height / scale), 0, i);
+
+        if (legacy) {
+          MetadataTools.populateMetadata(meta, i, null,
+            reader.isLittleEndian(), "XYCZT",
+            FormatTools.getPixelTypeString(reader.getPixelType()),
+            width / scale, height / scale, reader.getSizeZ(),
+            reader.getSizeC(), reader.getSizeT(), reader.getRGBChannelCount());
+        }
+        else {
+          meta.setResolutionSizeX(new PositiveInteger(width / scale), 0, i);
+          meta.setResolutionSizeY(new PositiveInteger(height / scale), 0, i);
+        }
       }
 
       if (legacy) {
@@ -154,8 +169,62 @@ public class Converter implements Callable<Void> {
     }
   }
 
-  public void writeFaasPyramid(IFormatReader reader, OMEPyramidStore meta, String outputFile) {
-    // TODO
+  /**
+   * Convert the data specified by the given initialized reader to
+   * a Bio-Formats 5.9.x-compatible TIFF pyramid with the given
+   * file name.  If the reader does not represent a pyramid,
+   * additional resolutions will be generated as needed.
+   *
+   * @param reader an initialized reader
+   * @param meta metadata store specifying the pyramid resolutions
+   * @param outputFile the path to the output TIFF file
+   */
+  public void writeFaasPyramid(IFormatReader reader, IMetadata meta,
+    String outputFile)
+    throws FormatException, IOException
+  {
+    try (TiffWriter writer = new TiffWriter()) {
+      setupWriter(reader, writer, meta, outputFile);
+
+      int writerSeries = 0;
+      for (int i=0; i<reader.getSeriesCount(); i++) {
+        reader.setSeries(i);
+
+        if (i == 0) {
+          int resolutions = i == 0 ? pyramidResolutions + 1: 1;
+          for (int r=0; r<resolutions; r++) {
+            writer.setSeries(writerSeries);
+            LOGGER.info("writing resolution {} in series {}", r, i);
+            saveResolution(r, reader, writer);
+            writerSeries++;
+          }
+        }
+        else {
+          LOGGER.warn("Writing extra label/macro image #{} not supported", i);
+          // TODO: options here:
+          // 1) try to detect extra images in PyramidTiffReader
+          // 2) write any extra images to separate TIFF files
+          // 3) just log that the extra images were not converted
+        }
+      }
+    }
+
+    RandomAccessInputStream in = null;
+    RandomAccessOutputStream out = null;
+    try {
+      in = new RandomAccessInputStream(outputFile);
+      out = new RandomAccessOutputStream(outputFile);
+      TiffSaver saver = new TiffSaver(out, outputFile);
+      saver.overwriteComment(in, "Faas-mrxs2ometiff");
+    }
+    finally {
+      if (in != null) {
+        in.close();
+      }
+      if (out != null) {
+        out.close();
+      }
+    }
   }
 
   /**
@@ -165,18 +234,15 @@ public class Converter implements Callable<Void> {
    * additional resolutions will be generated as needed.
    *
    * @param reader an initialized reader
+   * @param meta metadata store specifying the pyramid resolutions
    * @param outputFile the path to the output OME-TIFF file
    */
-  public void writeOMEPyramid(IFormatReader reader, OMEPyramidStore meta, String outputFile)
+  public void writeOMEPyramid(IFormatReader reader, OMEPyramidStore meta,
+    String outputFile)
     throws FormatException, IOException
   {
     try (PyramidOMETiffWriter writer = new PyramidOMETiffWriter()) {
-      writer.setBigTiff(true);
-      writer.setMetadataRetrieve(meta);
-      writer.setInterleaved(reader.isInterleaved());
-      writer.setCompression(compression);
-      writer.setWriteSequentially(true);
-      writer.setId(outputFile);
+      setupWriter(reader, writer, meta, outputFile);
 
       for (int i=0; i<reader.getSeriesCount(); i++) {
         reader.setSeries(i);
@@ -185,31 +251,35 @@ public class Converter implements Callable<Void> {
         int resolutions = i == 0 ? pyramidResolutions + 1: 1;
         for (int r=0; r<resolutions; r++) {
           writer.setResolution(r);
-
           LOGGER.info("writing resolution {} in series {}", r, i);
+          saveResolution(r, reader, writer);
+        }
+      }
+    }
+  }
 
-          int scale = (int) Math.pow(PYRAMID_SCALE, r);
-          int xStep = tileWidth / scale;
-          int yStep = tileHeight / scale;
+  public void saveResolution(int resolution, IFormatReader reader,
+    TiffWriter writer)
+    throws FormatException, IOException
+  {
+    int scale = (int) Math.pow(PYRAMID_SCALE, resolution);
+    int xStep = tileWidth / scale;
+    int yStep = tileHeight / scale;
 
-          int sizeX = reader.getSizeX() / scale;
-          int sizeY = reader.getSizeY() / scale;
+    int sizeX = reader.getSizeX() / scale;
+    int sizeY = reader.getSizeY() / scale;
 
-          for (int plane=0; plane<reader.getImageCount(); plane++) {
-            LOGGER.info("writing plane {} of {}", plane, reader.getImageCount());
-            IFD ifd = new IFD();
-            ifd.put(IFD.TILE_WIDTH, xStep);
-            ifd.put(IFD.TILE_LENGTH, yStep);
+    for (int plane=0; plane<reader.getImageCount(); plane++) {
+      LOGGER.info("writing plane {} of {}", plane, reader.getImageCount());
+      IFD ifd = makeIFD(scale);
 
-            for (int yy=0; yy<sizeY; yy+=yStep) {
-              int height = (int) Math.min(yStep, sizeY - yy);
-              for (int xx=0; xx<sizeX; xx+=xStep) {
-                int width = (int) Math.min(xStep, sizeX - xx);
-                byte[] tile = getTile(reader, r, plane, xx, yy, width, height);
-                writer.saveBytes(plane, tile, ifd, xx,  yy, width, height);
-              }
-            }
-          }
+      for (int yy=0; yy<sizeY; yy+=yStep) {
+        int height = (int) Math.min(yStep, sizeY - yy);
+        for (int xx=0; xx<sizeX; xx+=xStep) {
+          int width = (int) Math.min(xStep, sizeX - xx);
+          byte[] tile =
+            getTile(reader, resolution, plane, xx, yy, width, height);
+          writer.saveBytes(plane, tile, ifd, xx,  yy, width, height);
         }
       }
     }
@@ -232,6 +302,25 @@ public class Converter implements Callable<Void> {
       scale, FormatTools.getBytesPerPixel(pixelType),
       reader.isLittleEndian(), FormatTools.isFloatingPoint(pixelType),
       reader.getRGBChannelCount(), reader.isInterleaved());
+  }
+
+  private void setupWriter(IFormatReader reader, TiffWriter writer,
+    IMetadata meta, String outputFile)
+    throws FormatException, IOException
+  {
+    writer.setBigTiff(true);
+    writer.setMetadataRetrieve(meta);
+    writer.setInterleaved(reader.isInterleaved());
+    writer.setCompression(compression);
+    writer.setWriteSequentially(true);
+    writer.setId(outputFile);
+  }
+
+  private IFD makeIFD(int scale) {
+    IFD ifd = new IFD();
+    ifd.put(IFD.TILE_WIDTH, tileWidth / scale);
+    ifd.put(IFD.TILE_LENGTH, tileHeight / scale);
+    return ifd;
   }
 
   public static void main(String[] args) {
