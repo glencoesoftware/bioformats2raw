@@ -136,7 +136,7 @@ public class Converter implements Callable<Void> {
       OMEPyramidStore meta = (OMEPyramidStore) reader.getMetadataStore();
       int width = meta.getPixelsSizeX(0).getValue();
       int height = meta.getPixelsSizeY(0).getValue();
-      for (int i=1; i<pyramidResolutions; i++) {
+      for (int i=1; i<=pyramidResolutions; i++) {
         int scale = (int) Math.pow(PYRAMID_SCALE, i);
         meta.setResolutionSizeX(new PositiveInteger(width / scale), 0, i);
         meta.setResolutionSizeY(new PositiveInteger(height / scale), 0, i);
