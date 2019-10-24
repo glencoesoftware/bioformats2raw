@@ -20,6 +20,7 @@ import loci.formats.MetadataTools;
 import loci.formats.MissingLibraryException;
 import loci.formats.meta.IMetadata;
 import loci.formats.ome.OMEPyramidStore;
+import loci.formats.out.JPEGWriter;
 import loci.formats.out.PyramidOMETiffWriter;
 import loci.formats.out.TiffWriter;
 import loci.formats.services.OMEXMLService;
@@ -119,18 +120,7 @@ public class Converter implements Callable<Void> {
     reader.setFlattenedResolutions(false);
     reader.setMetadataFiltered(true);
 
-    OMEXMLService service = null;
-    try {
-      ServiceFactory factory = new ServiceFactory();
-      service = factory.getInstance(OMEXMLService.class);
-      reader.setMetadataStore(service.createOMEXMLMetadata());
-    }
-    catch (DependencyException de) {
-      throw new MissingLibraryException(OMEXMLServiceImpl.NO_OME_XML_MSG, de);
-    }
-    catch (ServiceException se) {
-      throw new FormatException(se);
-    }
+    reader.setMetadataStore(createMetadata());
 
     try {
       reader.setId(inputFile);
@@ -183,29 +173,15 @@ public class Converter implements Callable<Void> {
     String outputFile)
     throws FormatException, IOException
   {
+    // write the pyramid first
     try (TiffWriter writer = new TiffWriter()) {
       setupWriter(reader, writer, meta, outputFile);
 
-      int writerSeries = 0;
-      for (int i=0; i<reader.getSeriesCount(); i++) {
-        reader.setSeries(i);
-
-        if (i == 0) {
-          int resolutions = i == 0 ? pyramidResolutions + 1: 1;
-          for (int r=0; r<resolutions; r++) {
-            writer.setSeries(writerSeries);
-            LOGGER.info("writing resolution {} in series {}", r, i);
-            saveResolution(r, reader, writer);
-            writerSeries++;
-          }
-        }
-        else {
-          LOGGER.warn("Writing extra label/macro image #{} not supported", i);
-          // TODO: options here:
-          // 1) try to detect extra images in PyramidTiffReader
-          // 2) write any extra images to separate TIFF files
-          // 3) just log that the extra images were not converted
-        }
+      reader.setSeries(0);
+      for (int r=0; r<=pyramidResolutions; r++) {
+        writer.setSeries(r);
+        LOGGER.info("writing resolution {}", r);
+        saveResolution(r, reader, writer);
       }
     }
 
@@ -223,6 +199,23 @@ public class Converter implements Callable<Void> {
       }
       if (out != null) {
         out.close();
+      }
+    }
+
+    // write any extra images to separate files
+    // since the 5.9.x pyramid reader doesn't support extra images
+    String baseOutput = outputFile.substring(0, outputFile.lastIndexOf("."));
+    for (int i=1; i<reader.getSeriesCount(); i++) {
+      LOGGER.info("Writing extra image #{}", i);
+
+      reader.setSeries(i);
+      IMetadata extraMeta = createMetadata();
+      MetadataTools.populateMetadata(extraMeta, 0, null,
+        reader.getCoreMetadataList().get(reader.getCoreIndex()));
+      try (JPEGWriter writer = new JPEGWriter()) {
+        writer.setMetadataRetrieve(extraMeta);
+        writer.setId(baseOutput + "-" + i + ".jpg");
+        writer.saveBytes(0, reader.openBytes(0));
       }
     }
   }
@@ -321,6 +314,21 @@ public class Converter implements Callable<Void> {
     ifd.put(IFD.TILE_WIDTH, tileWidth / scale);
     ifd.put(IFD.TILE_LENGTH, tileHeight / scale);
     return ifd;
+  }
+
+  private IMetadata createMetadata() throws FormatException {
+    OMEXMLService service = null;
+    try {
+      ServiceFactory factory = new ServiceFactory();
+      service = factory.getInstance(OMEXMLService.class);
+      return service.createOMEXMLMetadata();
+    }
+    catch (DependencyException de) {
+      throw new MissingLibraryException(OMEXMLServiceImpl.NO_OME_XML_MSG, de);
+    }
+    catch (ServiceException se) {
+      throw new FormatException(se);
+    }
   }
 
   public static void main(String[] args) {
