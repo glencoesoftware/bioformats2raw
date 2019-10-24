@@ -93,7 +93,7 @@ public class MiraxReader extends FormatReader {
   private static final int MAX_TILE_SIZE = 256;
 
   private static final String SLIDE_DATA = "Slidedat.ini";
-  private static final int CACHE_SIZE = 16;
+  private static final int CACHE_SIZE = 32;
 
   /**
    * Maximum number of channels in a tile.  The assembled slide can
