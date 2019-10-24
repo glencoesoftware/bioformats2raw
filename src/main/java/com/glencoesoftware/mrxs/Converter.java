@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) 2019 Glencoe Software, Inc. All rights reserved.
+ *
+ * This software is distributed under the terms described by the LICENSE.txt
+ * file you can find at the root of the distribution bundle.  If the file is
+ * missing please request a copy by contacting info@glencoesoftware.com
+ */
 package com.glencoesoftware.mrxs;
 
 import java.io.IOException;
@@ -37,10 +44,14 @@ import picocli.CommandLine;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
+/**
+ * Command line tool for converting .mrxs files to TIFF/OME-TIFF.
+ * Both Bio-Formats 5.9.x ("Faas") pyramids and true OME-TIFF pyramids
+ * are supported.
+ */
 public class Converter implements Callable<Void> {
 
-  private static final Logger LOGGER =
-    LoggerFactory.getLogger(MiraxReader.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(Converter.class);
 
 	private static final int PYRAMID_SCALE = 2;
 
@@ -113,7 +124,15 @@ public class Converter implements Callable<Void> {
     return null;
   }
 
+  /**
+   * Perform the pyramid conversion according to the specified
+   * command line arguments.
+   *
+   * @throws FormatException
+   * @throws IOException
+   */
   public void convert() throws FormatException, IOException {
+    // insert our own MiraxReader so that .mrxs files are correctly detected
     ClassList<IFormatReader> readers = ImageReader.getDefaultReaderClasses();
     readers.addClass(0, MiraxReader.class);
     ImageReader reader = new ImageReader(readers);
@@ -135,6 +154,8 @@ public class Converter implements Callable<Void> {
         int scale = (int) Math.pow(PYRAMID_SCALE, i);
 
         if (legacy) {
+          // writing 5.9.x pyramids requires one Image per resolution
+          // the relationship between the resolutions is implicit
           MetadataTools.populateMetadata(meta, i, null,
             reader.isLittleEndian(), "XYCZT",
             FormatTools.getPixelTypeString(reader.getPixelType()),
@@ -142,6 +163,8 @@ public class Converter implements Callable<Void> {
             reader.getSizeC(), reader.getSizeT(), reader.getRGBChannelCount());
         }
         else {
+          // writing 6.x pyramids requires using the OMEPyramidStore API
+          // to explicitly define subresolutions of the current Image
           meta.setResolutionSizeX(new PositiveInteger(width / scale), 0, i);
           meta.setResolutionSizeY(new PositiveInteger(height / scale), 0, i);
         }
@@ -168,6 +191,8 @@ public class Converter implements Callable<Void> {
    * @param reader an initialized reader
    * @param meta metadata store specifying the pyramid resolutions
    * @param outputFile the path to the output TIFF file
+   * @throws FormatException
+   * @throws IOException
    */
   public void writeFaasPyramid(IFormatReader reader, IMetadata meta,
     String outputFile)
@@ -185,6 +210,7 @@ public class Converter implements Callable<Void> {
       }
     }
 
+    // overwrite the TIFF comment so that the file will be detected as a pyramid
     RandomAccessInputStream in = null;
     RandomAccessOutputStream out = null;
     try {
@@ -229,6 +255,8 @@ public class Converter implements Callable<Void> {
    * @param reader an initialized reader
    * @param meta metadata store specifying the pyramid resolutions
    * @param outputFile the path to the output OME-TIFF file
+   * @throws FormatException
+   * @throws IOException
    */
   public void writeOMEPyramid(IFormatReader reader, OMEPyramidStore meta,
     String outputFile)
@@ -251,6 +279,18 @@ public class Converter implements Callable<Void> {
     }
   }
 
+  /**
+   * Write the given resolution, using the given writer.
+   * Pixel data is read from the given reader and downsampled accordingly.
+   * The reader and writer should be initialized and have the correct
+   * series and/or resolution state.
+   *
+   * @param resolution the pyramid resolution to write, indexed from 0
+   * @param reader the reader from which to read pixel data
+   * @param writer the writer to use for saving pixel data
+   * @throws FormatException
+   * @throws IOException
+   */
   public void saveResolution(int resolution, IFormatReader reader,
     TiffWriter writer)
     throws FormatException, IOException
@@ -278,6 +318,20 @@ public class Converter implements Callable<Void> {
     }
   }
 
+  /**
+   * Retrieve a tile of pixels corresponding to the given resolution,
+   * plane index, and tile bounding box.  Downsampling is performed as needed.
+   *
+   * @param reader the initialized reader used to retrieve pixel data
+   * @param res the pyramid resolution (from 0)
+   * @param no the plane index
+   * @param x the X coordinate of the upper-left corner of the tile
+   * @param y the Y coordinate of the upper-left corner of the tile
+   * @param w the tile width in pixels
+   * @param h the tile height in pixels
+   * @throws FormatException
+   * @throws IOException
+   */
   public byte[] getTile(IFormatReader reader, int res,
     int no, int x, int y, int w, int h)
     throws FormatException, IOException
@@ -297,6 +351,16 @@ public class Converter implements Callable<Void> {
       reader.getRGBChannelCount(), reader.isInterleaved());
   }
 
+  /**
+   * Set all appropriate options on an uninitialized writer and initialize it.
+   *
+   * @param reader
+   * @param writer the writer to initialize
+   * @param meta the initialized IMetadata object to be used by the writer
+   * @param outputFile the absolute path to the output file
+   * @throws FormatException
+   * @throws IOException
+   */
   private void setupWriter(IFormatReader reader, TiffWriter writer,
     IMetadata meta, String outputFile)
     throws FormatException, IOException
@@ -309,6 +373,14 @@ public class Converter implements Callable<Void> {
     writer.setId(outputFile);
   }
 
+  /**
+   * Construct an IFD with the given scale factor.
+   * The scale factor is applied to the current tile dimensions,
+   * and is used to set the tile dimensions for this IFD.
+   *
+   * @param scale tile dimension scale factor
+   * @return IFD object with tile dimensions populated
+   */
   private IFD makeIFD(int scale) {
     IFD ifd = new IFD();
     ifd.put(IFD.TILE_WIDTH, tileWidth / scale);
@@ -316,6 +388,10 @@ public class Converter implements Callable<Void> {
     return ifd;
   }
 
+  /**
+   * @return an empty IMetadata object for metadata transport.
+   * @throws FormatException
+   */
   private IMetadata createMetadata() throws FormatException {
     OMEXMLService service = null;
     try {
