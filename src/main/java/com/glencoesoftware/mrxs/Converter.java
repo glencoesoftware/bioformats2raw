@@ -37,6 +37,7 @@ import loci.formats.tiff.TiffSaver;
 
 import ome.xml.model.primitives.PositiveInteger;
 
+import org.perf4j.slf4j.Slf4JStopWatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -302,6 +303,7 @@ public class Converter implements Callable<Void> {
     int sizeX = reader.getSizeX() / scale;
     int sizeY = reader.getSizeY() / scale;
 
+    Slf4JStopWatch watch = null;
     for (int plane=0; plane<reader.getImageCount(); plane++) {
       LOGGER.info("writing plane {} of {}", plane, reader.getImageCount());
       IFD ifd = makeIFD(scale);
@@ -310,9 +312,13 @@ public class Converter implements Callable<Void> {
         int height = (int) Math.min(yStep, sizeY - yy);
         for (int xx=0; xx<sizeX; xx+=xStep) {
           int width = (int) Math.min(xStep, sizeX - xx);
+          watch = stopWatch();
           byte[] tile =
             getTile(reader, resolution, plane, xx, yy, width, height);
+          watch.stop("getTile: resolution = " + resolution);
+          watch = stopWatch();
           writer.saveBytes(plane, tile, ifd, xx,  yy, width, height);
+          watch.stop("saveBytes");
         }
       }
     }
@@ -405,6 +411,10 @@ public class Converter implements Callable<Void> {
     catch (ServiceException se) {
       throw new FormatException(se);
     }
+  }
+
+  private Slf4JStopWatch stopWatch() {
+    return new Slf4JStopWatch(LOGGER, Slf4JStopWatch.DEBUG_LEVEL);
   }
 
   public static void main(String[] args) {
