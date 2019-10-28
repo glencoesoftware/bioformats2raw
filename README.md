@@ -28,3 +28,4 @@ Run the conversion (for a 6.x pyramid):
 
 The compression defaults to JPEG-2000, but can be configured with the `--compression` option.
 Maximum tile dimensions are 2048x2048, and can be configured with the `--tile-width` and `--tile-height` options.
+`--resolutions` is optional; if omitted, the number of resolutions is set so that the smallest resolution is no greater than 256x256.
