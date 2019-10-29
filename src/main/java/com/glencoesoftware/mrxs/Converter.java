@@ -8,6 +8,9 @@
 package com.glencoesoftware.mrxs;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.Callable;
 
 import loci.common.DebugTools;
@@ -54,6 +57,21 @@ public class Converter implements Callable<Void> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(Converter.class);
 
+  static class CompressionTypes extends ArrayList<String> {
+    CompressionTypes() {
+      super(CompressionTypes.getCompressionTypes());
+    }
+
+    private static List<String> getCompressionTypes() {
+      try (TiffWriter v = new TiffWriter()) {
+        return Arrays.asList(v.getCompressionTypes());
+      }
+      catch (Exception e) {
+        return new ArrayList<String>();
+      }
+    }
+  }
+
   // minimum size of the largest XY dimension in the smallest resolution,
   // when calculating the number of resolutions to generate
   private static final int MIN_SIZE = 256;
@@ -84,19 +102,21 @@ public class Converter implements Callable<Void> {
 
   @Option(
     names = {"-w", "--tile-width"},
-    description = "Maximum tile width to read (default: 2048)"
+    description = "Maximum tile width to read (default: ${DEFAULT-VALUE})"
   )
   private int tileWidth = 2048;
 
   @Option(
     names = {"-h", "--tile-height"},
-    description = "Maximum tile height to read (default: 2048)"
+    description = "Maximum tile height to read (default: ${DEFAULT-VALUE})"
   )
   private int tileHeight = 2048;
 
   @Option(
-    names = {"-c", "--compression"},
-    description = "Compression type for output file (default: JPEG-2000)"
+      names = {"-c", "--compression"},
+      completionCandidates = CompressionTypes.class,
+      description = "Compression type for output OME-TIFF file " +
+                    "(${COMPLETION-CANDIDATES}; default: ${DEFAULT-VALUE})"
   )
   private String compression = "JPEG-2000";
 
