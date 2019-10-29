@@ -1001,8 +1001,23 @@ public class MiraxReader extends FormatReader {
       Location.mapFile(filename, null);
     }
     else if (format.equals("JPEG")) {
-      jpegOptions.interleaved = false;
-      tile = jpegCodec.decompress(tileStream, jpegOptions);
+      // check the JPEG marker before decompressing
+      // missing tiles will sometimes present as an offset somewhere
+      // in the middle of a file that does not contain pixel data
+      //
+      // checking the marker first is faster and prevents
+      // IllegalArgumentException and/or NullPointerException from
+      // being thrown
+      if (tileStream.read() == (byte) 0xff &&
+        tileStream.read() == (byte) 0xd8)
+      {
+        tileStream.seek(offset);
+        jpegOptions.interleaved = false;
+        tile = jpegCodec.decompress(tileStream, jpegOptions);
+      }
+      else {
+        LOGGER.trace("Invalid marker: reading from {} at {}", file, offset);
+      }
     }
     else if (format.equals("JPEG2000")) {
       jp2kOptions.interleaved = false;
