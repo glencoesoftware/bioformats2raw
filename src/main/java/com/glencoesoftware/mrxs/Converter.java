@@ -54,7 +54,12 @@ public class Converter implements Callable<Void> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(Converter.class);
 
-	private static final int PYRAMID_SCALE = 2;
+  // minimum size of the largest XY dimension in the smallest resolution,
+  // when calculating the number of resolutions to generate
+  private static final int MIN_SIZE = 256;
+
+  // scaling factor in X and Y between any two consecutive resolutions
+  private static final int PYRAMID_SCALE = 2;
 
   @Option(
     names = "--output",
@@ -73,7 +78,6 @@ public class Converter implements Callable<Void> {
 
   @Option(
     names = {"-r", "--resolutions"},
-    required = true,
     description = "Number of pyramid resolutions to generate"
   )
   private int pyramidResolutions = 0;
@@ -144,6 +148,17 @@ public class Converter implements Callable<Void> {
 
     try {
       reader.setId(inputFile);
+
+      // calculate a reasonable pyramid depth if not specified as an argument
+      if (pyramidResolutions == 0) {
+        int width = reader.getSizeX();
+        int height = reader.getSizeY();
+        while (width > MIN_SIZE || height > MIN_SIZE) {
+          pyramidResolutions++;
+          width /= PYRAMID_SCALE;
+          height /= PYRAMID_SCALE;
+        }
+      }
 
       // set up extra resolutions to be generated
       // assume first series is the largest resolution
