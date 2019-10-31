@@ -108,13 +108,13 @@ public class Converter implements Callable<Void> {
     names = {"-w", "--tile-width"},
     description = "Maximum tile width to read (default: ${DEFAULT-VALUE})"
   )
-  private int tileWidth = 2048;
+  private int tileWidth = 1024;
 
   @Option(
     names = {"-h", "--tile-height"},
     description = "Maximum tile height to read (default: ${DEFAULT-VALUE})"
   )
-  private int tileHeight = 2048;
+  private int tileHeight = 1024;
 
   @Option(
       names = {"-c", "--compression"},
