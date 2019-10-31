@@ -102,7 +102,7 @@ public class Converter implements Callable<Void> {
     names = {"-r", "--resolutions"},
     description = "Number of pyramid resolutions to generate"
   )
-  private int pyramidResolutions = 0;
+  private Integer pyramidResolutions;
 
   @Option(
     names = {"-w", "--tile-width"},
@@ -223,7 +223,8 @@ public class Converter implements Callable<Void> {
       // calculate a reasonable pyramid depth if not specified as an argument
       IFormatReader reader = readers.take();
       try {
-        if (pyramidResolutions == 0) {
+        if (pyramidResolutions == null) {
+          pyramidResolutions = 0;
           int width = reader.getSizeX();
           int height = reader.getSizeY();
           while (width > MIN_SIZE || height > MIN_SIZE) {
@@ -231,6 +232,7 @@ public class Converter implements Callable<Void> {
             width /= PYRAMID_SCALE;
             height /= PYRAMID_SCALE;
           }
+          LOGGER.info("Using {} pyramid resolutions", pyramidResolutions);
         }
       }
       finally {
