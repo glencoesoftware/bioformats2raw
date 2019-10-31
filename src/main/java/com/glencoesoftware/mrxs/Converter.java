@@ -446,7 +446,7 @@ public class Converter implements Callable<Void> {
     metadata.setPixelsID("Pixels:0", 0);
     metadata.setChannelID("Channel:0:0", 0, 0);
     metadata.setChannelSamplesPerPixel(new PositiveInteger(1), 0, 0);
-    metadata.setPixelsBigEndian(true, 0);
+    metadata.setPixelsBigEndian(!isLittleEndian, 0);
     metadata.setPixelsSizeX(
       new PositiveInteger(sizeX), 0);
     metadata.setPixelsSizeY(
