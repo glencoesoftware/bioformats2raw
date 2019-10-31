@@ -309,7 +309,7 @@ public class Converter implements Callable<Void> {
       int scale = (int) Math.pow(PYRAMID_SCALE, resolution);
       Slf4JStopWatch t1 = stopWatch();
       try (IFormatWriter writer = createWriter(
-          pixelType, width / scale, height / scale, sizeC)) {
+          pixelType, width / scale, height / scale)) {
         byte[] scaledTile = tile;
         if (resolution > 0) {
           scaledTile = scaler.downsample(tile, width, height,
@@ -317,7 +317,7 @@ public class Converter implements Callable<Void> {
             isLittleEndian, FormatTools.isFloatingPoint(pixelType),
             rgbChannelCount, isInterleaved);
         }
-        Path id = directory.resolve(String.format("%d.tiff", yy));
+        Path id = directory.resolve(String.format("%d_w%d.tiff", yy, plane));
         LOGGER.info("Writing to: {}", id);
         writer.setId(id.toString());
         writer.saveBytes(0, scaledTile);
@@ -374,16 +374,14 @@ public class Converter implements Callable<Void> {
     }
 
     nTile = new AtomicInteger(0);
-    for (int i=0; i<imageCount; i++) {
-      final int plane = i;
-      LOGGER.info("writing plane {} of {}", plane, imageCount);
-
-      for (int j=0; j<sizeY; j+=tileHeight) {
-        final int yy = j;
-        int height = (int) Math.min(tileHeight, sizeY - yy);
-        for (int k=0; k<sizeX; k+=tileWidth) {
-          final int xx = k;
-          int width = (int) Math.min(tileWidth, sizeX - xx);
+    for (int j=0; j<sizeY; j+=tileHeight) {
+      final int yy = j;
+      int height = (int) Math.min(tileHeight, sizeY - yy);
+      for (int k=0; k<sizeX; k+=tileWidth) {
+        final int xx = k;
+        int width = (int) Math.min(tileWidth, sizeX - xx);
+        for (int i=0; i<imageCount; i++) {
+          final int plane = i;
 
           executor.execute(() -> {
             try {
@@ -406,11 +404,10 @@ public class Converter implements Callable<Void> {
    * @param pixelType
    * @param sizeX
    * @param sizeY
-   * @param sizeC
    * @return
    * @throws EnumerationException
    */
-  private IFormatWriter createWriter(int pixelType, int sizeX, int sizeY, int sizeC)
+  private IFormatWriter createWriter(int pixelType, int sizeX, int sizeY)
       throws EnumerationException {
     IMetadata metadata = MetadataTools.createOMEXMLMetadata();
     metadata.setImageID("Image:0", 0);
@@ -423,7 +420,7 @@ public class Converter implements Callable<Void> {
     metadata.setPixelsSizeY(
       new PositiveInteger(sizeY), 0);
     metadata.setPixelsSizeZ(new PositiveInteger(1), 0);
-    metadata.setPixelsSizeC(new PositiveInteger(sizeC), 0);
+    metadata.setPixelsSizeC(new PositiveInteger(1), 0);
     metadata.setPixelsSizeT(new PositiveInteger(1), 0);
     metadata.setPixelsDimensionOrder(DimensionOrder.XYCZT, 0);
     metadata.setPixelsType(PixelType.fromString(
