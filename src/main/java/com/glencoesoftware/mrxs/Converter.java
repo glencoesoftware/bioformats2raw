@@ -309,6 +309,7 @@ public class Converter implements Callable<Void> {
       LOGGER.info("tile read complete {}/{}", nTile.get(), tileCount);
       t0.stop();
     }
+    int[] zct = reader.getZCTCoords(plane);
     for (int resolution=0; resolution<resolutions; resolution++) {
       Path directory = outputPath
           .resolve(Integer.toString(resolution))
@@ -325,7 +326,8 @@ public class Converter implements Callable<Void> {
             isLittleEndian, FormatTools.isFloatingPoint(pixelType),
             rgbChannelCount, isInterleaved);
         }
-        Path id = directory.resolve(String.format("%d_w%d.tiff", yy, plane));
+        Path id = directory.resolve(
+          String.format("%d_w%d_z%d_t%d.tiff", yy, zct[1], zct[0], zct[2]));
         LOGGER.info("Writing to: {}", id);
         writer.setId(id.toString());
         writer.saveBytes(0, scaledTile);
