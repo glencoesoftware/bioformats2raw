@@ -209,42 +209,71 @@ public class Converter implements Callable<Void> {
     queue = new LimitedQueue<Runnable>(maxWorkers);
     executor = new ThreadPoolExecutor(
       maxWorkers, maxWorkers, 0L, TimeUnit.MILLISECONDS, queue);
-    for (int i=0; i < maxWorkers; i++) {
-      IFormatReader reader = new MiraxReader();
-      reader.setFlattenedResolutions(false);
-      reader.setMetadataFiltered(true);
-      reader.setMetadataStore(createMetadata());
-      reader.setId(inputPath.toString());
-      reader.setResolution(0);
-      readers.add(reader);
-    }
-
     try {
-      // calculate a reasonable pyramid depth if not specified as an argument
-      IFormatReader reader = readers.take();
+      for (int i=0; i < maxWorkers; i++) {
+        IFormatReader reader = new MiraxReader();
+        reader.setFlattenedResolutions(false);
+        reader.setMetadataFiltered(true);
+        reader.setMetadataStore(createMetadata());
+        reader.setId(inputPath.toString());
+        reader.setResolution(0);
+        readers.add(reader);
+      }
+
       try {
-        if (pyramidResolutions == null) {
-          pyramidResolutions = 0;
-          int width = reader.getSizeX();
-          int height = reader.getSizeY();
-          while (width > MIN_SIZE || height > MIN_SIZE) {
-            pyramidResolutions++;
-            width /= PYRAMID_SCALE;
-            height /= PYRAMID_SCALE;
+        // calculate a reasonable pyramid depth if not specified as an argument
+        IFormatReader reader = readers.take();
+        try {
+          if (pyramidResolutions == null) {
+            pyramidResolutions = 0;
+            int width = reader.getSizeX();
+            int height = reader.getSizeY();
+            while (width > MIN_SIZE || height > MIN_SIZE) {
+              pyramidResolutions++;
+              width /= PYRAMID_SCALE;
+              height /= PYRAMID_SCALE;
+            }
+            LOGGER.info("Using {} pyramid resolutions", pyramidResolutions);
           }
-          LOGGER.info("Using {} pyramid resolutions", pyramidResolutions);
         }
+        finally {
+          readers.put(reader);
+        }
+
+        // only process the first series here
+        // wait until all tiles have been written to process the remaining series
+        // otherwise, the readers' series will be changed from under
+        // in-process tiles, leading to exceptions
+        write(0);
       }
       finally {
-        readers.put(reader);
+        // Shut down first, tasks may still be running
+        executor.shutdown();
+        executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
       }
 
-      write();
+      IFormatReader v = readers.take();
+      int seriesCount = v.getSeriesCount();
+      IMetadata meta = (IMetadata) v.getMetadataStore();
+      String xml = null;
+      try {
+        xml = getService().getOMEXML(meta);
+      }
+      catch (ServiceException se) {
+        LOGGER.error("Could not retrieve OME-XML", se);
+      }
+      readers.put(v);
+
+      // write each of the extra images to a separate file
+      for (int i=1; i<seriesCount; i++) {
+        write(i);
+      }
+
+      // write the original OME-XML to a file
+      Path omexmlFile = outputPath.resolve("METADATA.ome.xml");
+      Files.write(omexmlFile, xml.getBytes());
     }
     finally {
-      // Shut down first, tasks may still be running
-      executor.shutdown();
-      executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
       readers.forEach((v) -> {
         try {
           v.close();
@@ -263,33 +292,22 @@ public class Converter implements Callable<Void> {
    * @throws IOException
    * @throws InterruptedException 
    */
-  public void write()
+  public void write(int series)
     throws FormatException, IOException, InterruptedException
   {
-      int seriesCount;
-      IFormatReader v = readers.take();
-      try {
-        seriesCount = v.getSeriesCount();
-      }
-      finally {
-        readers.put(v);
-      }
-      for (int i=0; i<seriesCount; i++) {
-        final int series = i;
-        readers.forEach((reader) -> {
-          reader.setSeries(series);
-        });
+      readers.forEach((reader) -> {
+        reader.setSeries(series);
+      });
 
-        if (i == 0) {
-          saveResolutions();
+      if (series == 0) {
+        saveResolutions();
+      }
+      else {
+        String filename = series + ".jpg";
+        if (series == 1) {
+          filename = "LABELIMAGE.jpg";
         }
-        else {
-          String filename = i + ".jpg";
-          if (i == 1) {
-            filename = "LABELIMAGE.jpg";
-          }
-          saveExtraImage(filename);
-        }
+        saveExtraImage(filename);
       }
   }
 
@@ -472,19 +490,23 @@ public class Converter implements Callable<Void> {
     return writer;
   }
 
+  private OMEXMLService getService() throws FormatException {
+    try {
+      ServiceFactory factory = new ServiceFactory();
+      return factory.getInstance(OMEXMLService.class);
+    }
+    catch (DependencyException de) {
+      throw new MissingLibraryException(OMEXMLServiceImpl.NO_OME_XML_MSG, de);
+    }
+  }
+
   /**
    * @return an empty IMetadata object for metadata transport.
    * @throws FormatException
    */
   private IMetadata createMetadata() throws FormatException {
-    OMEXMLService service = null;
     try {
-      ServiceFactory factory = new ServiceFactory();
-      service = factory.getInstance(OMEXMLService.class);
-      return service.createOMEXMLMetadata();
-    }
-    catch (DependencyException de) {
-      throw new MissingLibraryException(OMEXMLServiceImpl.NO_OME_XML_MSG, de);
+      return getService().createOMEXMLMetadata();
     }
     catch (ServiceException se) {
       throw new FormatException(se);
