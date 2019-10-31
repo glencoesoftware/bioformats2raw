@@ -316,9 +316,19 @@ public class Converter implements Callable<Void> {
           .resolve(Integer.toString(xx));
       Files.createDirectories(directory);
       int scale = (int) Math.pow(PYRAMID_SCALE, resolution);
+      int scaledWidth = width / scale;
+      int scaledHeight = height / scale;
+
+      if (scaledWidth == 0 || scaledHeight == 0) {
+        // right-most column and/or bottom-most row of tiles
+        // may downsample to < 1 pixel in smaller resolutions
+        // in this case, just don't write anything
+        return;
+      }
+
       Slf4JStopWatch t1 = stopWatch();
       try (IFormatWriter writer = createWriter(
-          pixelType, width / scale, height / scale)) {
+          pixelType, scaledWidth, scaledHeight)) {
         byte[] scaledTile = tile;
         if (resolution > 0) {
           scaledTile = scaler.downsample(tile, width, height,
