@@ -158,8 +158,6 @@ public class Converter implements Callable<Void> {
 
   private int sizeY;
 
-  private int sizeC;
-
   private int rgbChannelCount;
 
   private boolean isInterleaved;
@@ -383,7 +381,6 @@ public class Converter implements Callable<Void> {
       }
       sizeX = _reader.getSizeX();
       sizeY = _reader.getSizeY();
-      sizeC = _reader.getEffectiveSizeC();
       rgbChannelCount = _reader.getRGBChannelCount();
       isInterleaved = _reader.isInterleaved();
       imageCount = _reader.getImageCount();
