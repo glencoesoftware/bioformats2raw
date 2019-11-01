@@ -178,7 +178,8 @@ public class Converter implements Callable<Void> {
   }
 
   @Override
-  public Void call() throws InterruptedException {
+  public Void call()
+      throws FormatException, IOException, InterruptedException {
     ch.qos.logback.classic.Logger root = (ch.qos.logback.classic.Logger)
         LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
     if (debug) {
@@ -186,12 +187,7 @@ public class Converter implements Callable<Void> {
     } else {
       root.setLevel(Level.INFO);
     }
-    try {
-      convert();
-    }
-    catch (FormatException|IOException e) {
-      throw new RuntimeException("Could not create pyramid", e);
-    }
+    convert();
     return null;
   }
 
@@ -227,6 +223,10 @@ public class Converter implements Callable<Void> {
         // in-process tiles, leading to exceptions
         write(0);
       }
+      catch (Exception e) {
+        LOGGER.error("Error while writing series 0");
+        return;
+      }
       finally {
         // Shut down first, tasks may still be running
         executor.shutdown();
@@ -254,7 +254,13 @@ public class Converter implements Callable<Void> {
 
       // write each of the extra images to a separate file
       for (int i=1; i<seriesCount; i++) {
-        write(i);
+        try {
+          write(i);
+        }
+        catch (Exception e) {
+          LOGGER.error("Error while writing series {}", i, e);
+          return;
+        }
       }
     }
     finally {
