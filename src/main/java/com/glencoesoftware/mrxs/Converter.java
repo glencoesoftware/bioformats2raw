@@ -233,26 +233,29 @@ public class Converter implements Callable<Void> {
         executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
       }
 
+      int seriesCount;
       IFormatReader v = readers.take();
-      int seriesCount = v.getSeriesCount();
-      IMetadata meta = (IMetadata) v.getMetadataStore();
-      String xml = null;
       try {
-        xml = getService().getOMEXML(meta);
+        seriesCount = v.getSeriesCount();
+        IMetadata meta = (IMetadata) v.getMetadataStore();
+        String xml = getService().getOMEXML(meta);
+
+        // write the original OME-XML to a file
+        Path omexmlFile = outputPath.resolve("METADATA.ome.xml");
+        Files.write(omexmlFile, xml.getBytes());
       }
       catch (ServiceException se) {
         LOGGER.error("Could not retrieve OME-XML", se);
+        return;
       }
-      readers.put(v);
+      finally {
+        readers.put(v);
+      }
 
       // write each of the extra images to a separate file
       for (int i=1; i<seriesCount; i++) {
         write(i);
       }
-
-      // write the original OME-XML to a file
-      Path omexmlFile = outputPath.resolve("METADATA.ome.xml");
-      Files.write(omexmlFile, xml.getBytes());
     }
     finally {
       readers.forEach((v) -> {
