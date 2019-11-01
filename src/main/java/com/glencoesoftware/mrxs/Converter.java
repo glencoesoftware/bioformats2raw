@@ -150,8 +150,6 @@ public class Converter implements Callable<Void> {
 
   private ExecutorService executor;
 
-  private int series;
-
   private boolean isLittleEndian;
 
   private int resolutions;
@@ -370,7 +368,6 @@ public class Converter implements Callable<Void> {
   {
     IFormatReader _reader = readers.take();
     try {
-      series = _reader.getSeries();
       isLittleEndian = _reader.isLittleEndian();
       resolutions = 1;
       // calculate a reasonable pyramid depth if not specified as an argument
@@ -400,9 +397,9 @@ public class Converter implements Callable<Void> {
       * imageCount;
 
     LOGGER.info(
-      "Preparing to read series {} sizeX {} (tileWidth: {}) " +
+      "Preparing to write pyramid sizeX {} (tileWidth: {}) " +
       "sizeY {} (tileWidth: {}) imageCount {}",
-        series, sizeX, tileWidth, sizeY, tileHeight, imageCount
+        sizeX, tileWidth, sizeY, tileHeight, imageCount
     );
 
     // Prepare directories
