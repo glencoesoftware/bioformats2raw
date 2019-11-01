@@ -221,25 +221,6 @@ public class Converter implements Callable<Void> {
       }
 
       try {
-        // calculate a reasonable pyramid depth if not specified as an argument
-        IFormatReader reader = readers.take();
-        try {
-          if (pyramidResolutions == null) {
-            pyramidResolutions = 0;
-            int width = reader.getSizeX();
-            int height = reader.getSizeY();
-            while (width > MIN_SIZE || height > MIN_SIZE) {
-              pyramidResolutions++;
-              width /= PYRAMID_SCALE;
-              height /= PYRAMID_SCALE;
-            }
-            LOGGER.info("Using {} pyramid resolutions", pyramidResolutions);
-          }
-        }
-        finally {
-          readers.put(reader);
-        }
-
         // only process the first series here
         // wait until all tiles have been written to process the remaining series
         // otherwise, the readers' series will be changed from under
@@ -382,7 +363,18 @@ public class Converter implements Callable<Void> {
     try {
       series = _reader.getSeries();
       isLittleEndian = _reader.isLittleEndian();
-      resolutions = series == 0 ? pyramidResolutions + 1: 1;
+      resolutions = 1;
+      // calculate a reasonable pyramid depth if not specified as an argument
+      if (pyramidResolutions == null) {
+        int width = _reader.getSizeX();
+        int height = _reader.getSizeY();
+        while (width > MIN_SIZE || height > MIN_SIZE) {
+          resolutions++;
+          width /= PYRAMID_SCALE;
+          height /= PYRAMID_SCALE;
+        }
+        LOGGER.info("Using {} pyramid resolutions", pyramidResolutions);
+      }
       sizeX = _reader.getSizeX();
       sizeY = _reader.getSizeY();
       sizeC = _reader.getEffectiveSizeC();
