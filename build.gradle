@@ -17,11 +17,15 @@ repositories {
     maven {
         url 'https://artifacts.openmicroscopy.org/artifactory/repo/'
     }
+    maven {
+        url 'https://saalfeldlab.github.io/maven'
+    }
 }
 
 dependencies {
     compile ('ome:formats-gpl:6.2.1')
     compile ('info.picocli:picocli:3.9.6')
+    compile ('org.janelia.saalfeldlab:n5:2.1.2')
 }
 
 applicationDistribution.from("$projectDir") {

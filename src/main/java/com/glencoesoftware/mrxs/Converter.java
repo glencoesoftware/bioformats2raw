@@ -10,14 +10,9 @@ package com.glencoesoftware.mrxs;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -36,7 +31,6 @@ import loci.formats.ImageWriter;
 import loci.formats.MetadataTools;
 import loci.formats.MissingLibraryException;
 import loci.formats.meta.IMetadata;
-import loci.formats.out.TiffWriter;
 import loci.formats.services.OMEXMLService;
 import loci.formats.services.OMEXMLServiceImpl;
 import ome.xml.model.enums.DimensionOrder;
@@ -44,6 +38,12 @@ import ome.xml.model.enums.EnumerationException;
 import ome.xml.model.enums.PixelType;
 import ome.xml.model.primitives.PositiveInteger;
 
+import org.janelia.saalfeldlab.n5.ByteArrayDataBlock;
+import org.janelia.saalfeldlab.n5.Compression;
+import org.janelia.saalfeldlab.n5.DataType;
+import org.janelia.saalfeldlab.n5.Lz4Compression;
+import org.janelia.saalfeldlab.n5.N5FSWriter;
+import org.janelia.saalfeldlab.n5.N5Writer;
 import org.perf4j.slf4j.Slf4JStopWatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,21 +61,6 @@ import picocli.CommandLine.Parameters;
 public class Converter implements Callable<Void> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(Converter.class);
-
-  static class CompressionTypes extends ArrayList<String> {
-    CompressionTypes() {
-      super(CompressionTypes.getCompressionTypes());
-    }
-
-    private static List<String> getCompressionTypes() {
-      try (TiffWriter v = new TiffWriter()) {
-        return Arrays.asList(v.getCompressionTypes());
-      }
-      catch (Exception e) {
-        return new ArrayList<String>();
-      }
-    }
-  }
 
   // minimum size of the largest XY dimension in the smallest resolution,
   // when calculating the number of resolutions to generate
@@ -115,20 +100,6 @@ public class Converter implements Callable<Void> {
     description = "Maximum tile height to read (default: ${DEFAULT-VALUE})"
   )
   private int tileHeight = 1024;
-
-  @Option(
-      names = {"-c", "--compression"},
-      completionCandidates = CompressionTypes.class,
-      description = "Compression type for output OME-TIFF file " +
-                    "(${COMPLETION-CANDIDATES}; default: ${DEFAULT-VALUE})"
-  )
-  private String compression = "JPEG-2000";
-
-  @Option(
-    names = "--legacy",
-    description = "Write a Bio-Formats 5.9.x pyramid instead of OME-TIFF"
-  )
-  private boolean legacy = false;
 
   @Option(
     names = "--debug",
@@ -313,12 +284,10 @@ public class Converter implements Callable<Void> {
       LOGGER.info("tile read complete {}/{}", nTile.get(), tileCount);
       t0.stop();
     }
-    int[] zct = reader.getZCTCoords(plane);
+    // TODO: ZCT
+    // int[] zct = reader.getZCTCoords(plane);
+    N5Writer n5 = new N5FSWriter(outputPath.resolve("pyramid.n5").toString());
     for (int resolution=0; resolution<resolutions; resolution++) {
-      Path directory = outputPath
-          .resolve(Integer.toString(resolution))
-          .resolve(Integer.toString(xx));
-      Files.createDirectories(directory);
       int scale = (int) Math.pow(PYRAMID_SCALE, resolution);
       int scaledWidth = width / scale;
       int scaledHeight = height / scale;
@@ -331,8 +300,7 @@ public class Converter implements Callable<Void> {
       }
 
       Slf4JStopWatch t1 = stopWatch();
-      try (IFormatWriter writer = createWriter(
-          pixelType, scaledWidth, scaledHeight)) {
+      try {
         byte[] scaledTile = tile;
         if (resolution > 0) {
           scaledTile = scaler.downsample(tile, width, height,
@@ -340,11 +308,16 @@ public class Converter implements Callable<Void> {
             isLittleEndian, FormatTools.isFloatingPoint(pixelType),
             rgbChannelCount, isInterleaved);
         }
-        Path id = directory.resolve(
-          String.format("%d_w%d_z%d_t%d.tiff", yy, zct[1], zct[0], zct[2]));
-        LOGGER.info("Writing to: {}", id);
-        writer.setId(id.toString());
-        writer.saveBytes(0, scaledTile);
+        String pathName = "/" + Integer.toString(resolution);
+        n5.writeBlock(
+          pathName,
+          n5.getDatasetAttributes(pathName),
+          new ByteArrayDataBlock(
+            new int[] { scaledWidth, scaledHeight },
+            new long[] { xx / scale, yy / scale },
+            scaledTile
+          )
+        );
       }
       finally {
         t1.stop("saveBytes");
@@ -399,11 +372,42 @@ public class Converter implements Callable<Void> {
         sizeX, tileWidth, sizeY, tileHeight, imageCount
     );
 
-    // Prepare directories
+    // Prepare N5 dataset
+    DataType dataType;
+    switch (pixelType) {
+      case FormatTools.INT8: {
+        dataType = DataType.INT8;
+        break;
+      }
+      case FormatTools.UINT8: {
+        dataType = DataType.UINT8;
+        break;
+      }
+      case FormatTools.INT16: {
+        dataType = DataType.INT16;
+        break;
+      }
+      case FormatTools.UINT16: {
+        dataType = DataType.UINT16;
+        break;
+      }
+      default: {
+        throw new FormatException("Unsupported pixel type: "
+            + FormatTools.getPixelTypeString(pixelType));
+      }
+    }
+    Compression compression = new Lz4Compression();
+    N5Writer n5 = new N5FSWriter(outputPath.resolve("pyramid.n5").toString());
     for (int resolution=0; resolution<resolutions; resolution++) {
-      Path tileDirectory =
-          outputPath.resolve(Integer.toString(resolution));
-        Files.createDirectories(tileDirectory);
+      int scale = (int) Math.pow(PYRAMID_SCALE, resolution);
+      int scaledWidth = sizeX / scale;
+      int scaledHeight = sizeY / scale;
+      n5.createDataset(
+          "/" + Integer.toString(resolution),
+          new long[] { scaledWidth, scaledHeight, imageCount },
+          new int[] { tileWidth, tileHeight, 1 },
+          dataType, compression
+      );
     }
 
     nTile = new AtomicInteger(0);
