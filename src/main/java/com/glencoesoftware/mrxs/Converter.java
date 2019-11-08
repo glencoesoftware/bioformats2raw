@@ -291,18 +291,18 @@ public class Converter implements Callable<Void> {
         readers.put(reader);
       }
     } else {
-      int bytesPerPixel = FormatTools.getBytesPerPixel(pixelType);
-      // Upscale our base X and Y offsets, and sizes to the previous resolution
-      // based on the pyramid scaling factor
-      xx *= PYRAMID_SCALE;
-      yy *= PYRAMID_SCALE;
-      width *= PYRAMID_SCALE;
-      height *= PYRAMID_SCALE;
-
       String pathName = "/" + Integer.toString(resolution - 1);
       N5Reader n5 = new N5FSReader(
           outputPath.resolve("pyramid.n5").toString());
       DatasetAttributes datasetAttributes = n5.getDatasetAttributes(pathName);
+      long[] dimensions = datasetAttributes.getDimensions();
+
+      // Upscale our base X and Y offsets, and sizes to the previous resolution
+      // based on the pyramid scaling factor
+      xx *= PYRAMID_SCALE;
+      yy *= PYRAMID_SCALE;
+      width = (int) Math.min(tileWidth * PYRAMID_SCALE, dimensions[0] - xx);
+      height = (int) Math.min(tileHeight * PYRAMID_SCALE, dimensions[1] - yy);
 
       long[] startGridPosition = new long[] {
         xx / tileWidth, yy / tileHeight, plane
