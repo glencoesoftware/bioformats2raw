@@ -8,12 +8,18 @@
 package com.glencoesoftware.mrxs;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -40,10 +46,15 @@ import ome.xml.model.primitives.PositiveInteger;
 
 import org.janelia.saalfeldlab.n5.ByteArrayDataBlock;
 import org.janelia.saalfeldlab.n5.Compression;
+import org.janelia.saalfeldlab.n5.DataBlock;
 import org.janelia.saalfeldlab.n5.DataType;
-import org.janelia.saalfeldlab.n5.Lz4Compression;
+import org.janelia.saalfeldlab.n5.DatasetAttributes;
+import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
+import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
+import org.janelia.saalfeldlab.n5.ShortArrayDataBlock;
+import org.janelia.saalfeldlab.n5.blosc.BloscCompression;
 import org.perf4j.slf4j.Slf4JStopWatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -268,62 +279,128 @@ public class Converter implements Callable<Void> {
       }
   }
 
-  public void processTile(
-      int plane, int xx, int yy, int width, int height)
+  private byte[] getTile(
+      int resolution, int plane, int xx, int yy, int width, int height)
+          throws FormatException, IOException, InterruptedException {
+    if (resolution == 0) {
+      IFormatReader reader = readers.take();
+      try {
+        return reader.openBytes(plane, xx, yy, width, height);
+      }
+      finally {
+        readers.put(reader);
+      }
+    } else {
+      int bytesPerPixel = FormatTools.getBytesPerPixel(pixelType);
+      // Upscale our base X and Y offsets, and sizes to the previous resolution
+      // based on the pyramid scaling factor
+      xx *= PYRAMID_SCALE;
+      yy *= PYRAMID_SCALE;
+      width *= PYRAMID_SCALE;
+      height *= PYRAMID_SCALE;
+
+      String pathName = "/" + Integer.toString(resolution - 1);
+      N5Reader n5 = new N5FSReader(
+          outputPath.resolve("pyramid.n5").toString());
+      DatasetAttributes datasetAttributes = n5.getDatasetAttributes(pathName);
+
+      long[] startGridPosition = new long[] {
+        xx / tileWidth, yy / tileHeight, plane
+      };
+      int xBlocks = (int) Math.ceil((double) width / tileWidth);
+      int yBlocks = (int) Math.ceil((double) height / tileHeight);
+
+      byte[] tile = new byte[width * height * bytesPerPixel];
+      for (int xBlock=0; xBlock<xBlocks; xBlock++) {
+        for (int yBlock=0; yBlock<yBlocks; yBlock++) {
+          int blockWidth = Math.min(
+            width - (xBlock * tileWidth), tileWidth);
+          int blockHeight = Math.min(
+            height - (yBlock * tileHeight),  tileHeight);
+          long[] gridPosition = new long[] {
+            startGridPosition[0] + xBlock, startGridPosition[1] + yBlock, plane
+          };
+          ByteBuffer buffer = n5.readBlock(
+            pathName, datasetAttributes, gridPosition
+          ).toByteBuffer();
+          byte[] subTile = new byte[buffer.limit()];
+          buffer.get(subTile);
+
+          int length = blockWidth * bytesPerPixel;
+          for (int y=0; y<blockHeight; y++) {
+            int srcPos = y * blockWidth * bytesPerPixel;
+            int destPos = ((yBlock * width * tileHeight)
+              + (y * width) + (xBlock * tileWidth)) * bytesPerPixel;
+            System.arraycopy(subTile, srcPos, tile, destPos, length);
+          }
+        }
+      }
+      return scaler.downsample(tile, width, height,
+          PYRAMID_SCALE, FormatTools.getBytesPerPixel(pixelType),
+          isLittleEndian, FormatTools.isFloatingPoint(pixelType),
+          rgbChannelCount, isInterleaved);
+    }
+  }
+
+  private void processTile(
+      int resolution, int plane, int xx, int yy, int width, int height)
         throws EnumerationException, FormatException, IOException,
           InterruptedException {
+    String pathName = "/" + Integer.toString(resolution);
+    long[] gridPosition = new long[] {
+      xx / tileWidth, yy / tileHeight, plane
+    };
+    int[] size = new int[] { width, height, 1 };
+
     Slf4JStopWatch t0 = new Slf4JStopWatch("getTile");
-    byte[] tile;
-    IFormatReader reader = readers.take();
+    DataBlock<?> dataBlock;
     try {
-      tile = reader.openBytes(plane, xx, yy, width, height);
+      LOGGER.info("requesting tile to write at {} to {}",
+        gridPosition, pathName);
+      byte[] tile = getTile(resolution, plane, xx, yy, width, height);
+      if (tile == null) {
+        return;
+      }
+
+      int bytesPerPixel = FormatTools.getBytesPerPixel(pixelType);
+      switch (bytesPerPixel) {
+        case 1: {
+          dataBlock = new ByteArrayDataBlock(size, gridPosition, tile);
+          break;
+        }
+        case 2: {
+          short[] asShort = new short[tile.length / 2];
+          ByteBuffer.wrap(tile).asShortBuffer().get(asShort);
+          dataBlock = new ShortArrayDataBlock(size, gridPosition, asShort);
+          break;
+        }
+        default: {
+          throw new FormatException(
+              "Unsupported bytes per pixel: " + bytesPerPixel);
+        }
+      }
     }
     finally {
-      readers.put(reader);
       nTile.incrementAndGet();
       LOGGER.info("tile read complete {}/{}", nTile.get(), tileCount);
       t0.stop();
     }
+
     // TODO: ZCT
     // int[] zct = reader.getZCTCoords(plane);
     N5Writer n5 = new N5FSWriter(outputPath.resolve("pyramid.n5").toString());
-    for (int resolution=0; resolution<resolutions; resolution++) {
-      int scale = (int) Math.pow(PYRAMID_SCALE, resolution);
-      int scaledWidth = width / scale;
-      int scaledHeight = height / scale;
-
-      if (scaledWidth == 0 || scaledHeight == 0) {
-        // right-most column and/or bottom-most row of tiles
-        // may downsample to < 1 pixel in smaller resolutions
-        // in this case, just don't write anything
-        return;
-      }
-
-      Slf4JStopWatch t1 = stopWatch();
-      try {
-        byte[] scaledTile = tile;
-        if (resolution > 0) {
-          scaledTile = scaler.downsample(tile, width, height,
-            scale, FormatTools.getBytesPerPixel(pixelType),
-            isLittleEndian, FormatTools.isFloatingPoint(pixelType),
-            rgbChannelCount, isInterleaved);
-        }
-        String pathName = "/" + Integer.toString(resolution);
-        n5.writeBlock(
-          pathName,
-          n5.getDatasetAttributes(pathName),
-          new ByteArrayDataBlock(
-            new int[] { scaledWidth, scaledHeight },
-            new long[] { xx / scale, yy / scale },
-            scaledTile
-          )
-        );
-      }
-      finally {
-        t1.stop("saveBytes");
-      }
+    Slf4JStopWatch t1 = stopWatch();
+    try {
+      n5.writeBlock(
+        pathName,
+        n5.getDatasetAttributes(pathName),
+        dataBlock
+      );
+      LOGGER.info("successfully wrote at {} to {}", gridPosition, pathName);
     }
-    return;
+    finally {
+      t1.stop("saveBytes");
+    }
   }
 
   /**
@@ -350,8 +427,10 @@ public class Converter implements Callable<Void> {
           width /= PYRAMID_SCALE;
           height /= PYRAMID_SCALE;
         }
-        LOGGER.info("Using {} pyramid resolutions", pyramidResolutions);
+      } else {
+        resolutions = pyramidResolutions;
       }
+      LOGGER.info("Using {} pyramid resolutions", resolutions);
       sizeX = _reader.getSizeX();
       sizeY = _reader.getSizeY();
       rgbChannelCount = _reader.getRGBChannelCount();
@@ -362,9 +441,6 @@ public class Converter implements Callable<Void> {
     finally {
       readers.put(_reader);
     }
-    tileCount = (int) Math.ceil((double) sizeX / tileWidth)
-      * (int) Math.ceil((double) sizeY / tileHeight)
-      * imageCount;
 
     LOGGER.info(
       "Preparing to write pyramid sizeX {} (tileWidth: {}) " +
@@ -396,9 +472,18 @@ public class Converter implements Callable<Void> {
             + FormatTools.getPixelTypeString(pixelType));
       }
     }
-    Compression compression = new Lz4Compression();
+    // Use compression scheme that is most compatible with Zarr
+    Compression compression = new BloscCompression(
+      "lz4",
+      5,  // clevel
+      BloscCompression.SHUFFLE,  // shuffle
+      0,  // blocksize (0 = auto)
+      1  // nthreads
+    );
+    //Compression compression = new RawCompression();
     N5Writer n5 = new N5FSWriter(outputPath.resolve("pyramid.n5").toString());
-    for (int resolution=0; resolution<resolutions; resolution++) {
+    for (int _resolution=0; _resolution<resolutions; _resolution++) {
+      final int resolution = _resolution;
       int scale = (int) Math.pow(PYRAMID_SCALE, resolution);
       int scaledWidth = sizeX / scale;
       int scaledHeight = sizeY / scale;
@@ -408,30 +493,47 @@ public class Converter implements Callable<Void> {
           new int[] { tileWidth, tileHeight, 1 },
           dataType, compression
       );
-    }
 
-    nTile = new AtomicInteger(0);
-    for (int j=0; j<sizeY; j+=tileHeight) {
-      final int yy = j;
-      int height = (int) Math.min(tileHeight, sizeY - yy);
-      for (int k=0; k<sizeX; k+=tileWidth) {
-        final int xx = k;
-        int width = (int) Math.min(tileWidth, sizeX - xx);
-        for (int i=0; i<imageCount; i++) {
-          final int plane = i;
+      nTile = new AtomicInteger(0);
+      tileCount = (int) Math.ceil((double) scaledWidth / tileWidth)
+          * (int) Math.ceil((double) scaledHeight / tileHeight)
+          * imageCount;
+      List<CompletableFuture<Void>> futures = new ArrayList<CompletableFuture<Void>>();
+      for (int j=0; j<scaledHeight; j+=tileHeight) {
+        final int yy = j;
+        int height = (int) Math.min(tileHeight, scaledHeight - yy);
+        for (int k=0; k<scaledWidth; k+=tileWidth) {
+          final int xx = k;
+          int width = (int) Math.min(tileWidth, scaledWidth - xx);
+          for (int i=0; i<imageCount; i++) {
+            final int plane = i;
 
-          executor.execute(() -> {
-            try {
-              processTile(plane, xx, yy, width, height);
-            }
-            catch (Exception e) {
-              LOGGER.error(
-                "Failure processing tile; plane={} xx={} yy={} " +
-                "width={} height={}", plane, xx, yy, width, height, e);
-            }
-          });
+            CompletableFuture<Void> future = new CompletableFuture<Void>();
+            futures.add(future);
+            executor.execute(() -> {
+              try {
+                processTile(resolution, plane, xx, yy, width, height);
+                LOGGER.info(
+                    "Successfully processed tile; resolution={} plane={} " +
+                    "xx={} yy={} width={} height={}",
+                    resolution, plane, xx, yy, width, height);
+                future.complete(null);
+              }
+              catch (Exception e) {
+                future.completeExceptionally(e);
+                LOGGER.error(
+                  "Failure processing tile; resolution={} plane={} " +
+                  "xx={} yy={} width={} height={}",
+                  resolution, plane, xx, yy, width, height, e);
+              }
+            });
+          }
         }
       }
+      // Wait until the entire resolution has completed before proceeding to
+      // the next one
+      CompletableFuture.allOf(
+        futures.toArray(new CompletableFuture[futures.size()])).join();
     }
   }
 
