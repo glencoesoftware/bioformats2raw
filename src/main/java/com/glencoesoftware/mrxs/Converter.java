@@ -310,6 +310,7 @@ public class Converter implements Callable<Void> {
       int xBlocks = (int) Math.ceil((double) width / tileWidth);
       int yBlocks = (int) Math.ceil((double) height / tileHeight);
 
+      int bytesPerPixel = FormatTools.getBytesPerPixel(pixelType);
       byte[] tile = new byte[width * height * bytesPerPixel];
       for (int xBlock=0; xBlock<xBlocks; xBlock++) {
         for (int yBlock=0; yBlock<yBlocks; yBlock++) {
@@ -328,7 +329,7 @@ public class Converter implements Callable<Void> {
 
           int length = blockWidth * bytesPerPixel;
           for (int y=0; y<blockHeight; y++) {
-            int srcPos = y * blockWidth * bytesPerPixel;
+            int srcPos = y * length;
             int destPos = ((yBlock * width * tileHeight)
               + (y * width) + (xBlock * tileWidth)) * bytesPerPixel;
             System.arraycopy(subTile, srcPos, tile, destPos, length);
@@ -336,8 +337,8 @@ public class Converter implements Callable<Void> {
         }
       }
       return scaler.downsample(tile, width, height,
-          PYRAMID_SCALE, FormatTools.getBytesPerPixel(pixelType),
-          isLittleEndian, FormatTools.isFloatingPoint(pixelType),
+          PYRAMID_SCALE, bytesPerPixel, isLittleEndian,
+          FormatTools.isFloatingPoint(pixelType),
           rgbChannelCount, isInterleaved);
     }
   }
