@@ -30,17 +30,13 @@ import loci.common.services.ServiceFactory;
 import loci.formats.FormatException;
 import loci.formats.FormatTools;
 import loci.formats.IFormatReader;
-import loci.formats.IFormatWriter;
 import loci.formats.ImageWriter;
 import loci.formats.MetadataTools;
 import loci.formats.MissingLibraryException;
 import loci.formats.meta.IMetadata;
 import loci.formats.services.OMEXMLService;
 import loci.formats.services.OMEXMLServiceImpl;
-import ome.xml.model.enums.DimensionOrder;
 import ome.xml.model.enums.EnumerationException;
-import ome.xml.model.enums.PixelType;
-import ome.xml.model.primitives.PositiveInteger;
 
 import org.janelia.saalfeldlab.n5.ByteArrayDataBlock;
 import org.janelia.saalfeldlab.n5.Compression;
@@ -567,38 +563,6 @@ public class Converter implements Callable<Void> {
     finally {
       readers.put(reader);
     }
-  }
-
-  /**
-   * Create a writer with all appropriate options and initialize it.
-   *
-   * @param pixelType
-   * @param sizeX
-   * @param sizeY
-   * @return
-   * @throws EnumerationException
-   */
-  private IFormatWriter createWriter(int pixelType, int sizeX, int sizeY)
-      throws EnumerationException {
-    IMetadata metadata = MetadataTools.createOMEXMLMetadata();
-    metadata.setImageID("Image:0", 0);
-    metadata.setPixelsID("Pixels:0", 0);
-    metadata.setChannelID("Channel:0:0", 0, 0);
-    metadata.setChannelSamplesPerPixel(new PositiveInteger(1), 0, 0);
-    metadata.setPixelsBigEndian(!isLittleEndian, 0);
-    metadata.setPixelsSizeX(
-      new PositiveInteger(sizeX), 0);
-    metadata.setPixelsSizeY(
-      new PositiveInteger(sizeY), 0);
-    metadata.setPixelsSizeZ(new PositiveInteger(1), 0);
-    metadata.setPixelsSizeC(new PositiveInteger(1), 0);
-    metadata.setPixelsSizeT(new PositiveInteger(1), 0);
-    metadata.setPixelsDimensionOrder(DimensionOrder.XYCZT, 0);
-    metadata.setPixelsType(PixelType.fromString(
-      FormatTools.getPixelTypeString(pixelType)), 0);
-    ImageWriter writer = new ImageWriter();
-    writer.setMetadataRetrieve(metadata);
-    return writer;
   }
 
   private OMEXMLService getService() throws FormatException {
