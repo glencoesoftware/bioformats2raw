@@ -277,6 +277,60 @@ public class Converter implements Callable<Void> {
       }
   }
 
+  private byte[] getTileDownsampled(
+      int resolution, int plane, int xx, int yy, int width, int height)
+          throws FormatException, IOException, InterruptedException {
+    String pathName = "/" + Integer.toString(resolution - 1);
+    N5Reader n5 = new N5FSReader(
+        outputPath.resolve("pyramid.n5").toString());
+    DatasetAttributes datasetAttributes = n5.getDatasetAttributes(pathName);
+    long[] dimensions = datasetAttributes.getDimensions();
+
+    // Upscale our base X and Y offsets, and sizes to the previous resolution
+    // based on the pyramid scaling factor
+    xx *= PYRAMID_SCALE;
+    yy *= PYRAMID_SCALE;
+    width = (int) Math.min(tileWidth * PYRAMID_SCALE, dimensions[0] - xx);
+    height = (int) Math.min(tileHeight * PYRAMID_SCALE, dimensions[1] - yy);
+
+    long[] startGridPosition = new long[] {
+      xx / tileWidth, yy / tileHeight, plane
+    };
+    int xBlocks = (int) Math.ceil((double) width / tileWidth);
+    int yBlocks = (int) Math.ceil((double) height / tileHeight);
+
+    int bytesPerPixel = FormatTools.getBytesPerPixel(pixelType);
+    byte[] tile = new byte[width * height * bytesPerPixel];
+    for (int xBlock=0; xBlock<xBlocks; xBlock++) {
+      for (int yBlock=0; yBlock<yBlocks; yBlock++) {
+        int blockWidth = Math.min(
+          width - (xBlock * tileWidth), tileWidth);
+        int blockHeight = Math.min(
+          height - (yBlock * tileHeight),  tileHeight);
+        long[] gridPosition = new long[] {
+          startGridPosition[0] + xBlock, startGridPosition[1] + yBlock, plane
+        };
+        ByteBuffer buffer = n5.readBlock(
+          pathName, datasetAttributes, gridPosition
+        ).toByteBuffer();
+        byte[] subTile = new byte[buffer.limit()];
+        buffer.get(subTile);
+
+        int length = blockWidth * bytesPerPixel;
+        for (int y=0; y<blockHeight; y++) {
+          int srcPos = y * length;
+          int destPos = ((yBlock * width * tileHeight)
+            + (y * width) + (xBlock * tileWidth)) * bytesPerPixel;
+          System.arraycopy(subTile, srcPos, tile, destPos, length);
+        }
+      }
+    }
+    return scaler.downsample(tile, width, height,
+        PYRAMID_SCALE, bytesPerPixel, isLittleEndian,
+        FormatTools.isFloatingPoint(pixelType),
+        rgbChannelCount, isInterleaved);
+  }
+
   private byte[] getTile(
       int resolution, int plane, int xx, int yy, int width, int height)
           throws FormatException, IOException, InterruptedException {
@@ -289,55 +343,13 @@ public class Converter implements Callable<Void> {
         readers.put(reader);
       }
     } else {
-      String pathName = "/" + Integer.toString(resolution - 1);
-      N5Reader n5 = new N5FSReader(
-          outputPath.resolve("pyramid.n5").toString());
-      DatasetAttributes datasetAttributes = n5.getDatasetAttributes(pathName);
-      long[] dimensions = datasetAttributes.getDimensions();
-
-      // Upscale our base X and Y offsets, and sizes to the previous resolution
-      // based on the pyramid scaling factor
-      xx *= PYRAMID_SCALE;
-      yy *= PYRAMID_SCALE;
-      width = (int) Math.min(tileWidth * PYRAMID_SCALE, dimensions[0] - xx);
-      height = (int) Math.min(tileHeight * PYRAMID_SCALE, dimensions[1] - yy);
-
-      long[] startGridPosition = new long[] {
-        xx / tileWidth, yy / tileHeight, plane
-      };
-      int xBlocks = (int) Math.ceil((double) width / tileWidth);
-      int yBlocks = (int) Math.ceil((double) height / tileHeight);
-
-      int bytesPerPixel = FormatTools.getBytesPerPixel(pixelType);
-      byte[] tile = new byte[width * height * bytesPerPixel];
-      for (int xBlock=0; xBlock<xBlocks; xBlock++) {
-        for (int yBlock=0; yBlock<yBlocks; yBlock++) {
-          int blockWidth = Math.min(
-            width - (xBlock * tileWidth), tileWidth);
-          int blockHeight = Math.min(
-            height - (yBlock * tileHeight),  tileHeight);
-          long[] gridPosition = new long[] {
-            startGridPosition[0] + xBlock, startGridPosition[1] + yBlock, plane
-          };
-          ByteBuffer buffer = n5.readBlock(
-            pathName, datasetAttributes, gridPosition
-          ).toByteBuffer();
-          byte[] subTile = new byte[buffer.limit()];
-          buffer.get(subTile);
-
-          int length = blockWidth * bytesPerPixel;
-          for (int y=0; y<blockHeight; y++) {
-            int srcPos = y * length;
-            int destPos = ((yBlock * width * tileHeight)
-              + (y * width) + (xBlock * tileWidth)) * bytesPerPixel;
-            System.arraycopy(subTile, srcPos, tile, destPos, length);
-          }
-        }
+      Slf4JStopWatch t0 = new Slf4JStopWatch("getTileDownsampled");
+      try {
+        return getTileDownsampled(resolution, plane, xx, yy, width, height);
       }
-      return scaler.downsample(tile, width, height,
-          PYRAMID_SCALE, bytesPerPixel, isLittleEndian,
-          FormatTools.isFloatingPoint(pixelType),
-          rgbChannelCount, isInterleaved);
+      finally {
+        t0.stop();
+      }
     }
   }
 
