@@ -310,18 +310,17 @@ public class Converter implements Callable<Void> {
         long[] gridPosition = new long[] {
           startGridPosition[0] + xBlock, startGridPosition[1] + yBlock, plane
         };
-        ByteBuffer buffer = n5.readBlock(
+        ByteBuffer subTile = n5.readBlock(
           pathName, datasetAttributes, gridPosition
         ).toByteBuffer();
-        byte[] subTile = new byte[buffer.limit()];
-        buffer.get(subTile);
 
         int length = blockWidth * bytesPerPixel;
         for (int y=0; y<blockHeight; y++) {
           int srcPos = y * length;
           int destPos = ((yBlock * width * tileHeight)
             + (y * width) + (xBlock * tileWidth)) * bytesPerPixel;
-          System.arraycopy(subTile, srcPos, tile, destPos, length);
+          subTile.position(srcPos);
+          subTile.get(tile, destPos, length);
         }
       }
     }
