@@ -95,13 +95,13 @@ public class Converter implements Callable<Void> {
   private Integer pyramidResolutions;
 
   @Option(
-    names = {"-w", "--tile-width"},
+    names = {"-w", "--tile_width"},
     description = "Maximum tile width to read (default: ${DEFAULT-VALUE})"
   )
   private int tileWidth = 1024;
 
   @Option(
-    names = {"-h", "--tile-height"},
+    names = {"-h", "--tile_height"},
     description = "Maximum tile height to read (default: ${DEFAULT-VALUE})"
   )
   private int tileHeight = 1024;
