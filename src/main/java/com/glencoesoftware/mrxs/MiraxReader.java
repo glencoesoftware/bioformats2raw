@@ -1,28 +1,10 @@
-/*
- * #%L
- * OME Bio-Formats package for reading and converting biological file formats.
- * %%
- * Copyright (C) 2005 - 2013 Open Microscopy Environment:
- *   - Board of Regents of the University of Wisconsin-Madison
- *   - Glencoe Software, Inc.
- *   - University of Dundee
- * %%
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as
- * published by the Free Software Foundation, either version 2 of the
- * License, or (at your option) any later version.
+/**
+ * Copyright (c) 2019 Glencoe Software, Inc. All rights reserved.
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/gpl-2.0.html>.
- * #L%
+ * This software is distributed under the terms described by the LICENSE.txt
+ * file you can find at the root of the distribution bundle.  If the file is
+ * missing please request a copy by contacting info@glencoesoftware.com
  */
-
 package com.glencoesoftware.mrxs;
 
 import java.io.BufferedReader;
