@@ -9,15 +9,15 @@
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
- * published by the Free Software Foundation, either version 2 of the 
+ * published by the Free Software Foundation, either version 2 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
- * You should have received a copy of the GNU General Public 
+ *
+ * You should have received a copy of the GNU General Public
  * License along with this program.  If not, see
  * <http://www.gnu.org/licenses/gpl-2.0.html>.
  * #L%
@@ -30,9 +30,7 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
@@ -51,10 +49,8 @@ import loci.common.Region;
 import loci.formats.ChannelSeparator;
 import loci.formats.CoreMetadata;
 import loci.formats.FormatException;
-import loci.formats.FormatHandler;
 import loci.formats.FormatReader;
 import loci.formats.FormatTools;
-import loci.formats.IFormatReader;
 import loci.formats.MetadataTools;
 import loci.formats.codec.CodecOptions;
 import loci.formats.codec.JPEGCodec;
@@ -70,18 +66,10 @@ import ome.units.quantity.Length;
 import ome.units.quantity.Time;
 import ome.units.UNITS;
 import ome.xml.model.primitives.Color;
-import ome.xml.model.primitives.PositiveFloat;
-import ome.xml.model.primitives.PositiveInteger;
 import ome.xml.model.primitives.Timestamp;
 
 /**
  * MiraxReader is the file format reader for 3D Histech/Zeiss Mirax datasets.
- *
- * <dl><dt><b>Source code:</b></dt>
- * <dd><a href="http://trac.openmicroscopy.org.uk/ome/browser/bioformats.git/components/bio-formats/src/loci/formats/in/MiraxReader.java">Trac</a>,
- * <a href="http://git.openmicroscopy.org/?p=bioformats.git;a=blob;f=components/bio-formats/src/loci/formats/in/MiraxReader.java;hb=HEAD">Gitweb</a></dd></dl>
- *
- * @author Melissa Linkert melissa at glencoesoftware.com
  */
 public class MiraxReader extends FormatReader {
 
@@ -103,8 +91,8 @@ public class MiraxReader extends FormatReader {
 
   /**
    * Linear scaling factor for each progressively smaller resolution.
-   * This meant to be as close to 2.0 as possible, with a little breathing room for
-   * overlap calculations
+   * This meant to be as close to 2.0 as possible, with a little breathing room
+   * for overlap calculations
    */
   private static final double SCALE_FACTOR = 2.0;
 
@@ -114,9 +102,12 @@ public class MiraxReader extends FormatReader {
   private int pyramidDepth;
   private List<String> files = new ArrayList<String>();
   private String iniPath;
-  private int[] tileWidth, tileHeight;
-  private double[] overlapX, overlapY;
-  private double[] tileRowCount, tileColCount;
+  private int[] tileWidth;
+  private int[] tileHeight;
+  private double[] overlapX;
+  private double[] overlapY;
+  private double[] tileRowCount;
+  private double[] tileColCount;
   private List<String> format = new ArrayList<String>();
 
   /**
@@ -125,7 +116,8 @@ public class MiraxReader extends FormatReader {
    */
   private SortedMap<TilePointer, List<TilePointer>> offsets = null;
 
-  private int xTiles, yTiles;
+  private int xTiles;
+  private int yTiles;
   private int divPerSide;
 
   private List<Long> firstLevelOffsets = new ArrayList<Long>();
@@ -144,7 +136,8 @@ public class MiraxReader extends FormatReader {
   private CodecOptions jpegOptions = new CodecOptions();
 
   private JPEG2000Codec jp2kCodec = new JPEG2000Codec();
-  private JPEG2000CodecOptions jp2kOptions = JPEG2000CodecOptions.getDefaultOptions();
+  private JPEG2000CodecOptions jp2kOptions =
+    JPEG2000CodecOptions.getDefaultOptions();
 
   private transient JPEGXRCodec jpegxrCodec = new JPEGXRCodec();
 
@@ -163,6 +156,7 @@ public class MiraxReader extends FormatReader {
   // -- IFormatReader API methods --
 
   /* @see loci.formats.IFormatReader#getOptimalTileWidth() */
+  @Override
   public int getOptimalTileWidth() {
     FormatTools.assertId(currentId, true, 1);
     if (getCoreIndex() < pyramidDepth) {
@@ -172,6 +166,7 @@ public class MiraxReader extends FormatReader {
   }
 
   /* @see loci.formats.IFormatReader#getOptimalTileHeight() */
+  @Override
   public int getOptimalTileHeight() {
     FormatTools.assertId(currentId, true, 1);
     if (getCoreIndex() < pyramidDepth) {
@@ -181,6 +176,7 @@ public class MiraxReader extends FormatReader {
   }
 
   /* @see loci.formats.IFormatReader#getSeriesUsedFiles(boolean) */
+  @Override
   public String[] getSeriesUsedFiles(boolean noPixels) {
     FormatTools.assertId(currentId, true, 1);
 
@@ -197,6 +193,7 @@ public class MiraxReader extends FormatReader {
   }
 
   /* @see loci.formats.IFormatReader#setCoreIndex(int) */
+  @Override
   public void setCoreIndex(int index) {
     super.setCoreIndex(index);
     closeTileStream();
@@ -205,6 +202,7 @@ public class MiraxReader extends FormatReader {
   /**
    * @see loci.formats.IFormatReader#openBytes(int, byte[], int, int, int, int)
    */
+  @Override
   public byte[] openBytes(int no, byte[] buf, int x, int y, int w, int h)
     throws FormatException, IOException
   {
@@ -251,8 +249,10 @@ public class MiraxReader extends FormatReader {
           int tile = yp * (xTiles / divPerSide) + xp;
           int correctX = colIndex % (int) div;
           int correctY = rowIndex % (int) div;
-          tileRegion.x = (int) (((tilePositions[tile][0] / scale) + (correctX * width)));
-          tileRegion.y = (int) (((tilePositions[tile][1] / scale) + (correctY * height)));
+          tileRegion.x =
+            (int) (((tilePositions[tile][0] / scale) + (correctX * width)));
+          tileRegion.y =
+            (int) (((tilePositions[tile][1] / scale) + (correctY * height)));
         }
 
         Region intersection = tileRegion.intersection(image);
@@ -263,8 +263,9 @@ public class MiraxReader extends FormatReader {
         TilePointer thisOffset = lookupTile(index, col, row, no / MAX_CHANNELS);
         if (thisOffset != null) {
           int offsetIndex = firstLevelOffsets.indexOf(thisOffset.offset);
-          Long nextOffset = offsetIndex < 0 || offsetIndex >= firstLevelOffsets.size() - 1 ? -1L :
-            firstLevelOffsets.get(offsetIndex + 1);
+          Long nextOffset =
+            offsetIndex < 0 || offsetIndex >= firstLevelOffsets.size() - 1 ?
+            -1L : firstLevelOffsets.get(offsetIndex + 1);
 
           int maxChannel = (int) Math.min(MAX_CHANNELS, getSizeC());
           int channel = no % maxChannel;
@@ -276,21 +277,28 @@ public class MiraxReader extends FormatReader {
           byte[] tileBuf = lookup(thisOffset);
           if (tileBuf == null) {
             try {
-              tileBuf = readTile(file, thisOffset.offset, nextOffset, format.get(index), channel);
+              tileBuf = readTile(file, thisOffset.offset, nextOffset,
+                format.get(index), channel);
             }
             catch (NullPointerException e) {
               LOGGER.warn("Could not read tile (file=" + file +
-                ", offset="  + thisOffset.offset + ", nextOffset=" + nextOffset + ")", e);
+                ", offset="  + thisOffset.offset +
+                ", nextOffset=" + nextOffset + ")", e);
             }
           }
           if (tileBuf != null) {
             int channelIndex = channel * (tileBuf.length / MAX_CHANNELS);
 
-            // overlap is confined to the edges of the tile, so we can copy directly
+            // overlap is confined to the edges of the tile,
+            // so we can copy directly
             for (int trow=0; trow<intersection.height; trow++) {
-              int src = channelIndex + pixel * (width * (intersection.y - tileRegion.y + trow) + intersection.x - tileRegion.x);
-              int dest = pixel * (intersection.x - x) + outputRowLen * (trow + intersection.y - y);
-              int copy = (int) Math.min(intersection.width * pixel, buf.length - dest);
+              int src = channelIndex + pixel *
+                (width * (intersection.y - tileRegion.y + trow) +
+                intersection.x - tileRegion.x);
+              int dest = pixel * (intersection.x - x) +
+                outputRowLen * (trow + intersection.y - y);
+              int copy =
+                (int) Math.min(intersection.width * pixel, buf.length - dest);
               if (copy > 0) {
                 System.arraycopy(tileBuf, src, buf, dest, copy);
               }
@@ -307,7 +315,8 @@ public class MiraxReader extends FormatReader {
     return buf;
   }
 
-  /* @see loci.formats.IFormatReader#close(boolean) */
+  /** @see loci.formats.IFormatReader#close(boolean) */
+  @Override
   public void close(boolean fileOnly) throws IOException {
     super.close(fileOnly);
     if (!fileOnly) {
@@ -339,6 +348,7 @@ public class MiraxReader extends FormatReader {
   }
 
   /* @see loci.formats.IFormatReader#reopenFile() */
+  @Override
   public void reopenFile() throws IOException {
     super.reopenFile();
     // make sure we have usable tile offsets
@@ -352,11 +362,12 @@ public class MiraxReader extends FormatReader {
     // Calling lookupTile forces 'offsets' to be referenced, which results in
     // an IncompatibleClassChangeError.  Wrapping ICCE in an IOException forces
     // the Memoizer to automatically invalidate and regenerate the memo file.
-    // Throwing IncompatibleClassChangeError here would require Memoizer to catch
-    // Throwable, which is potentially dangerous.
+    // Throwing IncompatibleClassChangeError here would require Memoizer to
+    // catch Throwable, which is potentially dangerous.
     //
     // If a Memoizer is not in the reader stack, IncompatibleClassChangeError
-    // should never be thrown, and the impact of a single lookupTile call is minimal.
+    // should never be thrown, and the impact of a single
+    // lookupTile call is minimal.
     try {
       lookupTile(0, 0, 0, 0);
     }
@@ -399,7 +410,8 @@ public class MiraxReader extends FormatReader {
     String indexFile = hierarchy.get("INDEXFILE");
     Location index = new Location(dir, indexFile);
     if (!index.exists()) {
-      throw new IOException("Index file " + index.getAbsolutePath() + " missing");
+      throw new IOException(
+        "Index file " + index.getAbsolutePath() + " missing");
     }
     indexFile = index.getAbsolutePath();
     files.add(indexFile);
@@ -459,7 +471,8 @@ public class MiraxReader extends FormatReader {
         indexData.seek(listOffsets[levelIndex]);
         int nItems = indexData.readInt();
         if (nItems != 0) {
-          LOGGER.warn("First page size should be 0, was " + nItems + "; skipping level " + i + " in hierarchy " + h);
+          LOGGER.warn("First page size should be 0, was " + nItems +
+            "; skipping level " + i + " in hierarchy " + h);
           continue;
         }
         listOffsets[levelIndex] = indexData.readInt();
@@ -492,7 +505,8 @@ public class MiraxReader extends FormatReader {
             TilePointer key = new TilePointer(i, nextCounter);
             List<TilePointer> resolutionOffsets =
               getOrCreateResolutionOffsets(key);
-            resolutionOffsets.add(new TilePointer(i, fileNumber, nextOffset, nextCounter));
+            resolutionOffsets.add(
+              new TilePointer(i, fileNumber, nextOffset, nextCounter));
             firstLevelOffsets.add(nextOffset);
           }
           nextCounter = indexData.readInt();
@@ -532,7 +546,8 @@ public class MiraxReader extends FormatReader {
               resolutionOffsets.add(
                 new TilePointer(pyramidDepth, fileNumber, nextOffset, 0));
 
-              String section = hierarchy.get("NONHIER_" + i + "_VAL_" + q + "_SECTION");
+              String section =
+                hierarchy.get("NONHIER_" + i + "_VAL_" + q + "_SECTION");
               IniTable barcode = data.getTable(section);
 
               CoreMetadata m = new CoreMetadata();
@@ -570,7 +585,8 @@ public class MiraxReader extends FormatReader {
             int fileNumber = indexData.readInt();
 
             String positionFile = files.get(fileNumber + 1);
-            RandomAccessInputStream stream = new RandomAccessInputStream(positionFile);
+            RandomAccessInputStream stream =
+              new RandomAccessInputStream(positionFile);
             stream.seek(nextOffset);
 
             ZlibCodec codec = new ZlibCodec();
@@ -581,8 +597,10 @@ public class MiraxReader extends FormatReader {
             int minX = Integer.MAX_VALUE;
             int minY = Integer.MAX_VALUE;
             for (int t=0; t<nTiles; t++) {
-              tilePositions[t][0] = DataTools.bytesToInt(positionData, t * 9 + 1, 4, true);
-              tilePositions[t][1] = DataTools.bytesToInt(positionData, t * 9 + 5, 4, true);
+              tilePositions[t][0] =
+                DataTools.bytesToInt(positionData, t * 9 + 1, 4, true);
+              tilePositions[t][1] =
+                DataTools.bytesToInt(positionData, t * 9 + 5, 4, true);
 
               if (tilePositions[t][0] > 0 && tilePositions[t][0] < minX) {
                 minX = tilePositions[t][0];
@@ -618,7 +636,8 @@ public class MiraxReader extends FormatReader {
           int fileNumber = indexData.readInt();
 
           String positionFile = files.get(fileNumber + 1);
-          RandomAccessInputStream stream = new RandomAccessInputStream(positionFile);
+          RandomAccessInputStream stream =
+            new RandomAccessInputStream(positionFile);
           stream.order(true);
           stream.seek(nextOffset);
 
@@ -743,8 +762,12 @@ public class MiraxReader extends FormatReader {
       int tilesPerTile = (int) Math.ceil(1 / getResolutionDivisions(i));
 
       if (i == 0) {
-        m.sizeX = (int) ((tileWidth[i] * tileColCount[i]) - (overlapX[i] * ((tileColCount[0] / div) - 1)));
-        m.sizeY = (int) ((tileHeight[i] * tileRowCount[i]) - (overlapY[i] * ((tileRowCount[0] / div) - 1)));
+        double totalWidth = tileWidth[i] * tileColCount[i];
+        double totalHeight = tileHeight[i] * tileRowCount[i];
+        double divX = tileColCount[0] / div;
+        double divY = tileRowCount[0] / div;
+        m.sizeX = (int) (totalWidth - (overlapX[i] * (divX - 1)));
+        m.sizeY = (int) (totalHeight - (overlapY[i] * (divY - 1)));
       }
       else {
         m.sizeX = (int) (core.get(i - 1).sizeX / SCALE_FACTOR);
@@ -783,7 +806,8 @@ public class MiraxReader extends FormatReader {
         for (int c=0; c<getEffectiveSizeC(); c++) {
           int color = (fillColor >> (8 * (c % MAX_CHANNELS))) & 0xff;
           double percentColor = color / 255.0;
-          percentColor *= (Math.pow(2, FormatTools.getBytesPerPixel(getPixelType()) * 8) - 1);
+          percentColor *=
+            (Math.pow(2, FormatTools.getBytesPerPixel(getPixelType()) * 8) - 1);
           minMax.setChannelGlobalMinMax(c, 0, percentColor, series);
         }
       }
@@ -813,10 +837,12 @@ public class MiraxReader extends FormatReader {
       store.setObjectiveModel(objectiveName, 0, 0);
       if (objectiveMag != null) {
         try {
-          store.setObjectiveNominalMagnification(new Double(objectiveMag), 0, 0);
+          store.setObjectiveNominalMagnification(
+            new Double(objectiveMag), 0, 0);
         }
         catch (NumberFormatException e) {
-          LOGGER.debug("Could not parse objective magnification {}", objectiveMag);
+          LOGGER.debug(
+            "Could not parse objective magnification {}", objectiveMag);
         }
       }
 
@@ -824,7 +850,9 @@ public class MiraxReader extends FormatReader {
       store.setDetectorID(detector, 0, 0);
       store.setDetectorModel(cameraType, 0, 0);
 
-      if ((slideName == null || slideName.equals("None")) && objectiveMag != null) {
+      if ((slideName == null || slideName.equals("None")) &&
+        objectiveMag != null)
+      {
         slideName = objectiveMag + "x";
       }
 
@@ -839,8 +867,8 @@ public class MiraxReader extends FormatReader {
       store.setObjectiveSettingsID(objective, 0);
 
       if (creationDate != null) {
-        store.setImageAcquisitionDate(
-          new Timestamp(DateTools.formatDate(creationDate, "dd/MM/yyyy HH:mm:ss")), 0);
+        store.setImageAcquisitionDate(new Timestamp(
+          DateTools.formatDate(creationDate, "dd/MM/yyyy HH:mm:ss")), 0);
       }
 
       String section = hierarchy.get("HIER_0_VAL_0_SECTION");
@@ -888,9 +916,12 @@ public class MiraxReader extends FormatReader {
         String blue = channelTable.get("COLOR_B");
         String exposure = channelTable.get("EXPOSURE_TIME");
         String gain = channelTable.get("DIGITALGAIN");
-        boolean useRed = Boolean.valueOf(channelTable.get("USE_RED_CHANNEL").toLowerCase());
-        boolean useGreen = Boolean.valueOf(channelTable.get("USE_GREEN_CHANNEL").toLowerCase());
-        boolean useBlue = Boolean.valueOf(channelTable.get("USE_BLUE_CHANNEL").toLowerCase());
+        boolean useRed =
+          Boolean.valueOf(channelTable.get("USE_RED_CHANNEL").toLowerCase());
+        boolean useGreen =
+          Boolean.valueOf(channelTable.get("USE_GREEN_CHANNEL").toLowerCase());
+        boolean useBlue =
+          Boolean.valueOf(channelTable.get("USE_BLUE_CHANNEL").toLowerCase());
 
         if (!useRed && !useGreen && !useBlue) {
           // name and color information won't be usable
@@ -971,7 +1002,7 @@ public class MiraxReader extends FormatReader {
   }
 
   private byte[] readTile(String file, long offset, long nextOffset,
-    String format, int channel)
+    String tileFormat, int channel)
     throws FormatException, IOException
   {
     if (tileStream == null || !file.equals(tileFile)) {
@@ -986,11 +1017,11 @@ public class MiraxReader extends FormatReader {
     if (nextOffset < 0 || compressedByteCount <= 0) {
       compressedByteCount = (int) (tileStream.length() - offset);
     }
-    if (format.equals("PNG")) {
+    if (tileFormat.equals("PNG")) {
       byte[] fileBuffer = new byte[compressedByteCount];
       tileStream.readFully(fileBuffer);
 
-      String filename = "tile." + (format.equals("PNG") ? "png" : "jpg");
+      String filename = "tile." + (tileFormat.equals("PNG") ? "png" : "jpg");
       ByteArrayHandle byteFile = new ByteArrayHandle(fileBuffer);
       Location.mapFile(filename, byteFile);
 
@@ -1000,7 +1031,7 @@ public class MiraxReader extends FormatReader {
       byteFile.close();
       Location.mapFile(filename, null);
     }
-    else if (format.equals("JPEG")) {
+    else if (tileFormat.equals("JPEG")) {
       // check the JPEG marker before decompressing
       // missing tiles will sometimes present as an offset somewhere
       // in the middle of a file that does not contain pixel data
@@ -1019,7 +1050,7 @@ public class MiraxReader extends FormatReader {
         LOGGER.trace("Invalid marker: reading from {} at {}", file, offset);
       }
     }
-    else if (format.equals("JPEG2000")) {
+    else if (tileFormat.equals("JPEG2000")) {
       jp2kOptions.interleaved = false;
       LOGGER.debug("jp2k offset = {}", offset);
       LOGGER.debug("jp2k next offset = {}", nextOffset);
@@ -1030,19 +1061,21 @@ public class MiraxReader extends FormatReader {
         jp2kOptions.maxBytes = 0;
       }
       jp2kOptions.littleEndian = isLittleEndian();
-      jp2kOptions.bitsPerSample = FormatTools.getBytesPerPixel(getPixelType()) * 8;
+      jp2kOptions.bitsPerSample =
+        FormatTools.getBytesPerPixel(getPixelType()) * 8;
       long t0 = System.currentTimeMillis();
       tile = jp2kCodec.decompress(tileStream, jp2kOptions);
       LOGGER.debug(
           "jp2kCodec.decompress() time {}ms", System.currentTimeMillis() - t0
       );
     }
-    else if (format.equals("JPEGXR")) {
+    else if (tileFormat.equals("JPEGXR")) {
       byte[] fileBuffer = new byte[compressedByteCount];
       tileStream.readFully(fileBuffer);
       jpegOptions.interleaved = false;
       jpegOptions.littleEndian = isLittleEndian();
-      jpegOptions.bitsPerSample = FormatTools.getBytesPerPixel(getPixelType()) * 8;
+      jpegOptions.bitsPerSample =
+        FormatTools.getBytesPerPixel(getPixelType()) * 8;
       jpegOptions.width = tileWidth[getCoreIndex()];
       jpegOptions.height = tileHeight[getCoreIndex()];
       if (jpegxrCodec == null) {
@@ -1055,7 +1088,7 @@ public class MiraxReader extends FormatReader {
       );
     }
     else {
-      throw new FormatException("Unsupported tile format: " + format);
+      throw new FormatException("Unsupported tile format: " + tileFormat);
     }
     return tile;
   }
@@ -1064,7 +1097,8 @@ public class MiraxReader extends FormatReader {
     int counter = 0;
     if (resolution < pyramidDepth) {
       int resScale = (int) Math.pow(2, resolution);
-      int firstTile = minRowIndex[resolution] * xTiles + minColIndex[resolution];
+      int firstTile =
+        minRowIndex[resolution] * xTiles + minColIndex[resolution];
       counter = firstTile + resScale * (y * xTiles + x);
     }
     TilePointer key = new TilePointer(resolution, counter);
@@ -1102,16 +1136,16 @@ public class MiraxReader extends FormatReader {
     public long offset;
     public int counter;
 
-    public TilePointer(int res, int counter) {
+    public TilePointer(int res, int tileCounter) {
       this.resolution = res;
-      this.counter = counter;
+      this.counter = tileCounter;
     }
 
-    public TilePointer(int res, int fileIndex, long offset, int counter) {
+    public TilePointer(int res, int index, long tileOffset, int tileCounter) {
       this.resolution = res;
-      this.fileIndex = fileIndex;
-      this.offset = offset;
-      this.counter = counter;
+      this.fileIndex = index;
+      this.offset = tileOffset;
+      this.counter = tileCounter;
     }
 
     @Override
@@ -1136,7 +1170,8 @@ public class MiraxReader extends FormatReader {
 
     @Override
     public String toString() {
-      return "resolution=" + resolution + ", fileIndex=" + fileIndex + ", offset=" + offset + ", counter=" + counter;
+      return "resolution=" + resolution + ", fileIndex=" + fileIndex +
+        ", offset=" + offset + ", counter=" + counter;
     }
 
     @Override
@@ -1149,6 +1184,11 @@ public class MiraxReader extends FormatReader {
             && tilePointer.counter == this.counter;
       }
       return super.equals(obj);
+    }
+
+    @Override
+    public int hashCode() {
+      return counter;
     }
   }
 
@@ -1165,8 +1205,8 @@ public class MiraxReader extends FormatReader {
     private TilePointer offset;
     private byte[] tileBuffer;
 
-    public CachedTile(TilePointer offset, byte[] buffer) {
-      this.offset = offset;
+    public CachedTile(TilePointer tileOffset, byte[] buffer) {
+      this.offset = tileOffset;
       this.tileBuffer = buffer;
     }
 
