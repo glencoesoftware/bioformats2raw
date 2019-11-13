@@ -19,6 +19,9 @@ import java.util.TreeMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+
 import loci.common.ByteArrayHandle;
 import loci.common.DataTools;
 import loci.common.DateTools;
@@ -63,7 +66,6 @@ public class MiraxReader extends FormatReader {
   private static final int MAX_TILE_SIZE = 256;
 
   private static final String SLIDE_DATA = "Slidedat.ini";
-  private static final int CACHE_SIZE = 32;
 
   /**
    * Maximum number of channels in a tile.  The assembled slide can
@@ -123,7 +125,9 @@ public class MiraxReader extends FormatReader {
 
   private transient JPEGXRCodec jpegxrCodec = new JPEGXRCodec();
 
-  private ArrayList<CachedTile> tileCache = new ArrayList<CachedTile>();
+  private Cache<TilePointer, byte[]> tileCache = CacheBuilder.newBuilder()
+      .maximumSize(0)  // Disabled
+      .build();
 
   // -- Constructor --
 
@@ -256,7 +260,7 @@ public class MiraxReader extends FormatReader {
           }
 
           String file = files.get(thisOffset.fileIndex + 1);
-          byte[] tileBuf = lookup(thisOffset);
+          byte[] tileBuf = tileCache.getIfPresent(thisOffset);
           if (tileBuf == null) {
             try {
               tileBuf = readTile(file, thisOffset.offset, nextOffset,
@@ -285,10 +289,7 @@ public class MiraxReader extends FormatReader {
                 System.arraycopy(tileBuf, src, buf, dest, copy);
               }
             }
-            if (tileCache.size() > CACHE_SIZE) {
-              tileCache.remove(0);
-            }
-            tileCache.add(new CachedTile(thisOffset, tileBuf));
+            tileCache.put(thisOffset, tileBuf);
           }
         }
       }
@@ -325,7 +326,6 @@ public class MiraxReader extends FormatReader {
       tilePositions = null;
       pngReader.close();
       firstLevelOffsets.clear();
-      tileCache.clear();
     }
   }
 
@@ -965,6 +965,15 @@ public class MiraxReader extends FormatReader {
   }
 
   /**
+   * Sets the tile cache that will be used to try and avoid repeated
+   * decompression.
+   * @param newTileCache the tile cache to use
+   */
+  public void setTileCache(Cache<TilePointer, byte[]> newTileCache) {
+    tileCache = newTileCache;
+  }
+
+  /**
    * Retrieves the current set of offsets for a given resolution.  Creates the
    * resolution offsets map if it has not been already.
    * @param resolution resolution to retrieve offsets for
@@ -1112,17 +1121,29 @@ public class MiraxReader extends FormatReader {
     return div;
   }
 
-  class TilePointer implements Comparable<TilePointer> {
-    public int resolution;
-    public int fileIndex;
-    public long offset;
-    public int counter;
+  public class TilePointer implements Comparable<TilePointer> {
+    public final int resolution;
+    public final int fileIndex;
+    public final long offset;
+    public final int counter;
 
+    /**
+     * Tile pointer to a tile at a given logical offset at a given resolution.
+     * @param res resolution the file is at
+     * @param tileCounter logical offset of the tile
+     */
     public TilePointer(int res, int tileCounter) {
-      this.resolution = res;
-      this.counter = tileCounter;
+      this(res, 0, 0, tileCounter);
     }
 
+    /**
+     * Tile pointer to a tile at a given logical offset at a given resolution.
+     * with a physical offset and index within the file
+     * @param res resolution the file is at
+     * @param index physical index within the file
+     * @param tileOffset physical offset within the file
+     * @param tileCounter logical offset of the tile
+     */
     public TilePointer(int res, int index, long tileOffset, int tileCounter) {
       this.resolution = res;
       this.fileIndex = index;
@@ -1171,33 +1192,6 @@ public class MiraxReader extends FormatReader {
     @Override
     public int hashCode() {
       return counter;
-    }
-  }
-
-  private byte[] lookup(TilePointer tile) {
-    for (CachedTile cache : tileCache) {
-      if (cache.getOffset().equals(tile)) {
-        return cache.getBuffer();
-      }
-    }
-    return null;
-  }
-
-  class CachedTile {
-    private TilePointer offset;
-    private byte[] tileBuffer;
-
-    public CachedTile(TilePointer tileOffset, byte[] buffer) {
-      this.offset = tileOffset;
-      this.tileBuffer = buffer;
-    }
-
-    public TilePointer getOffset() {
-      return offset;
-    }
-
-    public byte[] getBuffer() {
-      return tileBuffer;
     }
   }
 

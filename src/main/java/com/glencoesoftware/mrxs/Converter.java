@@ -53,6 +53,10 @@ import org.perf4j.slf4j.Slf4JStopWatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.glencoesoftware.mrxs.MiraxReader.TilePointer;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+
 import ch.qos.logback.classic.Level;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
@@ -118,6 +122,14 @@ public class Converter implements Callable<Void> {
   )
   private int maxWorkers = Runtime.getRuntime().availableProcessors();
 
+  @Option(
+    names = "--max_cached_tiles",
+    description =
+      "Maximum number of tiles that will be cached across all "
+      + "workers (default: ${DEFAULT-VALUE})"
+  )
+  private int maxCachedTiles = 64;
+
   private IImageScaler scaler = new SimpleImageScaler();
 
   private BlockingQueue<IFormatReader> readers;
@@ -177,14 +189,18 @@ public class Converter implements Callable<Void> {
     queue = new LimitedQueue<Runnable>(maxWorkers);
     executor = new ThreadPoolExecutor(
       maxWorkers, maxWorkers, 0L, TimeUnit.MILLISECONDS, queue);
+    Cache<TilePointer, byte[]> tileCache = CacheBuilder.newBuilder()
+        .maximumSize(maxCachedTiles)
+        .build();
     try {
       for (int i=0; i < maxWorkers; i++) {
-        IFormatReader reader = new MiraxReader();
+        MiraxReader reader = new MiraxReader();
         reader.setFlattenedResolutions(false);
         reader.setMetadataFiltered(true);
         reader.setMetadataStore(createMetadata());
         reader.setId(inputPath.toString());
         reader.setResolution(0);
+        reader.setTileCache(tileCache);
         readers.add(reader);
       }
 
