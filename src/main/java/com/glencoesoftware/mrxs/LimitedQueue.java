@@ -11,27 +11,32 @@ package com.glencoesoftware.mrxs;
 import java.util.concurrent.LinkedBlockingQueue;
 
 /**
- * A limited queue which blocks when <code>offer(...)</code> is attempted
- * @see https://stackoverflow.com/questions/4521983/java-executorservice-that-blocks-on-submission-after-a-certain-queue-size
+ * A limited queue which blocks when <code>offer(...)</code> is attempted.
+ * @see https://stackoverflow.com/questions/4521983/
+ * @param <E> the type of elements in this queue
  */
-public class LimitedQueue<E> extends LinkedBlockingQueue<E> 
-{
-    public LimitedQueue(int maxSize)
-    {
-        super(maxSize);
-    }
+public class LimitedQueue<E> extends LinkedBlockingQueue<E> {
 
-    @Override
-    public boolean offer(E e)
-    {
-        // turn offer() and add() into a blocking calls (unless interrupted)
-        try {
-            put(e);
-            return true;
-        } catch(InterruptedException ie) {
-            Thread.currentThread().interrupt();
-        }
-        return false;
+  /**
+   * Construct a new queue with the given maximum size.
+   *
+   * @param maxSize the maximum number of items in the queue
+   */
+  public LimitedQueue(int maxSize) {
+    super(maxSize);
+  }
+
+  @Override
+  public boolean offer(E e) {
+    // turn offer() and add() into a blocking calls (unless interrupted)
+    try {
+      put(e);
+      return true;
     }
+    catch(InterruptedException ie) {
+      Thread.currentThread().interrupt();
+    }
+    return false;
+  }
 
 }

@@ -95,13 +95,13 @@ public class Converter implements Callable<Void> {
   private Integer pyramidResolutions;
 
   @Option(
-    names = {"-w", "--tile-width"},
+    names = {"-w", "--tile_width"},
     description = "Maximum tile width to read (default: ${DEFAULT-VALUE})"
   )
   private int tileWidth = 1024;
 
   @Option(
-    names = {"-h", "--tile-height"},
+    names = {"-h", "--tile_height"},
     description = "Maximum tile height to read (default: ${DEFAULT-VALUE})"
   )
   private int tileHeight = 1024;
@@ -146,17 +146,16 @@ public class Converter implements Callable<Void> {
 
   private AtomicInteger nTile;
 
-  public Converter() {
-  }
-
   @Override
   public Void call()
-      throws FormatException, IOException, InterruptedException {
+      throws FormatException, IOException, InterruptedException
+  {
     ch.qos.logback.classic.Logger root = (ch.qos.logback.classic.Logger)
         LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
     if (debug) {
       root.setLevel(Level.DEBUG);
-    } else {
+    }
+    else {
       root.setLevel(Level.INFO);
     }
     convert();
@@ -172,7 +171,8 @@ public class Converter implements Callable<Void> {
    * @throws InterruptedException
    */
   public void convert()
-      throws FormatException, IOException, InterruptedException {
+      throws FormatException, IOException, InterruptedException
+  {
     readers = new ArrayBlockingQueue<IFormatReader>(maxWorkers);
     queue = new LimitedQueue<Runnable>(maxWorkers);
     executor = new ThreadPoolExecutor(
@@ -190,7 +190,9 @@ public class Converter implements Callable<Void> {
 
       try {
         // only process the first series here
-        // wait until all tiles have been written to process the remaining series
+        // wait until all tiles have been written
+        // before processing the remaining series
+        //
         // otherwise, the readers' series will be changed from under
         // in-process tiles, leading to exceptions
         write(0);
@@ -239,7 +241,8 @@ public class Converter implements Callable<Void> {
       readers.forEach((v) -> {
         try {
           v.close();
-        } catch (IOException e) {
+        }
+        catch (IOException e) {
           LOGGER.error("Exception while closing reader", e);
         }
       });
@@ -250,32 +253,34 @@ public class Converter implements Callable<Void> {
    * Convert the data specified by the given initialized reader to
    * an intermediate form.
    *
+   * @param series the reader series index to be converted
    * @throws FormatException
    * @throws IOException
-   * @throws InterruptedException 
+   * @throws InterruptedException
    */
   public void write(int series)
     throws FormatException, IOException, InterruptedException
   {
-      readers.forEach((reader) -> {
-        reader.setSeries(series);
-      });
+    readers.forEach((reader) -> {
+      reader.setSeries(series);
+    });
 
-      if (series == 0) {
-        saveResolutions();
+    if (series == 0) {
+      saveResolutions();
+    }
+    else {
+      String filename = series + ".jpg";
+      if (series == 1) {
+        filename = "LABELIMAGE.jpg";
       }
-      else {
-        String filename = series + ".jpg";
-        if (series == 1) {
-          filename = "LABELIMAGE.jpg";
-        }
-        saveExtraImage(filename);
-      }
+      saveExtraImage(filename);
+    }
   }
 
   private byte[] getTileDownsampled(
       int resolution, int plane, int xx, int yy, int width, int height)
-          throws FormatException, IOException, InterruptedException {
+          throws FormatException, IOException, InterruptedException
+  {
     String pathName = "/" + Integer.toString(resolution - 1);
     N5Reader n5 = new N5FSReader(
         outputPath.resolve("pyramid.n5").toString());
@@ -328,7 +333,8 @@ public class Converter implements Callable<Void> {
 
   private byte[] getTile(
       int resolution, int plane, int xx, int yy, int width, int height)
-          throws FormatException, IOException, InterruptedException {
+          throws FormatException, IOException, InterruptedException
+  {
     if (resolution == 0) {
       IFormatReader reader = readers.take();
       try {
@@ -337,7 +343,8 @@ public class Converter implements Callable<Void> {
       finally {
         readers.put(reader);
       }
-    } else {
+    }
+    else {
       Slf4JStopWatch t0 = new Slf4JStopWatch("getTileDownsampled");
       try {
         return getTileDownsampled(resolution, plane, xx, yy, width, height);
@@ -351,12 +358,13 @@ public class Converter implements Callable<Void> {
   private void processTile(
       int resolution, int plane, int xx, int yy, int width, int height)
         throws EnumerationException, FormatException, IOException,
-          InterruptedException {
+          InterruptedException
+  {
     String pathName = "/" + Integer.toString(resolution);
     long[] gridPosition = new long[] {
       xx / tileWidth, yy / tileHeight, plane
     };
-    int[] size = new int[] { width, height, 1 };
+    int[] size = new int[] {width, height, 1};
 
     Slf4JStopWatch t0 = new Slf4JStopWatch("getTile");
     DataBlock<?> dataBlock;
@@ -370,20 +378,17 @@ public class Converter implements Callable<Void> {
 
       int bytesPerPixel = FormatTools.getBytesPerPixel(pixelType);
       switch (bytesPerPixel) {
-        case 1: {
+        case 1:
           dataBlock = new ByteArrayDataBlock(size, gridPosition, tile);
           break;
-        }
-        case 2: {
+        case 2:
           short[] asShort = new short[tile.length / 2];
           ByteBuffer.wrap(tile).asShortBuffer().get(asShort);
           dataBlock = new ShortArrayDataBlock(size, gridPosition, asShort);
           break;
-        }
-        default: {
+        default:
           throw new FormatException(
               "Unsupported bytes per pixel: " + bytesPerPixel);
-        }
       }
     }
     finally {
@@ -415,37 +420,38 @@ public class Converter implements Callable<Void> {
    *
    * @throws FormatException
    * @throws IOException
-   * @throws InterruptedException 
+   * @throws InterruptedException
    */
   public void saveResolutions()
     throws FormatException, IOException, InterruptedException
   {
-    IFormatReader _reader = readers.take();
+    IFormatReader workingReader = readers.take();
     try {
-      isLittleEndian = _reader.isLittleEndian();
+      isLittleEndian = workingReader.isLittleEndian();
       resolutions = 1;
       // calculate a reasonable pyramid depth if not specified as an argument
       if (pyramidResolutions == null) {
-        int width = _reader.getSizeX();
-        int height = _reader.getSizeY();
+        int width = workingReader.getSizeX();
+        int height = workingReader.getSizeY();
         while (width > MIN_SIZE || height > MIN_SIZE) {
           resolutions++;
           width /= PYRAMID_SCALE;
           height /= PYRAMID_SCALE;
         }
-      } else {
+      }
+      else {
         resolutions = pyramidResolutions;
       }
       LOGGER.info("Using {} pyramid resolutions", resolutions);
-      sizeX = _reader.getSizeX();
-      sizeY = _reader.getSizeY();
-      rgbChannelCount = _reader.getRGBChannelCount();
-      isInterleaved = _reader.isInterleaved();
-      imageCount = _reader.getImageCount();
-      pixelType = _reader.getPixelType();
+      sizeX = workingReader.getSizeX();
+      sizeY = workingReader.getSizeY();
+      rgbChannelCount = workingReader.getRGBChannelCount();
+      isInterleaved = workingReader.isInterleaved();
+      imageCount = workingReader.getImageCount();
+      pixelType = workingReader.getPixelType();
     }
     finally {
-      readers.put(_reader);
+      readers.put(workingReader);
     }
 
     LOGGER.info(
@@ -457,26 +463,21 @@ public class Converter implements Callable<Void> {
     // Prepare N5 dataset
     DataType dataType;
     switch (pixelType) {
-      case FormatTools.INT8: {
+      case FormatTools.INT8:
         dataType = DataType.INT8;
         break;
-      }
-      case FormatTools.UINT8: {
+      case FormatTools.UINT8:
         dataType = DataType.UINT8;
         break;
-      }
-      case FormatTools.INT16: {
+      case FormatTools.INT16:
         dataType = DataType.INT16;
         break;
-      }
-      case FormatTools.UINT16: {
+      case FormatTools.UINT16:
         dataType = DataType.UINT16;
         break;
-      }
-      default: {
+      default:
         throw new FormatException("Unsupported pixel type: "
             + FormatTools.getPixelTypeString(pixelType));
-      }
     }
     // Use compression scheme that is most compatible with Zarr
     Compression compression = new BloscCompression(
@@ -488,15 +489,15 @@ public class Converter implements Callable<Void> {
     );
     //Compression compression = new RawCompression();
     N5Writer n5 = new N5FSWriter(outputPath.resolve("pyramid.n5").toString());
-    for (int _resolution=0; _resolution<resolutions; _resolution++) {
-      final int resolution = _resolution;
+    for (int resCounter=0; resCounter<resolutions; resCounter++) {
+      final int resolution = resCounter;
       int scale = (int) Math.pow(PYRAMID_SCALE, resolution);
       int scaledWidth = sizeX / scale;
       int scaledHeight = sizeY / scale;
       n5.createDataset(
           "/" + Integer.toString(resolution),
-          new long[] { scaledWidth, scaledHeight, imageCount },
-          new int[] { tileWidth, tileHeight, 1 },
+          new long[] {scaledWidth, scaledHeight, imageCount},
+          new int[] {tileWidth, tileHeight, 1},
           dataType, compression
       );
 
@@ -504,7 +505,8 @@ public class Converter implements Callable<Void> {
       tileCount = (int) Math.ceil((double) scaledWidth / tileWidth)
           * (int) Math.ceil((double) scaledHeight / tileHeight)
           * imageCount;
-      List<CompletableFuture<Void>> futures = new ArrayList<CompletableFuture<Void>>();
+      List<CompletableFuture<Void>> futures =
+        new ArrayList<CompletableFuture<Void>>();
       for (int j=0; j<scaledHeight; j+=tileHeight) {
         final int yy = j;
         int height = (int) Math.min(tileHeight, scaledHeight - yy);
@@ -592,6 +594,10 @@ public class Converter implements Callable<Void> {
     return new Slf4JStopWatch(LOGGER, Slf4JStopWatch.DEBUG_LEVEL);
   }
 
+  /**
+   * Perform file conversion as specified by command line arguments.
+   * @param args command line arguments
+   */
   public static void main(String[] args) {
     CommandLine.call(new Converter(), args);
   }
