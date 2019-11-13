@@ -190,7 +190,7 @@ public class Converter implements Callable<Void> {
     executor = new ThreadPoolExecutor(
       maxWorkers, maxWorkers, 0L, TimeUnit.MILLISECONDS, queue);
     Cache<TilePointer, byte[]> tileCache = CacheBuilder.newBuilder()
-        .maximumSize(64)
+        .maximumSize(maxCachedTiles)
         .build();
     try {
       for (int i=0; i < maxWorkers; i++) {
