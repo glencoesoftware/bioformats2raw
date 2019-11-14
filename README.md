@@ -5,6 +5,11 @@ Java application to convert an .mrxs dataset to an intermediate N5 structure.
 The raw2ometiff application can then be used to produce a
 Bio-Formats 5.9.x ("Faas") or Bio-Formats 6.x (true OME-TIFF) pyramid.
 
+Requirements
+============
+
+libblosc (https://github.com/Blosc/c-blosc) version 1.9.0 or later must be installed separately.
+The native libraries are not packaged with any relevant jars.  See also note in n5-zarr readme (https://github.com/saalfeldlab/n5-zarr/blob/0.0.2-beta/README.md)
 
 Usage
 =====
@@ -23,5 +28,6 @@ Run the conversion:
 
     bin/mrxs2raw /path/to/file.mrxs /path/to/n5-pyramid --resolutions 6
 
-Maximum tile dimensions are 2048x2048, and can be configured with the `--tile_width` and `--tile_height` options.
-`--resolutions` is optional; if omitted, the number of resolutions is set so that the smallest resolution is no greater than 256x256.
+Maximum tile dimensions are can be configured with the `--tile_width` and `--tile_height` options.  Defaults can be viewed with
+`bin/mrxs2raw --help`.  `--resolutions` is optional; if omitted, the number of resolutions is set so that the smallest
+resolution is no greater than 256x256.
