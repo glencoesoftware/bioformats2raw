@@ -6,7 +6,7 @@ plugins {
 }
 
 group = 'com.glencoesoftware'
-version = '0.1.0-SNAPSHOT'
+version = '0.1.0'
 
 mainClassName = 'com.glencoesoftware.mrxs.Converter'
 sourceCompatibility = 1.8
