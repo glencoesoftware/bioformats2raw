@@ -128,32 +128,48 @@ public class Converter implements Callable<Void> {
   )
   private int maxCachedTiles = 64;
 
+  /** Scaling implementation that will be used during downsampling. */
   private IImageScaler scaler = new SimpleImageScaler();
 
+  /**
+   * Set of readers that can be used concurrently, size will be equal to
+   * {@link #maxWorkers}.
+   */
   private BlockingQueue<IFormatReader> readers;
 
+  /**
+   * Bounded task queue limiting the number of in flight conversion operations
+   * happening in parallel.  Size will be equal to {@link #maxWorkers}.
+   */
   private BlockingQueue<Runnable> queue;
 
   private ExecutorService executor;
 
+  /** Whether or not the source file is little endian. */
   private boolean isLittleEndian;
 
-  private int resolutions;
-
-  private int sizeX;
-
-  private int sizeY;
-
+  /**
+   * The number of channels returned with each call to openBytes in the
+   * source file.  Retrieved from {@link IFormatReader#getRGBChannelCount()}.
+   */
   private int rgbChannelCount;
 
+  /**
+   * Whether or not the channels are interleaved in the source file. Retrieved
+   * from {@link IFormatReader#isInterleaved()}.
+   */
   private boolean isInterleaved;
 
-  private int imageCount;
-
+  /**
+   * The source file's pixel type.  Retrieved from
+   * {@link IFormatReader#getPixelType()}.
+   */
   private int pixelType;
 
+  /** Total number of tiles at the current resolution during processing. */
   private int tileCount;
 
+  /** Current number of tiles processed at the current resolution. */
   private AtomicInteger nTile;
 
   @Override
@@ -440,9 +456,12 @@ public class Converter implements Callable<Void> {
     throws FormatException, IOException, InterruptedException
   {
     IFormatReader workingReader = readers.take();
+    int resolutions = 1;
+    int sizeX;
+    int sizeY;
+    int imageCount;
     try {
       isLittleEndian = workingReader.isLittleEndian();
-      resolutions = 1;
       // calculate a reasonable pyramid depth if not specified as an argument
       if (pyramidResolutions == null) {
         int width = workingReader.getSizeX();
