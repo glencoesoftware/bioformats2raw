@@ -27,9 +27,11 @@ import loci.common.image.SimpleImageScaler;
 import loci.common.services.DependencyException;
 import loci.common.services.ServiceException;
 import loci.common.services.ServiceFactory;
+import loci.formats.ClassList;
 import loci.formats.FormatException;
 import loci.formats.FormatTools;
 import loci.formats.IFormatReader;
+import loci.formats.ImageReader;
 import loci.formats.ImageWriter;
 import loci.formats.MetadataTools;
 import loci.formats.MissingLibraryException;
@@ -186,6 +188,10 @@ public class Converter implements Callable<Void> {
     else {
       root.setLevel(Level.INFO);
     }
+    readers = new ArrayBlockingQueue<IFormatReader>(maxWorkers);
+    queue = new LimitedQueue<Runnable>(maxWorkers);
+    executor = new ThreadPoolExecutor(
+      maxWorkers, maxWorkers, 0L, TimeUnit.MILLISECONDS, queue);
     convert();
     return null;
   }
@@ -201,25 +207,47 @@ public class Converter implements Callable<Void> {
   public void convert()
       throws FormatException, IOException, InterruptedException
   {
-    readers = new ArrayBlockingQueue<IFormatReader>(maxWorkers);
-    queue = new LimitedQueue<Runnable>(maxWorkers);
-    executor = new ThreadPoolExecutor(
-      maxWorkers, maxWorkers, 0L, TimeUnit.MILLISECONDS, queue);
     Cache<TilePointer, byte[]> tileCache = CacheBuilder.newBuilder()
         .maximumSize(maxCachedTiles)
         .build();
-    try {
-      for (int i=0; i < maxWorkers; i++) {
-        MiraxReader reader = new MiraxReader();
-        reader.setFlattenedResolutions(false);
-        reader.setMetadataFiltered(true);
-        reader.setMetadataStore(createMetadata());
-        reader.setId(inputPath.toString());
-        reader.setResolution(0);
-        reader.setTileCache(tileCache);
-        readers.add(reader);
-      }
 
+    // First find which reader class we need
+    ClassList<IFormatReader> readerClasses =
+        ImageReader.getDefaultReaderClasses();
+    readerClasses.addClass(0, MiraxReader.class);
+    ImageReader imageReader = new ImageReader(readerClasses);
+    Class<?> readerClass;
+    try {
+      imageReader.setId(inputPath.toString());
+      readerClass = imageReader.getReader().getClass();
+    }
+    finally {
+      imageReader.close();
+    }
+    // Now with our found type instantiate our queue of readers for use
+    // during conversion
+    for (int i=0; i < maxWorkers; i++) {
+      IFormatReader reader;
+      try {
+        reader = (IFormatReader) readerClass.getConstructor().newInstance();
+      }
+      catch (Exception e) {
+        LOGGER.error("Failed to instantiate reader: {}", readerClass, e);
+        return;
+      }
+      reader.setFlattenedResolutions(false);
+      reader.setMetadataFiltered(true);
+      reader.setMetadataStore(createMetadata());
+      reader.setId(inputPath.toString());
+      reader.setResolution(0);
+      if (reader instanceof MiraxReader) {
+        ((MiraxReader) reader).setTileCache(tileCache);
+      }
+      readers.add(reader);
+    }
+
+    // Finally, perform conversion on all series
+    try {
       try {
         // only process the first series here
         // wait until all tiles have been written
