@@ -63,9 +63,7 @@ import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
 /**
- * Command line tool for converting .mrxs files to TIFF/OME-TIFF.
- * Both Bio-Formats 5.9.x ("Faas") pyramids and true OME-TIFF pyramids
- * are supported.
+ * Command line tool for converting whole slide imaging files to N5.
  */
 public class Converter implements Callable<Void> {
 
