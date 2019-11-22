@@ -79,7 +79,7 @@ public class Converter implements Callable<Void> {
   @Parameters(
     index = "0",
     arity = "1",
-    description = ".mrxs file to convert"
+    description = "file to convert"
   )
   private Path inputPath;
 
