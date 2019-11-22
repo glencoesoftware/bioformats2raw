@@ -5,7 +5,7 @@
  * file you can find at the root of the distribution bundle.  If the file is
  * missing please request a copy by contacting info@glencoesoftware.com
  */
-package com.glencoesoftware.mrxs;
+package com.glencoesoftware.bioformats2raw;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -53,7 +53,7 @@ import org.perf4j.slf4j.Slf4JStopWatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.glencoesoftware.mrxs.MiraxReader.TilePointer;
+import com.glencoesoftware.bioformats2raw.MiraxReader.TilePointer;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 
