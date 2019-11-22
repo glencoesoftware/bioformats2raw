@@ -69,11 +69,13 @@ public class Converter implements Callable<Void> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(Converter.class);
 
-  // minimum size of the largest XY dimension in the smallest resolution,
-  // when calculating the number of resolutions to generate
+  /**
+   * Minimum size of the largest XY dimension in the smallest resolution,
+   * when calculating the number of resolutions to generate.
+   */
   private static final int MIN_SIZE = 256;
 
-  // scaling factor in X and Y between any two consecutive resolutions
+  /** Scaling factor in X and Y between any two consecutive resolutions. */
   private static final int PYRAMID_SCALE = 2;
 
   @Parameters(
