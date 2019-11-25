@@ -27,6 +27,7 @@ import loci.common.image.SimpleImageScaler;
 import loci.common.services.DependencyException;
 import loci.common.services.ServiceException;
 import loci.common.services.ServiceFactory;
+import loci.formats.ChannelSeparator;
 import loci.formats.ClassList;
 import loci.formats.FormatException;
 import loci.formats.FormatTools;
@@ -153,18 +154,6 @@ public class Converter implements Callable<Void> {
   private boolean isLittleEndian;
 
   /**
-   * The number of channels returned with each call to openBytes in the
-   * source file.  Retrieved from {@link IFormatReader#getRGBChannelCount()}.
-   */
-  private int rgbChannelCount;
-
-  /**
-   * Whether or not the channels are interleaved in the source file. Retrieved
-   * from {@link IFormatReader#isInterleaved()}.
-   */
-  private boolean isInterleaved;
-
-  /**
    * The source file's pixel type.  Retrieved from
    * {@link IFormatReader#getPixelType()}.
    */
@@ -243,7 +232,7 @@ public class Converter implements Callable<Void> {
       if (reader instanceof MiraxReader) {
         ((MiraxReader) reader).setTileCache(tileCache);
       }
-      readers.add(reader);
+      readers.add(new ChannelSeparator(reader));
     }
 
     // Finally, perform conversion on all series
@@ -388,7 +377,7 @@ public class Converter implements Callable<Void> {
     return scaler.downsample(tile, width, height,
         PYRAMID_SCALE, bytesPerPixel, isLittleEndian,
         FormatTools.isFloatingPoint(pixelType),
-        rgbChannelCount, isInterleaved);
+        1, false);
   }
 
   private byte[] getTile(
@@ -508,8 +497,6 @@ public class Converter implements Callable<Void> {
       LOGGER.info("Using {} pyramid resolutions", resolutions);
       sizeX = workingReader.getSizeX();
       sizeY = workingReader.getSizeY();
-      rgbChannelCount = workingReader.getRGBChannelCount();
-      isInterleaved = workingReader.isInterleaved();
       imageCount = workingReader.getImageCount();
       pixelType = workingReader.getPixelType();
     }
