@@ -5,7 +5,7 @@
  * file you can find at the root of the distribution bundle.  If the file is
  * missing please request a copy by contacting info@glencoesoftware.com
  */
-package com.glencoesoftware.mrxs;
+package com.glencoesoftware.bioformats2raw;
 
 import java.io.BufferedReader;
 import java.io.IOException;

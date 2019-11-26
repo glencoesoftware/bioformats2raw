@@ -6,9 +6,9 @@ plugins {
 }
 
 group = 'com.glencoesoftware'
-version = '0.1.0'
+version = '0.2.0-SNAPSHOT'
 
-mainClassName = 'com.glencoesoftware.mrxs.Converter'
+mainClassName = 'com.glencoesoftware.bioformats2raw.Converter'
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 

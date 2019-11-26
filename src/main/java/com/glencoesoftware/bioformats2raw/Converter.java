@@ -5,7 +5,7 @@
  * file you can find at the root of the distribution bundle.  If the file is
  * missing please request a copy by contacting info@glencoesoftware.com
  */
-package com.glencoesoftware.mrxs;
+package com.glencoesoftware.bioformats2raw;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -27,9 +27,12 @@ import loci.common.image.SimpleImageScaler;
 import loci.common.services.DependencyException;
 import loci.common.services.ServiceException;
 import loci.common.services.ServiceFactory;
+import loci.formats.ChannelSeparator;
+import loci.formats.ClassList;
 import loci.formats.FormatException;
 import loci.formats.FormatTools;
 import loci.formats.IFormatReader;
+import loci.formats.ImageReader;
 import loci.formats.ImageWriter;
 import loci.formats.MetadataTools;
 import loci.formats.MissingLibraryException;
@@ -53,7 +56,7 @@ import org.perf4j.slf4j.Slf4JStopWatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.glencoesoftware.mrxs.MiraxReader.TilePointer;
+import com.glencoesoftware.bioformats2raw.MiraxReader.TilePointer;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 
@@ -63,25 +66,25 @@ import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
 /**
- * Command line tool for converting .mrxs files to TIFF/OME-TIFF.
- * Both Bio-Formats 5.9.x ("Faas") pyramids and true OME-TIFF pyramids
- * are supported.
+ * Command line tool for converting whole slide imaging files to N5.
  */
 public class Converter implements Callable<Void> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(Converter.class);
 
-  // minimum size of the largest XY dimension in the smallest resolution,
-  // when calculating the number of resolutions to generate
+  /**
+   * Minimum size of the largest XY dimension in the smallest resolution,
+   * when calculating the number of resolutions to generate.
+   */
   private static final int MIN_SIZE = 256;
 
-  // scaling factor in X and Y between any two consecutive resolutions
+  /** Scaling factor in X and Y between any two consecutive resolutions. */
   private static final int PYRAMID_SCALE = 2;
 
   @Parameters(
     index = "0",
     arity = "1",
-    description = ".mrxs file to convert"
+    description = "file to convert"
   )
   private Path inputPath;
 
@@ -130,32 +133,36 @@ public class Converter implements Callable<Void> {
   )
   private int maxCachedTiles = 64;
 
+  /** Scaling implementation that will be used during downsampling. */
   private IImageScaler scaler = new SimpleImageScaler();
 
+  /**
+   * Set of readers that can be used concurrently, size will be equal to
+   * {@link #maxWorkers}.
+   */
   private BlockingQueue<IFormatReader> readers;
 
+  /**
+   * Bounded task queue limiting the number of in flight conversion operations
+   * happening in parallel.  Size will be equal to {@link #maxWorkers}.
+   */
   private BlockingQueue<Runnable> queue;
 
   private ExecutorService executor;
 
+  /** Whether or not the source file is little endian. */
   private boolean isLittleEndian;
 
-  private int resolutions;
-
-  private int sizeX;
-
-  private int sizeY;
-
-  private int rgbChannelCount;
-
-  private boolean isInterleaved;
-
-  private int imageCount;
-
+  /**
+   * The source file's pixel type.  Retrieved from
+   * {@link IFormatReader#getPixelType()}.
+   */
   private int pixelType;
 
+  /** Total number of tiles at the current resolution during processing. */
   private int tileCount;
 
+  /** Current number of tiles processed at the current resolution. */
   private AtomicInteger nTile;
 
   @Override
@@ -170,6 +177,10 @@ public class Converter implements Callable<Void> {
     else {
       root.setLevel(Level.INFO);
     }
+    readers = new ArrayBlockingQueue<IFormatReader>(maxWorkers);
+    queue = new LimitedQueue<Runnable>(maxWorkers);
+    executor = new ThreadPoolExecutor(
+      maxWorkers, maxWorkers, 0L, TimeUnit.MILLISECONDS, queue);
     convert();
     return null;
   }
@@ -185,25 +196,47 @@ public class Converter implements Callable<Void> {
   public void convert()
       throws FormatException, IOException, InterruptedException
   {
-    readers = new ArrayBlockingQueue<IFormatReader>(maxWorkers);
-    queue = new LimitedQueue<Runnable>(maxWorkers);
-    executor = new ThreadPoolExecutor(
-      maxWorkers, maxWorkers, 0L, TimeUnit.MILLISECONDS, queue);
     Cache<TilePointer, byte[]> tileCache = CacheBuilder.newBuilder()
         .maximumSize(maxCachedTiles)
         .build();
-    try {
-      for (int i=0; i < maxWorkers; i++) {
-        MiraxReader reader = new MiraxReader();
-        reader.setFlattenedResolutions(false);
-        reader.setMetadataFiltered(true);
-        reader.setMetadataStore(createMetadata());
-        reader.setId(inputPath.toString());
-        reader.setResolution(0);
-        reader.setTileCache(tileCache);
-        readers.add(reader);
-      }
 
+    // First find which reader class we need
+    ClassList<IFormatReader> readerClasses =
+        ImageReader.getDefaultReaderClasses();
+    readerClasses.addClass(0, MiraxReader.class);
+    ImageReader imageReader = new ImageReader(readerClasses);
+    Class<?> readerClass;
+    try {
+      imageReader.setId(inputPath.toString());
+      readerClass = imageReader.getReader().getClass();
+    }
+    finally {
+      imageReader.close();
+    }
+    // Now with our found type instantiate our queue of readers for use
+    // during conversion
+    for (int i=0; i < maxWorkers; i++) {
+      IFormatReader reader;
+      try {
+        reader = (IFormatReader) readerClass.getConstructor().newInstance();
+      }
+      catch (Exception e) {
+        LOGGER.error("Failed to instantiate reader: {}", readerClass, e);
+        return;
+      }
+      reader.setFlattenedResolutions(false);
+      reader.setMetadataFiltered(true);
+      reader.setMetadataStore(createMetadata());
+      reader.setId(inputPath.toString());
+      reader.setResolution(0);
+      if (reader instanceof MiraxReader) {
+        ((MiraxReader) reader).setTileCache(tileCache);
+      }
+      readers.add(new ChannelSeparator(reader));
+    }
+
+    // Finally, perform conversion on all series
+    try {
       try {
         // only process the first series here
         // wait until all tiles have been written
@@ -344,7 +377,7 @@ public class Converter implements Callable<Void> {
     return scaler.downsample(tile, width, height,
         PYRAMID_SCALE, bytesPerPixel, isLittleEndian,
         FormatTools.isFloatingPoint(pixelType),
-        rgbChannelCount, isInterleaved);
+        1, false);
   }
 
   private byte[] getTile(
@@ -442,9 +475,12 @@ public class Converter implements Callable<Void> {
     throws FormatException, IOException, InterruptedException
   {
     IFormatReader workingReader = readers.take();
+    int resolutions = 1;
+    int sizeX;
+    int sizeY;
+    int imageCount;
     try {
       isLittleEndian = workingReader.isLittleEndian();
-      resolutions = 1;
       // calculate a reasonable pyramid depth if not specified as an argument
       if (pyramidResolutions == null) {
         int width = workingReader.getSizeX();
@@ -461,8 +497,6 @@ public class Converter implements Callable<Void> {
       LOGGER.info("Using {} pyramid resolutions", resolutions);
       sizeX = workingReader.getSizeX();
       sizeY = workingReader.getSizeY();
-      rgbChannelCount = workingReader.getRGBChannelCount();
-      isInterleaved = workingReader.isInterleaved();
       imageCount = workingReader.getImageCount();
       pixelType = workingReader.getPixelType();
     }
