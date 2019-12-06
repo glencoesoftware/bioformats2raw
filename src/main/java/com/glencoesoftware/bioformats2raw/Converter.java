@@ -22,6 +22,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import loci.common.Constants;
 import loci.common.image.IImageScaler;
 import loci.common.image.SimpleImageScaler;
 import loci.common.services.DependencyException;
@@ -265,7 +266,7 @@ public class Converter implements Callable<Void> {
 
         // write the original OME-XML to a file
         Path omexmlFile = outputPath.resolve("METADATA.ome.xml");
-        Files.write(omexmlFile, xml.getBytes());
+        Files.write(omexmlFile, xml.getBytes(Constants.ENCODING));
       }
       catch (ServiceException se) {
         LOGGER.error("Could not retrieve OME-XML", se);
