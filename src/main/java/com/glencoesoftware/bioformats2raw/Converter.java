@@ -43,15 +43,20 @@ import loci.formats.services.OMEXMLServiceImpl;
 import ome.xml.model.enums.EnumerationException;
 
 import org.janelia.saalfeldlab.n5.ByteArrayDataBlock;
+import org.janelia.saalfeldlab.n5.Bzip2Compression;
 import org.janelia.saalfeldlab.n5.Compression;
 import org.janelia.saalfeldlab.n5.DataBlock;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
+import org.janelia.saalfeldlab.n5.GzipCompression;
+import org.janelia.saalfeldlab.n5.Lz4Compression;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
+import org.janelia.saalfeldlab.n5.RawCompression;
 import org.janelia.saalfeldlab.n5.ShortArrayDataBlock;
+import org.janelia.saalfeldlab.n5.XzCompression;
 import org.janelia.saalfeldlab.n5.blosc.BloscCompression;
 import org.perf4j.slf4j.Slf4JStopWatch;
 import org.slf4j.Logger;
@@ -133,6 +138,13 @@ public class Converter implements Callable<Void> {
       + "workers (default: ${DEFAULT-VALUE})"
   )
   private int maxCachedTiles = 64;
+
+  @Option(
+          names = {"-c", "--compression"},
+          description = "Type of compression to use [bzip2, gzip, lz4, raw, xz]"
+                  + "(default: ${DEFAULT-VALUE})"
+  )
+  private String compressionType = "blosc";
 
   /** Scaling implementation that will be used during downsampling. */
   private IImageScaler scaler = new SimpleImageScaler();
@@ -531,13 +543,36 @@ public class Converter implements Callable<Void> {
             + FormatTools.getPixelTypeString(pixelType));
     }
     // Use compression scheme that is most compatible with Zarr
-    Compression compression = new BloscCompression(
-      "lz4",
-      5,  // clevel
-      BloscCompression.SHUFFLE,  // shuffle
-      0,  // blocksize (0 = auto)
-      1  // nthreads
-    );
+    Compression compression;
+    switch(compressionType) {
+      case "blosc":
+        compression = new BloscCompression(
+                "lz4",
+                5,  // clevel
+                BloscCompression.SHUFFLE,  // shuffle
+                0,  // blocksize (0 = auto)
+                1  // nthreads
+        );
+        break;
+      case "bzip2":
+        compression = new Bzip2Compression();
+        break;
+      case "gzip":
+        compression = new GzipCompression();
+        break;
+      case "lz4":
+        compression = new Lz4Compression();
+        break;
+      case "raw":
+        compression = new RawCompression();
+        break;
+      case "xz":
+        compression = new XzCompression();
+        break;
+      default:
+        throw new FormatException("Unknown compression type: "
+                + compressionType);
+    }
     //Compression compression = new RawCompression();
     N5Writer n5 = new N5FSWriter(outputPath.resolve("pyramid.n5").toString());
     for (int resCounter=0; resCounter<resolutions; resCounter++) {
