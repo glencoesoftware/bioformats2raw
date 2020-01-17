@@ -87,6 +87,58 @@ public class Converter implements Callable<Void> {
   /** Scaling factor in X and Y between any two consecutive resolutions. */
   private static final int PYRAMID_SCALE = 2;
 
+  static class N5Compression {
+    enum CompressionTypes { blosc, bzip2, gzip, lz4, raw, xz };
+
+    private static Compression getCompressor(
+            CompressionTypes type,
+            Integer compressionParameter)
+    {
+      switch (type) {
+        case blosc:
+          return new BloscCompression(
+                  "lz4",
+                  5, // clevel
+                  BloscCompression.SHUFFLE,  // shuffle
+                  0, // blocksize (0 = auto)
+                  1  // nthreads
+          );
+        case gzip:
+          if (compressionParameter == null) {
+            return new GzipCompression();
+          }
+          else {
+            return new GzipCompression(compressionParameter.intValue());
+          }
+        case bzip2:
+          if (compressionParameter == null) {
+            return new Bzip2Compression();
+          }
+          else {
+            return new Bzip2Compression(compressionParameter.intValue());
+          }
+        case xz:
+          if (compressionParameter == null) {
+            return new XzCompression();
+          }
+          else {
+            return new XzCompression(compressionParameter.intValue());
+          }
+        case lz4:
+          if (compressionParameter == null) {
+            return new Lz4Compression();
+          }
+          else {
+            return new Lz4Compression(compressionParameter.intValue());
+          }
+        case raw:
+          return new RawCompression();
+        default:
+          return null;
+      }
+    }
+  }
+
   @Parameters(
     index = "0",
     arity = "1",
@@ -141,10 +193,19 @@ public class Converter implements Callable<Void> {
 
   @Option(
           names = {"-c", "--compression"},
-          description = "Type of compression to use [bzip2, gzip, lz4, raw, xz]"
-                  + "(default: ${DEFAULT-VALUE})"
+          description = "Compression type for n5 " +
+                  "(${COMPLETION-CANDIDATES}; default: ${DEFAULT-VALUE})"
   )
-  private String compressionType = "blosc";
+  private N5Compression.CompressionTypes compressionType =
+          N5Compression.CompressionTypes.blosc;
+
+  @Option(
+          names = {"--compression-parameter"},
+          description = "Integer parameter for chosen compression (see " +
+                  "https://github.com/saalfeldlab/n5/blob/master/README.md" +
+                  " )"
+  )
+  private Integer compressionParameter = null;
 
   /** Scaling implementation that will be used during downsampling. */
   private IImageScaler scaler = new SimpleImageScaler();
@@ -542,38 +603,10 @@ public class Converter implements Callable<Void> {
         throw new FormatException("Unsupported pixel type: "
             + FormatTools.getPixelTypeString(pixelType));
     }
-    // Use compression scheme that is most compatible with Zarr
-    Compression compression;
-    switch(compressionType) {
-      case "blosc":
-        compression = new BloscCompression(
-                "lz4",
-                5,  // clevel
-                BloscCompression.SHUFFLE,  // shuffle
-                0,  // blocksize (0 = auto)
-                1  // nthreads
-        );
-        break;
-      case "bzip2":
-        compression = new Bzip2Compression();
-        break;
-      case "gzip":
-        compression = new GzipCompression();
-        break;
-      case "lz4":
-        compression = new Lz4Compression();
-        break;
-      case "raw":
-        compression = new RawCompression();
-        break;
-      case "xz":
-        compression = new XzCompression();
-        break;
-      default:
-        throw new FormatException("Unknown compression type: "
-                + compressionType);
-    }
-    //Compression compression = new RawCompression();
+
+    Compression compression = N5Compression.getCompressor(compressionType,
+            compressionParameter);
+
     N5Writer n5 = new N5FSWriter(outputPath.resolve("pyramid.n5").toString());
     for (int resCounter=0; resCounter<resolutions; resCounter++) {
       final int resolution = resCounter;
