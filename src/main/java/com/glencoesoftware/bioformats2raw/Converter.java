@@ -43,15 +43,20 @@ import loci.formats.services.OMEXMLServiceImpl;
 import ome.xml.model.enums.EnumerationException;
 
 import org.janelia.saalfeldlab.n5.ByteArrayDataBlock;
+import org.janelia.saalfeldlab.n5.Bzip2Compression;
 import org.janelia.saalfeldlab.n5.Compression;
 import org.janelia.saalfeldlab.n5.DataBlock;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
+import org.janelia.saalfeldlab.n5.GzipCompression;
+import org.janelia.saalfeldlab.n5.Lz4Compression;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
+import org.janelia.saalfeldlab.n5.RawCompression;
 import org.janelia.saalfeldlab.n5.ShortArrayDataBlock;
+import org.janelia.saalfeldlab.n5.XzCompression;
 import org.janelia.saalfeldlab.n5.blosc.BloscCompression;
 import org.perf4j.slf4j.Slf4JStopWatch;
 import org.slf4j.Logger;
@@ -81,6 +86,58 @@ public class Converter implements Callable<Void> {
 
   /** Scaling factor in X and Y between any two consecutive resolutions. */
   private static final int PYRAMID_SCALE = 2;
+
+  static class N5Compression {
+    enum CompressionTypes { blosc, bzip2, gzip, lz4, raw, xz };
+
+    private static Compression getCompressor(
+            CompressionTypes type,
+            Integer compressionParameter)
+    {
+      switch (type) {
+        case blosc:
+          return new BloscCompression(
+                  "lz4",
+                  5, // clevel
+                  BloscCompression.SHUFFLE,  // shuffle
+                  0, // blocksize (0 = auto)
+                  1  // nthreads
+          );
+        case gzip:
+          if (compressionParameter == null) {
+            return new GzipCompression();
+          }
+          else {
+            return new GzipCompression(compressionParameter.intValue());
+          }
+        case bzip2:
+          if (compressionParameter == null) {
+            return new Bzip2Compression();
+          }
+          else {
+            return new Bzip2Compression(compressionParameter.intValue());
+          }
+        case xz:
+          if (compressionParameter == null) {
+            return new XzCompression();
+          }
+          else {
+            return new XzCompression(compressionParameter.intValue());
+          }
+        case lz4:
+          if (compressionParameter == null) {
+            return new Lz4Compression();
+          }
+          else {
+            return new Lz4Compression(compressionParameter.intValue());
+          }
+        case raw:
+          return new RawCompression();
+        default:
+          return null;
+      }
+    }
+  }
 
   @Parameters(
     index = "0",
@@ -133,6 +190,22 @@ public class Converter implements Callable<Void> {
       + "workers (default: ${DEFAULT-VALUE})"
   )
   private int maxCachedTiles = 64;
+
+  @Option(
+          names = {"-c", "--compression"},
+          description = "Compression type for n5 " +
+                  "(${COMPLETION-CANDIDATES}; default: ${DEFAULT-VALUE})"
+  )
+  private N5Compression.CompressionTypes compressionType =
+          N5Compression.CompressionTypes.blosc;
+
+  @Option(
+          names = {"--compression-parameter"},
+          description = "Integer parameter for chosen compression (see " +
+                  "https://github.com/saalfeldlab/n5/blob/master/README.md" +
+                  " )"
+  )
+  private Integer compressionParameter = null;
 
   /** Scaling implementation that will be used during downsampling. */
   private IImageScaler scaler = new SimpleImageScaler();
@@ -530,15 +603,10 @@ public class Converter implements Callable<Void> {
         throw new FormatException("Unsupported pixel type: "
             + FormatTools.getPixelTypeString(pixelType));
     }
-    // Use compression scheme that is most compatible with Zarr
-    Compression compression = new BloscCompression(
-      "lz4",
-      5,  // clevel
-      BloscCompression.SHUFFLE,  // shuffle
-      0,  // blocksize (0 = auto)
-      1  // nthreads
-    );
-    //Compression compression = new RawCompression();
+
+    Compression compression = N5Compression.getCompressor(compressionType,
+            compressionParameter);
+
     N5Writer n5 = new N5FSWriter(outputPath.resolve("pyramid.n5").toString());
     for (int resCounter=0; resCounter<resolutions; resCounter++) {
       final int resolution = resCounter;
