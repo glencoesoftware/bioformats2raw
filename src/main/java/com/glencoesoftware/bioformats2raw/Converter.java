@@ -278,6 +278,7 @@ public class Converter implements Callable<Void> {
     ClassList<IFormatReader> readerClasses =
         ImageReader.getDefaultReaderClasses();
     readerClasses.addClass(0, MiraxReader.class);
+    readerClasses.addClass(1, PyramidTiffReader.class);
     ImageReader imageReader = new ImageReader(readerClasses);
     Class<?> readerClass;
     try {
