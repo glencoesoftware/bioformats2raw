@@ -33,3 +33,11 @@ Run the conversion:
 Maximum tile dimensions are can be configured with the `--tile_width` and `--tile_height` options.  Defaults can be viewed with
 `bin/bioformats2raw --help`.  `--resolutions` is optional; if omitted, the number of resolutions is set so that the smallest
 resolution is no greater than 256x256.
+
+By default, two additional readers (MiraxReader and PyramidTiffReader) are added to the beginning of Bio-Formats' list of reader classes.
+These and any other readers can be removed from the list with the `--exclude_readers` option:
+
+    # exclude the reader for Faas pyramids
+    bin/bioformats2raw /path/to/file.tiff /path/to/n5-pyramid --exclude_readers PyramidTiffReader
+    # exclude MiraxReader and JPEGReader, so .mrxs throws UnknownFormatException
+    bin/bioformats2raw /path/to/file.mrxs /path/to/n5-pyramid --exclude_readers MiraxReader,JPEGReader
