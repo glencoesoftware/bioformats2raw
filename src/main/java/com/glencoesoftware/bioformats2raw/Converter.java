@@ -88,11 +88,6 @@ public class Converter implements Callable<Void> {
   private static final int PYRAMID_SCALE = 2;
 
 
-  /** Extra readers supplied by bioformats2raw. */
-  private static final Class[] EXTRA_READERS = new Class[] {
-    PyramidTiffReader.class, MiraxReader.class
-  };
-
   static class N5Compression {
     enum CompressionTypes { blosc, bzip2, gzip, lz4, raw, xz };
 
@@ -214,12 +209,14 @@ public class Converter implements Callable<Void> {
   private Integer compressionParameter = null;
 
   @Option(
-          names = "--exclude_readers",
+          names = "--extra-readers",
           split = ",",
-          description = "Comma-separated list of readers to exclude " +
-                        "(e.g. PyramidTiffReader)"
+          description = "Separate set of readers to include; " +
+                  "default: ${DEFAULT-VALUE})"
   )
-  private List<String> excludedReaders;
+  private Class<?>[] extraReaders = new Class[] {
+    PyramidTiffReader.class, MiraxReader.class
+  };
 
   /** Scaling implementation that will be used during downsampling. */
   private IImageScaler scaler = new SimpleImageScaler();
@@ -292,27 +289,9 @@ public class Converter implements Callable<Void> {
     ClassList<IFormatReader> readerClasses =
         ImageReader.getDefaultReaderClasses();
 
-    if (excludedReaders != null) {
-      for (String reader : excludedReaders) {
-        try {
-          Class c = Class.forName("loci.formats.in." + reader);
-          if (c != null) {
-            readerClasses.removeClass(c);
-          }
-        }
-        catch (ClassNotFoundException e) {
-        }
-      }
-      for (Class reader : EXTRA_READERS) {
-        if (!excludedReaders.contains(reader.getSimpleName())) {
-          readerClasses.addClass(0, reader);
-        }
-      }
-    }
-    else {
-      for (Class reader : EXTRA_READERS) {
-        readerClasses.addClass(0, reader);
-      }
+    for (Class<?> reader : extraReaders) {
+      readerClasses.addClass(0, (Class<IFormatReader>) reader);
+      LOGGER.debug("Added extra reader: {}", reader);
     }
 
     ImageReader imageReader = new ImageReader(readerClasses);
