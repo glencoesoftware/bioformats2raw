@@ -87,6 +87,7 @@ public class Converter implements Callable<Void> {
   /** Scaling factor in X and Y between any two consecutive resolutions. */
   private static final int PYRAMID_SCALE = 2;
 
+
   static class N5Compression {
     enum CompressionTypes { blosc, bzip2, gzip, lz4, raw, xz };
 
@@ -207,6 +208,17 @@ public class Converter implements Callable<Void> {
   )
   private Integer compressionParameter = null;
 
+  @Option(
+          names = "--extra-readers",
+          arity = "0..1",
+          split = ",",
+          description = "Separate set of readers to include; " +
+                  "default: ${DEFAULT-VALUE})"
+  )
+  private Class<?>[] extraReaders = new Class[] {
+    PyramidTiffReader.class, MiraxReader.class
+  };
+
   /** Scaling implementation that will be used during downsampling. */
   private IImageScaler scaler = new SimpleImageScaler();
 
@@ -277,7 +289,12 @@ public class Converter implements Callable<Void> {
     // First find which reader class we need
     ClassList<IFormatReader> readerClasses =
         ImageReader.getDefaultReaderClasses();
-    readerClasses.addClass(0, MiraxReader.class);
+
+    for (Class<?> reader : extraReaders) {
+      readerClasses.addClass(0, (Class<IFormatReader>) reader);
+      LOGGER.debug("Added extra reader: {}", reader);
+    }
+
     ImageReader imageReader = new ImageReader(readerClasses);
     Class<?> readerClass;
     try {
