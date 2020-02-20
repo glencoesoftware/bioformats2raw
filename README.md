@@ -35,9 +35,9 @@ Maximum tile dimensions are can be configured with the `--tile_width` and `--til
 resolution is no greater than 256x256.
 
 By default, two additional readers (MiraxReader and PyramidTiffReader) are added to the beginning of Bio-Formats' list of reader classes.
-These and any other readers can be removed from the list with the `--exclude_readers` option:
+Either or both of these readers can be excluded with the `--extra-readers` option:
 
-    # exclude the reader for Faas pyramids
-    bin/bioformats2raw /path/to/file.tiff /path/to/n5-pyramid --exclude_readers PyramidTiffReader
-    # exclude MiraxReader and JPEGReader, so .mrxs throws UnknownFormatException
-    bin/bioformats2raw /path/to/file.mrxs /path/to/n5-pyramid --exclude_readers MiraxReader,JPEGReader
+    # only include the reader for .mrxs, exclude the reader for Faas pyramids
+    bin/bioformats2raw /path/to/file.tiff /path/to/n5-pyramid --extra-readers com.glencoesoftware.bioformats2raw.MiraxReader
+    # don't add any additional readers, just use the ones provided by Bio-Formats
+    bin/bioformats2raw /path/to/file.mrxs /path/to/n5-pyramid --extra-readers
