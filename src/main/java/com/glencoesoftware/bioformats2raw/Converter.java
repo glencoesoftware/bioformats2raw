@@ -210,6 +210,7 @@ public class Converter implements Callable<Void> {
 
   @Option(
           names = "--extra-readers",
+          arity = "0..1",
           split = ",",
           description = "Separate set of readers to include; " +
                   "default: ${DEFAULT-VALUE})"
