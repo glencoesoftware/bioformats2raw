@@ -24,7 +24,7 @@ repositories {
 }
 
 dependencies {
-    compile ('ome:formats-gpl:6.2.1')
+    compile ('ome:formats-gpl:6.4.0')
     compile ('info.picocli:picocli:3.9.6')
     compile ('org.janelia.saalfeldlab:n5:2.1.2')
     compile ('org.janelia.saalfeldlab:n5-blosc:1.0.0')
