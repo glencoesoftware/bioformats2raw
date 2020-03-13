@@ -9,6 +9,7 @@ package com.glencoesoftware.bioformats2raw;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -352,6 +353,11 @@ public class Converter implements Callable<Void> {
       try {
         seriesCount = v.getSeriesCount();
         IMetadata meta = (IMetadata) v.getMetadataStore();
+
+        for (int s=0; s<meta.getImageCount(); s++) {
+          meta.setPixelsBigEndian(true, s);
+        }
+
         String xml = getService().getOMEXML(meta);
 
         // write the original OME-XML to a file
@@ -466,7 +472,7 @@ public class Converter implements Callable<Void> {
       }
     }
     return scaler.downsample(tile, width, height,
-        PYRAMID_SCALE, bytesPerPixel, isLittleEndian,
+        PYRAMID_SCALE, bytesPerPixel, false,
         FormatTools.isFloatingPoint(pixelType),
         1, false);
   }
@@ -523,7 +529,11 @@ public class Converter implements Callable<Void> {
           break;
         case 2:
           short[] asShort = new short[tile.length / 2];
-          ByteBuffer.wrap(tile).asShortBuffer().get(asShort);
+          ByteBuffer bb = ByteBuffer.wrap(tile);
+          if (resolution == 0 && isLittleEndian) {
+            bb = bb.order(ByteOrder.LITTLE_ENDIAN);
+          }
+          bb.asShortBuffer().get(asShort);
           dataBlock = new ShortArrayDataBlock(size, gridPosition, asShort);
           break;
         default:
