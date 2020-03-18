@@ -46,8 +46,8 @@ import loci.formats.services.OMEXMLService;
 import loci.formats.services.OMEXMLServiceImpl;
 import ome.xml.model.enums.EnumerationException;
 
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.AnonymousAWSCredentials;
+import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
@@ -363,23 +363,29 @@ public class Converter implements Callable<Void> {
       readers.add(new ChannelSeparator(reader));
     }
 
-    if (outputURI.getScheme() == "s3") {
+    if (outputURI.getScheme() == null) {
+      s3uri = null;
+    }
+    else if (outputURI.getScheme().equalsIgnoreCase("s3")) {
       s3uri = new AmazonS3URI(outputURI.toString());
       // Set up S3 Client
       final AwsClientBuilder.EndpointConfiguration endpoint =
               new AwsClientBuilder.EndpointConfiguration(
                       awsEndpoint, awsRegion);
 
+      final AWSCredentialsProvider credentialsProvider =
+              new DefaultAWSCredentialsProviderChain();
+
       s3 = AmazonS3ClientBuilder
               .standard()
               .withPathStyleAccessEnabled(true)
               .withEndpointConfiguration(endpoint)
-              .withCredentials(new AWSStaticCredentialsProvider(
-                      new AnonymousAWSCredentials()))
+              .withCredentials(credentialsProvider)
               .build();
     }
     else {
-      s3uri = null;
+      LOGGER.error("Invalid output URI scheme: {}", outputURI.getScheme());
+      return;
     }
 
     // Finally, perform conversion on all series
@@ -394,7 +400,7 @@ public class Converter implements Callable<Void> {
         write(0);
       }
       catch (Exception e) {
-        LOGGER.error("Error while writing series 0");
+        LOGGER.error("Error while writing series 0", e);
         return;
       }
       finally {
@@ -423,6 +429,7 @@ public class Converter implements Callable<Void> {
                   s3uri.getKey() + "/METADATA.ome.xml",
                   new ByteArrayInputStream(xml.getBytes(Constants.ENCODING)),
                   metadata);
+          s3.putObject(request);
         }
         else {
           Path omexmlFile = Paths.get(
@@ -496,7 +503,7 @@ public class Converter implements Callable<Void> {
     String pathName = "/" + Integer.toString(resolution - 1);
     N5Reader n5;
 
-    if (s3 != null) {
+    if (s3uri != null) {
       n5 = new N5AmazonS3Reader(s3, s3uri.getBucket(),
               s3uri.getKey() + "/pyramid.n5");
     }
@@ -623,7 +630,7 @@ public class Converter implements Callable<Void> {
     // TODO: ZCT
     // int[] zct = reader.getZCTCoords(plane);
     N5Writer n5;
-    if (s3 != null) {
+    if (s3uri != null) {
       n5 = new N5AmazonS3Writer(s3, s3uri.getBucket(),
               s3uri.getKey() + "/pyramid.n5");
     }
@@ -715,7 +722,7 @@ public class Converter implements Callable<Void> {
             compressionParameter);
 
     N5Writer n5;
-    if (s3 != null) {
+    if (s3uri != null) {
       n5 = new N5AmazonS3Writer(s3, s3uri.getBucket(),
               s3uri.getKey() + "/pyramid.n5");
     }
