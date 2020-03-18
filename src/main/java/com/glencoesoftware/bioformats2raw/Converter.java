@@ -7,6 +7,7 @@
  */
 package com.glencoesoftware.bioformats2raw;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -43,6 +44,15 @@ import loci.formats.services.OMEXMLService;
 import loci.formats.services.OMEXMLServiceImpl;
 import ome.xml.model.enums.EnumerationException;
 
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.AnonymousAWSCredentials;
+import com.amazonaws.client.builder.AwsClientBuilder;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.amazonaws.services.s3.AmazonS3URI;
+import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.PutObjectRequest;
+
 import org.janelia.saalfeldlab.n5.ByteArrayDataBlock;
 import org.janelia.saalfeldlab.n5.Bzip2Compression;
 import org.janelia.saalfeldlab.n5.Compression;
@@ -59,6 +69,8 @@ import org.janelia.saalfeldlab.n5.RawCompression;
 import org.janelia.saalfeldlab.n5.ShortArrayDataBlock;
 import org.janelia.saalfeldlab.n5.XzCompression;
 import org.janelia.saalfeldlab.n5.blosc.BloscCompression;
+import org.janelia.saalfeldlab.n5.s3.N5AmazonS3Reader;
+import org.janelia.saalfeldlab.n5.s3.N5AmazonS3Writer;
 import org.perf4j.slf4j.Slf4JStopWatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -220,6 +232,21 @@ public class Converter implements Callable<Void> {
     PyramidTiffReader.class, MiraxReader.class
   };
 
+  @Option(
+          names = {"--aws-endpoint"},
+          description = "Alternate endpoint for use for AWS S3 " +
+                  "[for S3-compatible endpoints]"
+  )
+  private String awsEndpoint = null;
+
+  @Option(
+          names = {"--aws-region"},
+          description = "The region to use for SigV4 signing of requests " +
+                  "default: ${DEFAULT-VALUE})"
+  )
+  private String awsRegion = "us-east-1";
+
+
   /** Scaling implementation that will be used during downsampling. */
   private IImageScaler scaler = new SimpleImageScaler();
 
@@ -251,6 +278,12 @@ public class Converter implements Callable<Void> {
 
   /** Current number of tiles processed at the current resolution. */
   private AtomicInteger nTile;
+
+  /** Amazon S3 instance. Created only if using s3. */
+  private AmazonS3 s3 = null;
+
+  /** S3 URI info. Null if not using s3. */
+  private AmazonS3URI s3uri = null;
 
   @Override
   public Void call()
@@ -327,6 +360,25 @@ public class Converter implements Callable<Void> {
       readers.add(new ChannelSeparator(reader));
     }
 
+    if (outputPath.startsWith("s3://")) {
+      s3uri = new AmazonS3URI(outputPath.toString());
+      // Set up S3 Client
+      final AwsClientBuilder.EndpointConfiguration endpoint =
+              new AwsClientBuilder.EndpointConfiguration(
+                      awsEndpoint, awsRegion);
+
+      s3 = AmazonS3ClientBuilder
+              .standard()
+              .withPathStyleAccessEnabled(true)
+              .withEndpointConfiguration(endpoint)
+              .withCredentials(new AWSStaticCredentialsProvider(
+                      new AnonymousAWSCredentials()))
+              .build();
+    }
+    else {
+      s3uri = null;
+    }
+
     // Finally, perform conversion on all series
     try {
       try {
@@ -361,8 +413,18 @@ public class Converter implements Callable<Void> {
         String xml = getService().getOMEXML(meta);
 
         // write the original OME-XML to a file
-        Path omexmlFile = outputPath.resolve("METADATA.ome.xml");
-        Files.write(omexmlFile, xml.getBytes(Constants.ENCODING));
+        if (s3 != null) {
+          ObjectMetadata metadata = new ObjectMetadata();
+          metadata.setContentType("text/xml");
+          PutObjectRequest request = new PutObjectRequest(s3uri.getBucket(),
+                  s3uri.getKey() + "/METADATA.ome.xml",
+                  new ByteArrayInputStream(xml.getBytes(Constants.ENCODING)),
+                  metadata);
+        }
+        else {
+          Path omexmlFile = outputPath.resolve("METADATA.ome.xml");
+          Files.write(omexmlFile, xml.getBytes(Constants.ENCODING));
+        }
       }
       catch (ServiceException se) {
         LOGGER.error("Could not retrieve OME-XML", se);
@@ -428,8 +490,15 @@ public class Converter implements Callable<Void> {
           throws FormatException, IOException, InterruptedException
   {
     String pathName = "/" + Integer.toString(resolution - 1);
-    N5Reader n5 = new N5FSReader(
-        outputPath.resolve("pyramid.n5").toString());
+    N5Reader n5;
+
+    if (s3 != null) {
+      n5 = new N5AmazonS3Reader(s3, s3uri.getBucket(),
+              s3uri.getKey() + "/pyramid.n5");
+    }
+    else {
+      n5 = new N5FSReader(outputPath.resolve("pyramid.n5").toString());
+    }
     DatasetAttributes datasetAttributes = n5.getDatasetAttributes(pathName);
     long[] dimensions = datasetAttributes.getDimensions();
 
@@ -549,7 +618,14 @@ public class Converter implements Callable<Void> {
 
     // TODO: ZCT
     // int[] zct = reader.getZCTCoords(plane);
-    N5Writer n5 = new N5FSWriter(outputPath.resolve("pyramid.n5").toString());
+    N5Writer n5;
+    if (s3 != null) {
+      n5 = new N5AmazonS3Writer(s3, s3uri.getBucket(),
+              s3uri.getKey() + "/pyramid.n5");
+    }
+    else {
+      n5 =new N5FSWriter(outputPath.resolve("pyramid.n5").toString());
+    }
     Slf4JStopWatch t1 = stopWatch();
     try {
       n5.writeBlock(
@@ -634,7 +710,14 @@ public class Converter implements Callable<Void> {
     Compression compression = N5Compression.getCompressor(compressionType,
             compressionParameter);
 
-    N5Writer n5 = new N5FSWriter(outputPath.resolve("pyramid.n5").toString());
+    N5Writer n5;
+    if (s3 != null) {
+      n5 = new N5AmazonS3Writer(s3, s3uri.getBucket(),
+              s3uri.getKey() + "/pyramid.n5");
+    }
+    else {
+      n5 = new N5FSWriter(outputPath.resolve("pyramid.n5").toString());
+    }
     for (int resCounter=0; resCounter<resolutions; resCounter++) {
       final int resolution = resCounter;
       int scale = (int) Math.pow(PYRAMID_SCALE, resolution);
