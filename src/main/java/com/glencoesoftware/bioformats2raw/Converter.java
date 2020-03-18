@@ -9,10 +9,12 @@ package com.glencoesoftware.bioformats2raw;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -165,7 +167,7 @@ public class Converter implements Callable<Void> {
     arity = "1",
     description = "path to the output pyramid directory"
   )
-  private Path outputPath;
+  private URI outputURI;
 
   @Option(
     names = {"-r", "--resolutions"},
@@ -316,6 +318,7 @@ public class Converter implements Callable<Void> {
   public void convert()
       throws FormatException, IOException, InterruptedException
   {
+
     Cache<TilePointer, byte[]> tileCache = CacheBuilder.newBuilder()
         .maximumSize(maxCachedTiles)
         .build();
@@ -360,8 +363,8 @@ public class Converter implements Callable<Void> {
       readers.add(new ChannelSeparator(reader));
     }
 
-    if (outputPath.startsWith("s3://")) {
-      s3uri = new AmazonS3URI(outputPath.toString());
+    if (outputURI.getScheme() == "s3") {
+      s3uri = new AmazonS3URI(outputURI.toString());
       // Set up S3 Client
       final AwsClientBuilder.EndpointConfiguration endpoint =
               new AwsClientBuilder.EndpointConfiguration(
@@ -422,7 +425,8 @@ public class Converter implements Callable<Void> {
                   metadata);
         }
         else {
-          Path omexmlFile = outputPath.resolve("METADATA.ome.xml");
+          Path omexmlFile = Paths.get(
+                  outputURI.resolve("METADATA.ome.xml").getPath());
           Files.write(omexmlFile, xml.getBytes(Constants.ENCODING));
         }
       }
@@ -497,7 +501,7 @@ public class Converter implements Callable<Void> {
               s3uri.getKey() + "/pyramid.n5");
     }
     else {
-      n5 = new N5FSReader(outputPath.resolve("pyramid.n5").toString());
+      n5 = new N5FSReader(outputURI.resolve("pyramid.n5").getPath());
     }
     DatasetAttributes datasetAttributes = n5.getDatasetAttributes(pathName);
     long[] dimensions = datasetAttributes.getDimensions();
@@ -624,7 +628,7 @@ public class Converter implements Callable<Void> {
               s3uri.getKey() + "/pyramid.n5");
     }
     else {
-      n5 =new N5FSWriter(outputPath.resolve("pyramid.n5").toString());
+      n5 = new N5FSWriter(outputURI.resolve("pyramid.n5").getPath());
     }
     Slf4JStopWatch t1 = stopWatch();
     try {
@@ -716,7 +720,7 @@ public class Converter implements Callable<Void> {
               s3uri.getKey() + "/pyramid.n5");
     }
     else {
-      n5 = new N5FSWriter(outputPath.resolve("pyramid.n5").toString());
+      n5 = new N5FSWriter(outputURI.resolve("pyramid.n5").getPath());
     }
     for (int resCounter=0; resCounter<resolutions; resCounter++) {
       final int resolution = resCounter;
@@ -788,7 +792,7 @@ public class Converter implements Callable<Void> {
       MetadataTools.populateMetadata(metadata, 0, null,
         reader.getCoreMetadataList().get(reader.getCoreIndex()));
       writer.setMetadataRetrieve(metadata);
-      writer.setId(outputPath.resolve(filename).toString());
+      writer.setId(outputURI.resolve(filename).toString());
       writer.saveBytes(0, reader.openBytes(0));
     }
     finally {
