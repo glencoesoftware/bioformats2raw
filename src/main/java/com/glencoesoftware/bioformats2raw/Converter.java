@@ -248,6 +248,20 @@ public class Converter implements Callable<Void> {
   )
   private String awsRegion = "us-east-1";
 
+  @Option(
+          names = "--pyramid-name",
+          description = "Name of pyramid n5 (default: ${DEFAULT-VALUE})"
+  )
+  private String pyramidName = "pyramid.n5";
+
+  @Option(
+          names = "--scale-format-string",
+          description = "Format string for scale paths "+
+                  "[Use \"s%d\" for neuroglancer] +" +
+                  "(default: ${DEFAULT-VALUE})"
+  )
+  private String scaleFormatString = "%d";
+
 
   /** Scaling implementation that will be used during downsampling. */
   private IImageScaler scaler = new SimpleImageScaler();
@@ -500,16 +514,16 @@ public class Converter implements Callable<Void> {
       int resolution, int plane, int xx, int yy, int width, int height)
           throws FormatException, IOException, InterruptedException
   {
-    String pathName = "/" + Integer.toString(resolution - 1);
     N5Reader n5;
 
     if (s3uri != null) {
       n5 = new N5AmazonS3Reader(s3, s3uri.getBucket(),
-              s3uri.getKey() + "/pyramid.n5");
+              s3uri.getKey() + "/" + pyramidName);
     }
     else {
-      n5 = new N5FSReader(outputURI.resolve("pyramid.n5").getPath());
+      n5 = new N5FSReader(outputURI.resolve(pyramidName).getPath());
     }
+    String pathName = "/" + String.format(scaleFormatString, resolution - 1);
     DatasetAttributes datasetAttributes = n5.getDatasetAttributes(pathName);
     long[] dimensions = datasetAttributes.getDimensions();
 
@@ -586,7 +600,7 @@ public class Converter implements Callable<Void> {
         throws EnumerationException, FormatException, IOException,
           InterruptedException
   {
-    String pathName = "/" + Integer.toString(resolution);
+    String pathName = "/" + String.format(scaleFormatString, resolution);
     long[] gridPosition = new long[] {
       xx / tileWidth, yy / tileHeight, plane
     };
@@ -632,10 +646,10 @@ public class Converter implements Callable<Void> {
     N5Writer n5;
     if (s3uri != null) {
       n5 = new N5AmazonS3Writer(s3, s3uri.getBucket(),
-              s3uri.getKey() + "/pyramid.n5");
+              s3uri.getKey() + "/" + pyramidName);
     }
     else {
-      n5 = new N5FSWriter(outputURI.resolve("pyramid.n5").getPath());
+      n5 = new N5FSWriter(outputURI.resolve(pyramidName).getPath());
     }
     Slf4JStopWatch t1 = stopWatch();
     try {
@@ -724,10 +738,10 @@ public class Converter implements Callable<Void> {
     N5Writer n5;
     if (s3uri != null) {
       n5 = new N5AmazonS3Writer(s3, s3uri.getBucket(),
-              s3uri.getKey() + "/pyramid.n5");
+              s3uri.getKey() + "/" + pyramidName);
     }
     else {
-      n5 = new N5FSWriter(outputURI.resolve("pyramid.n5").getPath());
+      n5 = new N5FSWriter(outputURI.resolve(pyramidName).getPath());
     }
     for (int resCounter=0; resCounter<resolutions; resCounter++) {
       final int resolution = resCounter;
@@ -735,7 +749,7 @@ public class Converter implements Callable<Void> {
       int scaledWidth = sizeX / scale;
       int scaledHeight = sizeY / scale;
       n5.createDataset(
-          "/" + Integer.toString(resolution),
+          "/" +  String.format(scaleFormatString, resolution),
           new long[] {scaledWidth, scaledHeight, imageCount},
           new int[] {tileWidth, tileHeight, 1},
           dataType, compression
