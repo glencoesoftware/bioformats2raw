@@ -250,14 +250,15 @@ public class Converter implements Callable<Void> {
 
   @Option(
           names = "--pyramid-name",
-          description = "Name of pyramid n5 (default: ${DEFAULT-VALUE})"
+          description = "Name of pyramid n5 (default: ${DEFAULT-VALUE}) " +
+                  "[Can break compatibility with raw2ometiff]"
   )
   private String pyramidName = "pyramid.n5";
 
   @Option(
           names = "--scale-format-string",
           description = "Format string for scale paths "+
-                  "[Use \"s%d\" for neuroglancer] +" +
+                  "[Can break compatibility with raw2ometiff] " +
                   "(default: ${DEFAULT-VALUE})"
   )
   private String scaleFormatString = "%d";
