@@ -299,6 +299,12 @@ public class Converter implements Callable<Void> {
   public void convert()
       throws FormatException, IOException, InterruptedException
   {
+    if (!pyramidName.equals("pyramid.n5") || !scaleFormatString.equals("%d")) {
+      LOGGER.info("Output will be incompatible with raw2ometiff " +
+              "(pyramidName: {}, scaleFormatString: {})",
+              pyramidName, scaleFormatString);
+    }
+
     Cache<TilePointer, byte[]> tileCache = CacheBuilder.newBuilder()
         .maximumSize(maxCachedTiles)
         .build();
