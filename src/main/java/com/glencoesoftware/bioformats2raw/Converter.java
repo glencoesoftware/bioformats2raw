@@ -220,6 +220,22 @@ public class Converter implements Callable<Void> {
     PyramidTiffReader.class, MiraxReader.class
   };
 
+  @Option(
+          names = "--pyramid-name",
+          description = "Name of pyramid n5 (default: ${DEFAULT-VALUE}) " +
+                  "[Can break compatibility with raw2ometiff]"
+  )
+  private String pyramidName = "pyramid.n5";
+
+  @Option(
+          names = "--scale-format-string",
+          description = "Format string for scale paths "+
+                  "[Can break compatibility with raw2ometiff] " +
+                  "(default: ${DEFAULT-VALUE})"
+  )
+  private String scaleFormatString = "%d";
+
+
   /** Scaling implementation that will be used during downsampling. */
   private IImageScaler scaler = new SimpleImageScaler();
 
@@ -283,6 +299,12 @@ public class Converter implements Callable<Void> {
   public void convert()
       throws FormatException, IOException, InterruptedException
   {
+    if (!pyramidName.equals("pyramid.n5") || !scaleFormatString.equals("%d")) {
+      LOGGER.info("Output will be incompatible with raw2ometiff " +
+              "(pyramidName: {}, scaleFormatString: {})",
+              pyramidName, scaleFormatString);
+    }
+
     Cache<TilePointer, byte[]> tileCache = CacheBuilder.newBuilder()
         .maximumSize(maxCachedTiles)
         .build();
@@ -427,9 +449,9 @@ public class Converter implements Callable<Void> {
       int resolution, int plane, int xx, int yy, int width, int height)
           throws FormatException, IOException, InterruptedException
   {
-    String pathName = "/" + Integer.toString(resolution - 1);
+    String pathName = "/" + String.format(scaleFormatString, resolution - 1);
     N5Reader n5 = new N5FSReader(
-        outputPath.resolve("pyramid.n5").toString());
+        outputPath.resolve(pyramidName).toString());
     DatasetAttributes datasetAttributes = n5.getDatasetAttributes(pathName);
     long[] dimensions = datasetAttributes.getDimensions();
 
@@ -506,7 +528,7 @@ public class Converter implements Callable<Void> {
         throws EnumerationException, FormatException, IOException,
           InterruptedException
   {
-    String pathName = "/" + Integer.toString(resolution);
+    String pathName = "/" + String.format(scaleFormatString, resolution);
     long[] gridPosition = new long[] {
       xx / tileWidth, yy / tileHeight, plane
     };
@@ -549,7 +571,7 @@ public class Converter implements Callable<Void> {
 
     // TODO: ZCT
     // int[] zct = reader.getZCTCoords(plane);
-    N5Writer n5 = new N5FSWriter(outputPath.resolve("pyramid.n5").toString());
+    N5Writer n5 = new N5FSWriter(outputPath.resolve(pyramidName).toString());
     Slf4JStopWatch t1 = stopWatch();
     try {
       n5.writeBlock(
@@ -634,14 +656,14 @@ public class Converter implements Callable<Void> {
     Compression compression = N5Compression.getCompressor(compressionType,
             compressionParameter);
 
-    N5Writer n5 = new N5FSWriter(outputPath.resolve("pyramid.n5").toString());
+    N5Writer n5 = new N5FSWriter(outputPath.resolve(pyramidName).toString());
     for (int resCounter=0; resCounter<resolutions; resCounter++) {
       final int resolution = resCounter;
       int scale = (int) Math.pow(PYRAMID_SCALE, resolution);
       int scaledWidth = sizeX / scale;
       int scaledHeight = sizeY / scale;
       n5.createDataset(
-          "/" + Integer.toString(resolution),
+          "/" +  String.format(scaleFormatString, resolution),
           new long[] {scaledWidth, scaledHeight, imageCount},
           new int[] {tileWidth, tileHeight, 1},
           dataType, compression
