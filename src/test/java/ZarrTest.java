@@ -103,7 +103,7 @@ public class ZarrTest {
         }
     }
 
-    @Test(expected = Exception.class)
+    @Test
     public void testDefaultIsTooBig() throws Exception {
         fake = fake();
         assertTool();

@@ -18,6 +18,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -375,8 +376,8 @@ public class Converter implements Callable<Void> {
         // in-process tiles, leading to exceptions
         write(0);
       }
-      catch (Exception e) {
-        LOGGER.error("Error while writing series 0", e);
+      catch (Throwable t) {
+        LOGGER.error("Error while writing series 0", t);
         return;
       }
       finally {
@@ -737,10 +738,39 @@ public class Converter implements Callable<Void> {
           }
         }
       }
+
       // Wait until the entire resolution has completed before proceeding to
       // the next one
       CompletableFuture.allOf(
         futures.toArray(new CompletableFuture[futures.size()])).join();
+
+      // TODO: some of these futures may be completelyExceptionally and need re-throwing
+
+    }
+
+  }
+
+  /**
+   * Takes exception from asynchronous execution and re-throw known exception
+   * types. If the end is reached with no known exception detected, either the
+   * exception itself will be thrown if {@link RuntimeException}, otherwise
+   * wrap in a {@link RuntimeException}.
+   */
+  private void unwrapException(Throwable t) throws FormatException, IOException, InterruptedException {
+    if (t instanceof CompletionException) {
+      try {
+        throw ((CompletionException) t).getCause();
+      } catch (FormatException | IOException | InterruptedException e2) {
+        throw e2;
+      } catch (RuntimeException rt) {
+        throw rt;
+      } catch (Throwable t2) {
+        throw new RuntimeException(t);
+      }
+    } else if (t instanceof RuntimeException) {
+      throw (RuntimeException) t;
+    } else {
+      throw new RuntimeException(t);
     }
   }
 
