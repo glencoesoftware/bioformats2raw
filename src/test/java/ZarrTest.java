@@ -18,100 +18,115 @@ import org.junit.rules.TemporaryFolder;
 
 public class ZarrTest {
 
-    Path fake;
+  Path fake;
 
-    @Rule
-    public TemporaryFolder output = new TemporaryFolder();
+  @Rule
+  public TemporaryFolder output = new TemporaryFolder();
 
-    @Before
-    public void setup() throws Exception {
-        LogbackTools.setRootLevel("warn");
+  /**
+   * Set logging to warn before all methods.
+   */
+  @Before
+  public void setup() throws Exception {
+    LogbackTools.setRootLevel("warn");
+  }
+
+  /**
+   * Run the Converter main method and check for success or failure.
+   *
+   * @param additionalArgs CLI arguments as needed beyond "-o output input"
+   */
+  void assertTool(String...additionalArgs) throws IOException {
+    List<String> args = new ArrayList<String>();
+    for (String arg : additionalArgs) {
+      args.add(arg);
     }
-
-    /**
-     * Run the Converter main method and check for success or failure.
-     *
-     * @param additionalArgs CLI arguments as needed beyond "-o output input"
-     */
-    void assertTool(String...additionalArgs) throws IOException {
-        List<String> args = new ArrayList<String>();
-        for (String arg : additionalArgs) {
-            args.add(arg);
-        }
-        args.add("--use-zarr");
-        args.add(fake.toString());
-        args.add(output.newFolder().toPath().toString());
-        try {
-            Converter.main(args.toArray(new String[]{}));
-        } catch (RuntimeException rt) {
-            throw rt;
-        } catch (Throwable t) {
-            throw new RuntimeException(t);
-        }
+    args.add("--use-zarr");
+    args.add(fake.toString());
+    args.add(output.newFolder().toPath().toString());
+    try {
+      Converter.main(args.toArray(new String[]{}));
     }
-
-
-    public static Path fake(String...args) {
-        Assert.assertTrue(args.length %2 == 0);
-        Map<String, String> options = new HashMap<String, String>();
-        for (int i = 0; i < args.length; i += 2) {
-            options.put(args[i], args[i+1]);
-        }
-        return fake(options);
+    catch (RuntimeException rt) {
+      throw rt;
     }
-
-    public static Path fake(Map<String, String> options) {
-        return fake(options, null);
+    catch (Throwable t) {
+      throw new RuntimeException(t);
     }
+  }
 
-    public static Path fake(Map<String, String> options, Map<Integer, Map<String, String>> series) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("image");
-        if (options != null) {
-            for (Map.Entry<String, String> kv : options.entrySet()) {
-                sb.append("&");
-                sb.append(kv.getKey());
-                sb.append("=");
-                sb.append(kv.getValue());
-            }
-        }
+  static Path fake(String...args) {
+    Assert.assertTrue(args.length %2 == 0);
+    Map<String, String> options = new HashMap<String, String>();
+    for (int i = 0; i < args.length; i += 2) {
+      options.put(args[i], args[i+1]);
+    }
+    return fake(options);
+  }
+
+  static Path fake(Map<String, String> options) {
+    return fake(options, null);
+  }
+
+  static Path fake(Map<String, String> options,
+          Map<Integer, Map<String, String>> series)
+  {
+    StringBuilder sb = new StringBuilder();
+    sb.append("image");
+    if (options != null) {
+      for (Map.Entry<String, String> kv : options.entrySet()) {
         sb.append("&");
-        try {
-            List<String> lines = new ArrayList<String>();
-            if (series != null) {
-                for (int s : series.keySet()) {
-                    Map<String, String> seriesOptions = series.get(s);
-                    lines.add(String.format("[series_%d]", s));
-                    for (String key : seriesOptions.keySet()) {
-                        lines.add(String.format("%s=%s", key, seriesOptions.get(key)));
-                    }
-                }
-            }
-            Path ini = Files.createTempFile(sb.toString(), ".fake.ini");
-            File iniAsFile = ini.toFile();
-            String iniPath = iniAsFile.getAbsolutePath();
-            String fakePath = iniPath.substring(0, iniPath.length() - 4);
-            Path fake = Paths.get(fakePath);
-            File fakeAsFile = fake.toFile();
-            Files.write(fake, new byte[]{});
-            Files.write(ini, lines);
-            iniAsFile.deleteOnExit();
-            fakeAsFile.deleteOnExit();
-            return ini;
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        sb.append(kv.getKey());
+        sb.append("=");
+        sb.append(kv.getValue());
+      }
+    }
+    sb.append("&");
+    try {
+      List<String> lines = new ArrayList<String>();
+      if (series != null) {
+        for (int s : series.keySet()) {
+          Map<String, String> seriesOptions = series.get(s);
+          lines.add(String.format("[series_%d]", s));
+          for (String key : seriesOptions.keySet()) {
+            lines.add(String.format("%s=%s", key, seriesOptions.get(key)));
+          }
         }
+      }
+      Path ini = Files.createTempFile(sb.toString(), ".fake.ini");
+      File iniAsFile = ini.toFile();
+      String iniPath = iniAsFile.getAbsolutePath();
+      String fakePath = iniPath.substring(0, iniPath.length() - 4);
+      Path fake = Paths.get(fakePath);
+      File fakeAsFile = fake.toFile();
+      Files.write(fake, new byte[]{});
+      Files.write(ini, lines);
+      iniAsFile.deleteOnExit();
+      fakeAsFile.deleteOnExit();
+      return ini;
     }
+    catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
 
-    @Test
-    public void testDefaultIsTooBig() throws Exception {
-        fake = fake();
-        assertTool();
-    }
+  /**
+   * Test a fake file with default values smaller than
+   * the default tile size (512 vs 1024).
+   */
+  @Test
+  public void testDefaultIsTooBig() throws Exception {
+    fake = fake();
+    assertTool();
+  }
 
-    @Test
-    public void testSetSmallerDefault() throws Exception {
-        fake = fake("-h", "128", "-w", "128");
-        assertTool();
-    }
+  /**
+   * Manually set the tile size.
+   */
+  @Test
+  public void testSetSmallerDefault() throws Exception {
+    fake = fake("-h", "128", "-w", "128");
+    assertTool();
+  }
+
 }

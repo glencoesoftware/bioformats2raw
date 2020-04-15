@@ -224,7 +224,7 @@ public class Converter implements Callable<Void> {
 
   @Option(
           names = "--use-zarr",
-          description = "Switch to a zarr encoding (default: ${DEFAULT-VALUE}) " +
+          description = "Switch to zarr output (default: ${DEFAULT-VALUE}) " +
                   "[Can break compatibility with raw2ometiff]"
   )
   private boolean useZarr = false;
@@ -470,7 +470,8 @@ public class Converter implements Callable<Void> {
     if (useZarr) {
       n5 = new N5ZarrReader(
               outputPath.resolve(pyramidName).toString());
-    } else {
+    }
+    else {
       n5 = new N5FSWriter(
               outputPath.resolve(pyramidName).toString());
     }
@@ -596,7 +597,8 @@ public class Converter implements Callable<Void> {
     final N5Writer n5;
     if (useZarr) {
       n5 = new N5ZarrWriter(outputPath.resolve(pyramidName).toString());
-    } else {
+    }
+    else {
       n5 = new N5FSWriter(outputPath.resolve(pyramidName).toString());
     }
     Slf4JStopWatch t1 = stopWatch();
@@ -686,7 +688,8 @@ public class Converter implements Callable<Void> {
     final N5Writer n5;
     if (useZarr) {
       n5 = new N5ZarrWriter(outputPath.resolve(pyramidName).toString());
-    } else {
+    }
+    else {
       n5 = new N5FSWriter(outputPath.resolve(pyramidName).toString());
     }
     for (int resCounter=0; resCounter<resolutions; resCounter++) {
@@ -757,7 +760,8 @@ public class Converter implements Callable<Void> {
       CompletableFuture.allOf(
         futures.toArray(new CompletableFuture[futures.size()])).join();
 
-      // TODO: some of these futures may be completelyExceptionally and need re-throwing
+      // TODO: some of these futures may be completelyExceptionally
+      //  and need re-throwing
 
     }
 
@@ -768,21 +772,30 @@ public class Converter implements Callable<Void> {
    * types. If the end is reached with no known exception detected, either the
    * exception itself will be thrown if {@link RuntimeException}, otherwise
    * wrap in a {@link RuntimeException}.
+   *
+   * @param t Exception raised during processing.
    */
-  private void unwrapException(Throwable t) throws FormatException, IOException, InterruptedException {
+  private void unwrapException(Throwable t)
+          throws FormatException, IOException, InterruptedException
+  {
     if (t instanceof CompletionException) {
       try {
         throw ((CompletionException) t).getCause();
-      } catch (FormatException | IOException | InterruptedException e2) {
+      }
+      catch (FormatException | IOException | InterruptedException e2) {
         throw e2;
-      } catch (RuntimeException rt) {
+      }
+      catch (RuntimeException rt) {
         throw rt;
-      } catch (Throwable t2) {
+      }
+      catch (Throwable t2) {
         throw new RuntimeException(t);
       }
-    } else if (t instanceof RuntimeException) {
+    }
+    else if (t instanceof RuntimeException) {
       throw (RuntimeException) t;
-    } else {
+    }
+    else {
       throw new RuntimeException(t);
     }
   }
