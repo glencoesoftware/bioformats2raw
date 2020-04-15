@@ -4,7 +4,7 @@ build:
   verbosity: minimal
 
 build_script:
-  - gradlew build
+  - gradlew build test
 
 after_test:
   - gradlew distZip
