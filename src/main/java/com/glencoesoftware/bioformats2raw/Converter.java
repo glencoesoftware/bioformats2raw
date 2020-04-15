@@ -51,8 +51,9 @@ import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.Lz4Compression;
-import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
+import org.janelia.saalfeldlab.n5.zarr.N5ZarrReader;
+import org.janelia.saalfeldlab.n5.zarr.N5ZarrWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.RawCompression;
@@ -221,11 +222,18 @@ public class Converter implements Callable<Void> {
   };
 
   @Option(
-          names = "--pyramid-name",
-          description = "Name of pyramid n5 (default: ${DEFAULT-VALUE}) " +
+          names = "--use-zarr",
+          description = "Switch to a zarr encoding (default: ${DEFAULT-VALUE}) " +
                   "[Can break compatibility with raw2ometiff]"
   )
-  private String pyramidName = "pyramid.n5";
+  private boolean useZarr = false;
+
+  @Option(
+          names = "--pyramid-name",
+          description = "Name of pyramid (default: ${DEFAULT-VALUE}) " +
+                  "[Can break compatibility with raw2ometiff]"
+  )
+  private volatile String pyramidName = "pyramid.n5";
 
   @Option(
           names = "--scale-format-string",
@@ -299,7 +307,14 @@ public class Converter implements Callable<Void> {
   public void convert()
       throws FormatException, IOException, InterruptedException
   {
-    if (!pyramidName.equals("pyramid.n5") || !scaleFormatString.equals("%d")) {
+
+    if (useZarr || pyramidName.equals("pyramid.n5")) {
+      pyramidName = "pyramid.zarr";
+    }
+
+    if (!pyramidName.equals("pyramid.n5") ||
+              !scaleFormatString.equals("%d"))
+    {
       LOGGER.info("Output will be incompatible with raw2ometiff " +
               "(pyramidName: {}, scaleFormatString: {})",
               pyramidName, scaleFormatString);
@@ -450,8 +465,14 @@ public class Converter implements Callable<Void> {
           throws FormatException, IOException, InterruptedException
   {
     String pathName = "/" + String.format(scaleFormatString, resolution - 1);
-    N5Reader n5 = new N5FSReader(
-        outputPath.resolve(pyramidName).toString());
+    final N5Reader n5;
+    if (useZarr) {
+      n5 = new N5ZarrReader(
+              outputPath.resolve(pyramidName).toString());
+    } else {
+      n5 = new N5FSWriter(
+              outputPath.resolve(pyramidName).toString());
+    }
     DatasetAttributes datasetAttributes = n5.getDatasetAttributes(pathName);
     long[] dimensions = datasetAttributes.getDimensions();
 
@@ -571,7 +592,12 @@ public class Converter implements Callable<Void> {
 
     // TODO: ZCT
     // int[] zct = reader.getZCTCoords(plane);
-    N5Writer n5 = new N5FSWriter(outputPath.resolve(pyramidName).toString());
+    final N5Writer n5;
+    if (useZarr) {
+      n5 = new N5ZarrWriter(outputPath.resolve(pyramidName).toString());
+    } else {
+      n5 = new N5FSWriter(outputPath.resolve(pyramidName).toString());
+    }
     Slf4JStopWatch t1 = stopWatch();
     try {
       n5.writeBlock(
@@ -656,7 +682,12 @@ public class Converter implements Callable<Void> {
     Compression compression = N5Compression.getCompressor(compressionType,
             compressionParameter);
 
-    N5Writer n5 = new N5FSWriter(outputPath.resolve(pyramidName).toString());
+    final N5Writer n5;
+    if (useZarr) {
+      n5 = new N5ZarrWriter(outputPath.resolve(pyramidName).toString());
+    } else {
+      n5 = new N5FSWriter(outputPath.resolve(pyramidName).toString());
+    }
     for (int resCounter=0; resCounter<resolutions; resCounter++) {
       final int resolution = resCounter;
       int scale = (int) Math.pow(PYRAMID_SCALE, resolution);

@@ -12,6 +12,9 @@ Requirements
 libblosc (https://github.com/Blosc/c-blosc) version 1.9.0 or later must be installed separately.
 The native libraries are not packaged with any relevant jars.  See also note in n5-zarr readme (https://github.com/saalfeldlab/n5-zarr/blob/0.0.2-beta/README.md)
 
+ * Mac OSX: `brew install c-blosc`
+ * Ubuntu: `apt-get install libblosc1`
+
 Usage
 =====
 
