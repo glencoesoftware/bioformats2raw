@@ -694,10 +694,23 @@ public class Converter implements Callable<Void> {
       int scale = (int) Math.pow(PYRAMID_SCALE, resolution);
       int scaledWidth = sizeX / scale;
       int scaledHeight = sizeY / scale;
+
+      int activeTileWidth = tileWidth;
+      int activeTileHeight = tileHeight;
+      if (scaledWidth < activeTileWidth) {
+        LOGGER.warn("Reducing active tileWidth to {}", scaledWidth);
+        activeTileWidth = scaledWidth;
+      }
+
+      if (scaledHeight < activeTileHeight) {
+        LOGGER.warn("Reducing active tileHeight to {}", scaledHeight);
+        activeTileHeight = scaledHeight;
+      }
+
       n5.createDataset(
           "/" +  String.format(scaleFormatString, resolution),
           new long[] {scaledWidth, scaledHeight, imageCount},
-          new int[] {tileWidth, tileHeight, 1},
+          new int[] {activeTileWidth, activeTileHeight, 1},
           dataType, compression
       );
 
