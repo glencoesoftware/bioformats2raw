@@ -52,6 +52,7 @@ import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.Lz4Compression;
+import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.zarr.N5ZarrReader;
 import org.janelia.saalfeldlab.n5.zarr.N5ZarrWriter;
@@ -90,6 +91,30 @@ public class Converter implements Callable<Void> {
   /** Scaling factor in X and Y between any two consecutive resolutions. */
   private static final int PYRAMID_SCALE = 2;
 
+  /** Enumeration that backs the --file_type flag. Instances can be used
+   * as a factory method to create {@link N5Reader} and {@link N5Writer}
+   * instances.
+   */
+  enum FileType {
+    n5 {
+      N5Reader reader(String path) throws IOException {
+        return new N5FSReader(path);
+      }
+      N5Writer writer(String path) throws IOException {
+        return new N5FSWriter(path);
+      }
+    },
+    zarr {
+      N5Reader reader(String path) throws IOException {
+        return new N5ZarrReader(path);
+      }
+      N5Writer writer(String path) throws IOException {
+        return new N5ZarrWriter(path);
+      }
+    };
+    abstract N5Reader reader(String path) throws IOException;
+    abstract N5Writer writer(String path) throws IOException;
+  }
 
   static class N5Compression {
     enum CompressionTypes { blosc, bzip2, gzip, lz4, raw, xz };
@@ -223,11 +248,11 @@ public class Converter implements Callable<Void> {
   };
 
   @Option(
-          names = "--use-zarr",
-          description = "Switch to zarr output (default: ${DEFAULT-VALUE}) " +
+          names = "--file_type",
+          description = "Tile file extension (default: ${DEFAULT-VALUE}) " +
                   "[Can break compatibility with raw2ometiff]"
   )
-  private boolean useZarr = false;
+  private FileType fileType = FileType.n5;
 
   @Option(
           names = "--pyramid-name",
@@ -309,7 +334,7 @@ public class Converter implements Callable<Void> {
       throws FormatException, IOException, InterruptedException
   {
 
-    if (useZarr && pyramidName.equals("pyramid.n5")) {
+    if (fileType.equals(FileType.zarr) && pyramidName.equals("pyramid.n5")) {
       pyramidName = "pyramid.zarr";
     }
 
@@ -466,16 +491,11 @@ public class Converter implements Callable<Void> {
       int resolution, int plane, int xx, int yy, int width, int height)
           throws FormatException, IOException, InterruptedException
   {
-    String pathName = "/" + String.format(scaleFormatString, resolution - 1);
-    final N5Reader n5;
-    if (useZarr) {
-      n5 = new N5ZarrReader(
-              outputPath.resolve(pyramidName).toString());
-    }
-    else {
-      n5 = new N5FSWriter(
-              outputPath.resolve(pyramidName).toString());
-    }
+    final String pathName = "/" +
+            String.format(scaleFormatString, resolution - 1);
+    final String pyramidPath = outputPath.resolve(pyramidName).toString();
+    final N5Reader n5 = fileType.reader(pyramidPath);
+
     DatasetAttributes datasetAttributes = n5.getDatasetAttributes(pathName);
     long[] dimensions = datasetAttributes.getDimensions();
 
@@ -595,13 +615,9 @@ public class Converter implements Callable<Void> {
 
     // TODO: ZCT
     // int[] zct = reader.getZCTCoords(plane);
-    final N5Writer n5;
-    if (useZarr) {
-      n5 = new N5ZarrWriter(outputPath.resolve(pyramidName).toString());
-    }
-    else {
-      n5 = new N5FSWriter(outputPath.resolve(pyramidName).toString());
-    }
+    final String pyramidPath = outputPath.resolve(pyramidName).toString();
+    final N5Writer n5 = fileType.writer(pyramidPath);
+
     Slf4JStopWatch t1 = stopWatch();
     try {
       n5.writeBlock(
@@ -686,13 +702,9 @@ public class Converter implements Callable<Void> {
     Compression compression = N5Compression.getCompressor(compressionType,
             compressionParameter);
 
-    final N5Writer n5;
-    if (useZarr) {
-      n5 = new N5ZarrWriter(outputPath.resolve(pyramidName).toString());
-    }
-    else {
-      n5 = new N5FSWriter(outputPath.resolve(pyramidName).toString());
-    }
+    final String pyramidPath = outputPath.resolve(pyramidName).toString();
+    final N5Writer n5 = fileType.writer(pyramidPath);
+
     for (int resCounter=0; resCounter<resolutions; resCounter++) {
       final int resolution = resCounter;
       int scale = (int) Math.pow(PYRAMID_SCALE, resolution);

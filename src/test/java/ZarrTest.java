@@ -48,7 +48,7 @@ public class ZarrTest {
     for (String arg : additionalArgs) {
       args.add(arg);
     }
-    args.add("--use-zarr");
+    args.add("--file_type=zarr");
     args.add(fake.toString());
     args.add(output.newFolder().toPath().toString());
     try {
