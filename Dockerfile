@@ -9,7 +9,7 @@
 
 # Similarly, the BUILD_IMAGE argument can be overwritten
 # but this is generally not needed.
-ARG BUILD_IMAGE=gradle:5.2.1-jdk8
+ARG BUILD_IMAGE=gradle:6.2.1-jdk8
 
 #
 # Build phase: Use the gradle image for building.
