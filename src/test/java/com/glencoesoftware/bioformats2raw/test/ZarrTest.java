@@ -5,6 +5,8 @@
  * file you can find at the root of the distribution bundle.  If the file is
  * missing please request a copy by contacting info@glencoesoftware.com
  */
+package com.glencoesoftware.bioformats2raw.test;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
