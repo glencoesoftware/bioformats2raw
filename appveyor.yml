@@ -1,13 +1,19 @@
 version: 0.1.0.{build}
 
-build:
-  verbosity: minimal
+image: Ubuntu
+stack: jdk 11
+
+install:
+    - sh: sudo apt-get update
+    - sh: sudo apt-get install -y libblosc1
+
+build: off
 
 build_script:
-  - gradlew build
+  - ./gradlew build
 
 after_test:
-  - gradlew distZip
+  - ./gradlew distZip
 
 artifacts:
   - path: 'build\distributions\*.zip'

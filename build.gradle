@@ -28,6 +28,21 @@ dependencies {
     compile ('info.picocli:picocli:3.9.6')
     compile ('org.janelia.saalfeldlab:n5:2.1.6')
     compile ('org.janelia.saalfeldlab:n5-blosc:1.0.1')
+    compile ('org.janelia.saalfeldlab:n5-zarr:0.0.2-beta')
+
+    // https://github.com/junit-team/junit5-samples/blob/master/junit5-migration-gradle/build.gradle
+    def junit4Version        = '4.12'
+    def junitVintageVersion  = '5.2.0'
+    def junitJupiterVersion  = '5.2.0'
+    def junitPlatformVersion = '1.2.0'
+    testCompile("org.junit.jupiter:junit-jupiter-api:${junitJupiterVersion}")
+    testRuntime("org.junit.jupiter:junit-jupiter-engine:${junitJupiterVersion}")
+    testCompile("junit:junit:${junit4Version}")
+    testRuntime("org.junit.vintage:junit-vintage-engine:${junitVintageVersion}")
+    testRuntime("org.junit.platform:junit-platform-launcher:${junitPlatformVersion}")
+
+    // https://stackoverflow.com/questions/45462987/junit5-with-intellij-and-gradle
+    testImplementation "org.junit.jupiter:junit-jupiter-params:$junitJupiterVersion"
 }
 
 applicationDistribution.from("$projectDir") {

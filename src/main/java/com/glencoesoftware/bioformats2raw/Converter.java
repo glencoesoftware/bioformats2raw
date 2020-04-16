@@ -18,6 +18,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -53,6 +54,8 @@ import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.Lz4Compression;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
+import org.janelia.saalfeldlab.n5.zarr.N5ZarrReader;
+import org.janelia.saalfeldlab.n5.zarr.N5ZarrWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.RawCompression;
@@ -88,6 +91,30 @@ public class Converter implements Callable<Void> {
   /** Scaling factor in X and Y between any two consecutive resolutions. */
   private static final int PYRAMID_SCALE = 2;
 
+  /** Enumeration that backs the --file_type flag. Instances can be used
+   * as a factory method to create {@link N5Reader} and {@link N5Writer}
+   * instances.
+   */
+  enum FileType {
+    n5 {
+      N5Reader reader(String path) throws IOException {
+        return new N5FSReader(path);
+      }
+      N5Writer writer(String path) throws IOException {
+        return new N5FSWriter(path);
+      }
+    },
+    zarr {
+      N5Reader reader(String path) throws IOException {
+        return new N5ZarrReader(path);
+      }
+      N5Writer writer(String path) throws IOException {
+        return new N5ZarrWriter(path);
+      }
+    };
+    abstract N5Reader reader(String path) throws IOException;
+    abstract N5Writer writer(String path) throws IOException;
+  }
 
   static class N5Compression {
     enum CompressionTypes { blosc, bzip2, gzip, lz4, raw, xz };
@@ -146,44 +173,44 @@ public class Converter implements Callable<Void> {
     arity = "1",
     description = "file to convert"
   )
-  private Path inputPath;
+  private volatile Path inputPath;
 
   @Parameters(
     index = "1",
     arity = "1",
     description = "path to the output pyramid directory"
   )
-  private Path outputPath;
+  private volatile Path outputPath;
 
   @Option(
     names = {"-r", "--resolutions"},
     description = "Number of pyramid resolutions to generate"
   )
-  private Integer pyramidResolutions;
+  private volatile Integer pyramidResolutions;
 
   @Option(
     names = {"-w", "--tile_width"},
     description = "Maximum tile width to read (default: ${DEFAULT-VALUE})"
   )
-  private int tileWidth = 1024;
+  private volatile int tileWidth = 1024;
 
   @Option(
     names = {"-h", "--tile_height"},
     description = "Maximum tile height to read (default: ${DEFAULT-VALUE})"
   )
-  private int tileHeight = 1024;
+  private volatile int tileHeight = 1024;
 
   @Option(
     names = "--debug",
     description = "Turn on debug logging"
   )
-  private boolean debug = false;
+  private volatile boolean debug = false;
 
   @Option(
     names = "--max_workers",
     description = "Maximum number of workers (default: ${DEFAULT-VALUE})"
   )
-  private int maxWorkers = Runtime.getRuntime().availableProcessors();
+  private volatile int maxWorkers = Runtime.getRuntime().availableProcessors();
 
   @Option(
     names = "--max_cached_tiles",
@@ -191,14 +218,14 @@ public class Converter implements Callable<Void> {
       "Maximum number of tiles that will be cached across all "
       + "workers (default: ${DEFAULT-VALUE})"
   )
-  private int maxCachedTiles = 64;
+  private volatile int maxCachedTiles = 64;
 
   @Option(
           names = {"-c", "--compression"},
           description = "Compression type for n5 " +
                   "(${COMPLETION-CANDIDATES}; default: ${DEFAULT-VALUE})"
   )
-  private N5Compression.CompressionTypes compressionType =
+  private volatile N5Compression.CompressionTypes compressionType =
           N5Compression.CompressionTypes.blosc;
 
   @Option(
@@ -207,25 +234,33 @@ public class Converter implements Callable<Void> {
                   "https://github.com/saalfeldlab/n5/blob/master/README.md" +
                   " )"
   )
-  private Integer compressionParameter = null;
+  private volatile Integer compressionParameter = null;
 
   @Option(
           names = "--extra-readers",
           arity = "0..1",
           split = ",",
           description = "Separate set of readers to include; " +
-                  "default: ${DEFAULT-VALUE})"
+                  "(default: ${DEFAULT-VALUE})"
   )
-  private Class<?>[] extraReaders = new Class[] {
+  private volatile Class<?>[] extraReaders = new Class[] {
     PyramidTiffReader.class, MiraxReader.class
   };
 
   @Option(
-          names = "--pyramid-name",
-          description = "Name of pyramid n5 (default: ${DEFAULT-VALUE}) " +
+          names = "--file_type",
+          description = "Tile file extension: ${COMPLETION-CANDIDATES} " +
+                  "(default: ${DEFAULT-VALUE}) " +
                   "[Can break compatibility with raw2ometiff]"
   )
-  private String pyramidName = "pyramid.n5";
+  private volatile FileType fileType = FileType.n5;
+
+  @Option(
+          names = "--pyramid-name",
+          description = "Name of pyramid (default: ${DEFAULT-VALUE}) " +
+                  "[Can break compatibility with raw2ometiff]"
+  )
+  private volatile String pyramidName = "pyramid.n5";
 
   @Option(
           names = "--scale-format-string",
@@ -233,25 +268,25 @@ public class Converter implements Callable<Void> {
                   "[Can break compatibility with raw2ometiff] " +
                   "(default: ${DEFAULT-VALUE})"
   )
-  private String scaleFormatString = "%d";
+  private volatile String scaleFormatString = "%d";
 
 
   /** Scaling implementation that will be used during downsampling. */
-  private IImageScaler scaler = new SimpleImageScaler();
+  private volatile IImageScaler scaler = new SimpleImageScaler();
 
   /**
    * Set of readers that can be used concurrently, size will be equal to
    * {@link #maxWorkers}.
    */
-  private BlockingQueue<IFormatReader> readers;
+  private volatile BlockingQueue<IFormatReader> readers;
 
   /**
    * Bounded task queue limiting the number of in flight conversion operations
    * happening in parallel.  Size will be equal to {@link #maxWorkers}.
    */
-  private BlockingQueue<Runnable> queue;
+  private volatile BlockingQueue<Runnable> queue;
 
-  private ExecutorService executor;
+  private volatile ExecutorService executor;
 
   /** Whether or not the source file is little endian. */
   private boolean isLittleEndian;
@@ -260,13 +295,13 @@ public class Converter implements Callable<Void> {
    * The source file's pixel type.  Retrieved from
    * {@link IFormatReader#getPixelType()}.
    */
-  private int pixelType;
+  private volatile int pixelType;
 
   /** Total number of tiles at the current resolution during processing. */
-  private int tileCount;
+  private volatile int tileCount;
 
   /** Current number of tiles processed at the current resolution. */
-  private AtomicInteger nTile;
+  private volatile AtomicInteger nTile;
 
   @Override
   public Void call()
@@ -299,7 +334,14 @@ public class Converter implements Callable<Void> {
   public void convert()
       throws FormatException, IOException, InterruptedException
   {
-    if (!pyramidName.equals("pyramid.n5") || !scaleFormatString.equals("%d")) {
+
+    if (fileType.equals(FileType.zarr) && pyramidName.equals("pyramid.n5")) {
+      pyramidName = "pyramid.zarr";
+    }
+
+    if (!pyramidName.equals("pyramid.n5") ||
+              !scaleFormatString.equals("%d"))
+    {
       LOGGER.info("Output will be incompatible with raw2ometiff " +
               "(pyramidName: {}, scaleFormatString: {})",
               pyramidName, scaleFormatString);
@@ -360,8 +402,9 @@ public class Converter implements Callable<Void> {
         // in-process tiles, leading to exceptions
         write(0);
       }
-      catch (Exception e) {
-        LOGGER.error("Error while writing series 0", e);
+      catch (Throwable t) {
+        LOGGER.error("Error while writing series 0", t);
+        unwrapException(t);
         return;
       }
       finally {
@@ -449,9 +492,11 @@ public class Converter implements Callable<Void> {
       int resolution, int plane, int xx, int yy, int width, int height)
           throws FormatException, IOException, InterruptedException
   {
-    String pathName = "/" + String.format(scaleFormatString, resolution - 1);
-    N5Reader n5 = new N5FSReader(
-        outputPath.resolve(pyramidName).toString());
+    final String pathName = "/" +
+            String.format(scaleFormatString, resolution - 1);
+    final String pyramidPath = outputPath.resolve(pyramidName).toString();
+    final N5Reader n5 = fileType.reader(pyramidPath);
+
     DatasetAttributes datasetAttributes = n5.getDatasetAttributes(pathName);
     long[] dimensions = datasetAttributes.getDimensions();
 
@@ -571,7 +616,9 @@ public class Converter implements Callable<Void> {
 
     // TODO: ZCT
     // int[] zct = reader.getZCTCoords(plane);
-    N5Writer n5 = new N5FSWriter(outputPath.resolve(pyramidName).toString());
+    final String pyramidPath = outputPath.resolve(pyramidName).toString();
+    final N5Writer n5 = fileType.writer(pyramidPath);
+
     Slf4JStopWatch t1 = stopWatch();
     try {
       n5.writeBlock(
@@ -656,16 +703,31 @@ public class Converter implements Callable<Void> {
     Compression compression = N5Compression.getCompressor(compressionType,
             compressionParameter);
 
-    N5Writer n5 = new N5FSWriter(outputPath.resolve(pyramidName).toString());
+    final String pyramidPath = outputPath.resolve(pyramidName).toString();
+    final N5Writer n5 = fileType.writer(pyramidPath);
+
     for (int resCounter=0; resCounter<resolutions; resCounter++) {
       final int resolution = resCounter;
       int scale = (int) Math.pow(PYRAMID_SCALE, resolution);
       int scaledWidth = sizeX / scale;
       int scaledHeight = sizeY / scale;
+
+      int activeTileWidth = tileWidth;
+      int activeTileHeight = tileHeight;
+      if (scaledWidth < activeTileWidth) {
+        LOGGER.warn("Reducing active tileWidth to {}", scaledWidth);
+        activeTileWidth = scaledWidth;
+      }
+
+      if (scaledHeight < activeTileHeight) {
+        LOGGER.warn("Reducing active tileHeight to {}", scaledHeight);
+        activeTileHeight = scaledHeight;
+      }
+
       n5.createDataset(
           "/" +  String.format(scaleFormatString, resolution),
           new long[] {scaledWidth, scaledHeight, imageCount},
-          new int[] {tileWidth, tileHeight, 1},
+          new int[] {activeTileWidth, activeTileHeight, 1},
           dataType, compression
       );
 
@@ -706,10 +768,49 @@ public class Converter implements Callable<Void> {
           }
         }
       }
+
       // Wait until the entire resolution has completed before proceeding to
       // the next one
       CompletableFuture.allOf(
         futures.toArray(new CompletableFuture[futures.size()])).join();
+
+      // TODO: some of these futures may be completelyExceptionally
+      //  and need re-throwing
+
+    }
+
+  }
+
+  /**
+   * Takes exception from asynchronous execution and re-throw known exception
+   * types. If the end is reached with no known exception detected, either the
+   * exception itself will be thrown if {@link RuntimeException}, otherwise
+   * wrap in a {@link RuntimeException}.
+   *
+   * @param t Exception raised during processing.
+   */
+  private void unwrapException(Throwable t)
+          throws FormatException, IOException, InterruptedException
+  {
+    if (t instanceof CompletionException) {
+      try {
+        throw ((CompletionException) t).getCause();
+      }
+      catch (FormatException | IOException | InterruptedException e2) {
+        throw e2;
+      }
+      catch (RuntimeException rt) {
+        throw rt;
+      }
+      catch (Throwable t2) {
+        throw new RuntimeException(t);
+      }
+    }
+    else if (t instanceof RuntimeException) {
+      throw (RuntimeException) t;
+    }
+    else {
+      throw new RuntimeException(t);
     }
   }
 
