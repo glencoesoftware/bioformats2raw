@@ -309,7 +309,7 @@ public class Converter implements Callable<Void> {
       throws FormatException, IOException, InterruptedException
   {
 
-    if (useZarr || pyramidName.equals("pyramid.n5")) {
+    if (useZarr && pyramidName.equals("pyramid.n5")) {
       pyramidName = "pyramid.zarr";
     }
 
