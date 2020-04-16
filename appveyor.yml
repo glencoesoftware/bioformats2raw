@@ -1,13 +1,19 @@
 version: 0.1.0.{build}
 
+image: Ubuntu
+
+install:
+    - sh: sudo apt-get update
+    - sh: sudo apt-get install -y libblosc1
+
 build:
   verbosity: minimal
 
 build_script:
-  - gradlew build test
+  - ./gradlew build
 
 after_test:
-  - gradlew distZip
+  - ./gradlew distZip
 
 artifacts:
   - path: 'build\distributions\*.zip'
