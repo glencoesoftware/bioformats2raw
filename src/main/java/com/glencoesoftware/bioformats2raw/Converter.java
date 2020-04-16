@@ -241,7 +241,7 @@ public class Converter implements Callable<Void> {
           arity = "0..1",
           split = ",",
           description = "Separate set of readers to include; " +
-                  "default: ${DEFAULT-VALUE})"
+                  "(default: ${DEFAULT-VALUE})"
   )
   private volatile Class<?>[] extraReaders = new Class[] {
     PyramidTiffReader.class, MiraxReader.class
@@ -249,7 +249,8 @@ public class Converter implements Callable<Void> {
 
   @Option(
           names = "--file_type",
-          description = "Tile file extension (default: ${DEFAULT-VALUE}) " +
+          description = "Tile file extension: ${COMPLETION-CANDIDATES} " +
+                  "(default: ${DEFAULT-VALUE}) " +
                   "[Can break compatibility with raw2ometiff]"
   )
   private volatile FileType fileType = FileType.n5;
