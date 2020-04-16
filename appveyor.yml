@@ -1,6 +1,7 @@
 version: 0.1.0.{build}
 
 image: Ubuntu
+stack: jdk 11
 
 install:
     - sh: sudo apt-get update
