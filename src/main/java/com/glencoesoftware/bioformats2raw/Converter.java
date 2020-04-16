@@ -378,6 +378,7 @@ public class Converter implements Callable<Void> {
       }
       catch (Throwable t) {
         LOGGER.error("Error while writing series 0", t);
+        unwrapException(t);
         return;
       }
       finally {
