@@ -6,8 +6,7 @@ install:
     - sh: sudo apt-get update
     - sh: sudo apt-get install -y libblosc1
 
-build:
-  verbosity: minimal
+build: off
 
 build_script:
   - ./gradlew build
