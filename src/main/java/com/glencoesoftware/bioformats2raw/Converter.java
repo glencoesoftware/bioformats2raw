@@ -173,44 +173,44 @@ public class Converter implements Callable<Void> {
     arity = "1",
     description = "file to convert"
   )
-  private Path inputPath;
+  private volatile Path inputPath;
 
   @Parameters(
     index = "1",
     arity = "1",
     description = "path to the output pyramid directory"
   )
-  private Path outputPath;
+  private volatile Path outputPath;
 
   @Option(
     names = {"-r", "--resolutions"},
     description = "Number of pyramid resolutions to generate"
   )
-  private Integer pyramidResolutions;
+  private volatile Integer pyramidResolutions;
 
   @Option(
     names = {"-w", "--tile_width"},
     description = "Maximum tile width to read (default: ${DEFAULT-VALUE})"
   )
-  private int tileWidth = 1024;
+  private volatile int tileWidth = 1024;
 
   @Option(
     names = {"-h", "--tile_height"},
     description = "Maximum tile height to read (default: ${DEFAULT-VALUE})"
   )
-  private int tileHeight = 1024;
+  private volatile int tileHeight = 1024;
 
   @Option(
     names = "--debug",
     description = "Turn on debug logging"
   )
-  private boolean debug = false;
+  private volatile boolean debug = false;
 
   @Option(
     names = "--max_workers",
     description = "Maximum number of workers (default: ${DEFAULT-VALUE})"
   )
-  private int maxWorkers = Runtime.getRuntime().availableProcessors();
+  private volatile int maxWorkers = Runtime.getRuntime().availableProcessors();
 
   @Option(
     names = "--max_cached_tiles",
@@ -218,14 +218,14 @@ public class Converter implements Callable<Void> {
       "Maximum number of tiles that will be cached across all "
       + "workers (default: ${DEFAULT-VALUE})"
   )
-  private int maxCachedTiles = 64;
+  private volatile int maxCachedTiles = 64;
 
   @Option(
           names = {"-c", "--compression"},
           description = "Compression type for n5 " +
                   "(${COMPLETION-CANDIDATES}; default: ${DEFAULT-VALUE})"
   )
-  private N5Compression.CompressionTypes compressionType =
+  private volatile N5Compression.CompressionTypes compressionType =
           N5Compression.CompressionTypes.blosc;
 
   @Option(
@@ -234,7 +234,7 @@ public class Converter implements Callable<Void> {
                   "https://github.com/saalfeldlab/n5/blob/master/README.md" +
                   " )"
   )
-  private Integer compressionParameter = null;
+  private volatile Integer compressionParameter = null;
 
   @Option(
           names = "--extra-readers",
@@ -243,7 +243,7 @@ public class Converter implements Callable<Void> {
           description = "Separate set of readers to include; " +
                   "default: ${DEFAULT-VALUE})"
   )
-  private Class<?>[] extraReaders = new Class[] {
+  private volatile Class<?>[] extraReaders = new Class[] {
     PyramidTiffReader.class, MiraxReader.class
   };
 
@@ -252,7 +252,7 @@ public class Converter implements Callable<Void> {
           description = "Tile file extension (default: ${DEFAULT-VALUE}) " +
                   "[Can break compatibility with raw2ometiff]"
   )
-  private FileType fileType = FileType.n5;
+  private volatile FileType fileType = FileType.n5;
 
   @Option(
           names = "--pyramid-name",
@@ -267,25 +267,25 @@ public class Converter implements Callable<Void> {
                   "[Can break compatibility with raw2ometiff] " +
                   "(default: ${DEFAULT-VALUE})"
   )
-  private String scaleFormatString = "%d";
+  private volatile String scaleFormatString = "%d";
 
 
   /** Scaling implementation that will be used during downsampling. */
-  private IImageScaler scaler = new SimpleImageScaler();
+  private volatile IImageScaler scaler = new SimpleImageScaler();
 
   /**
    * Set of readers that can be used concurrently, size will be equal to
    * {@link #maxWorkers}.
    */
-  private BlockingQueue<IFormatReader> readers;
+  private volatile BlockingQueue<IFormatReader> readers;
 
   /**
    * Bounded task queue limiting the number of in flight conversion operations
    * happening in parallel.  Size will be equal to {@link #maxWorkers}.
    */
-  private BlockingQueue<Runnable> queue;
+  private volatile BlockingQueue<Runnable> queue;
 
-  private ExecutorService executor;
+  private volatile ExecutorService executor;
 
   /** Whether or not the source file is little endian. */
   private boolean isLittleEndian;
@@ -294,13 +294,13 @@ public class Converter implements Callable<Void> {
    * The source file's pixel type.  Retrieved from
    * {@link IFormatReader#getPixelType()}.
    */
-  private int pixelType;
+  private volatile int pixelType;
 
   /** Total number of tiles at the current resolution during processing. */
-  private int tileCount;
+  private volatile int tileCount;
 
   /** Current number of tiles processed at the current resolution. */
-  private AtomicInteger nTile;
+  private volatile AtomicInteger nTile;
 
   @Override
   public Void call()
