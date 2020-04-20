@@ -182,4 +182,52 @@ public class ZarrTest {
         new int[] {512, 512, 1, 1, 1}, da.getBlockSize());
   }
 
+  /**
+   * Test more than one Z-section.
+   */
+  @Test
+  public void testMultiZ() throws Exception {
+    input = fake("sizeZ", "2");
+    assertTool();
+    N5ZarrReader z =
+      new N5ZarrReader(output.resolve("data.zarr").toString());
+    DatasetAttributes da = z.getDatasetAttributes("/0/0");
+    Assert.assertArrayEquals(
+        new long[] {512, 512, 2, 1, 1}, da.getDimensions());
+    Assert.assertArrayEquals(
+        new int[] {512, 512, 1, 1, 1}, da.getBlockSize());
+  }
+
+  /**
+   * Test more than one channel.
+   */
+  @Test
+  public void testMultiC() throws Exception {
+    input = fake("sizeC", "2");
+    assertTool();
+    N5ZarrReader z =
+      new N5ZarrReader(output.resolve("data.zarr").toString());
+    DatasetAttributes da = z.getDatasetAttributes("/0/0");
+    Assert.assertArrayEquals(
+        new long[] {512, 512, 1, 2, 1}, da.getDimensions());
+    Assert.assertArrayEquals(
+        new int[] {512, 512, 1, 1, 1}, da.getBlockSize());
+  }
+
+  /**
+   * Test more than one timepoint.
+   */
+  @Test
+  public void testMultiT() throws Exception {
+    input = fake("sizeT", "2");
+    assertTool();
+    N5ZarrReader z =
+      new N5ZarrReader(output.resolve("data.zarr").toString());
+    DatasetAttributes da = z.getDatasetAttributes("/0/0");
+    Assert.assertArrayEquals(
+        new long[] {512, 512, 1, 1, 2}, da.getDimensions());
+    Assert.assertArrayEquals(
+        new int[] {512, 512, 1, 1, 1}, da.getBlockSize());
+  }
+
 }
