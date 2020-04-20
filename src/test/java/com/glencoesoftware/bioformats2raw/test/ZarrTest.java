@@ -159,4 +159,21 @@ public class ZarrTest {
     Assert.assertArrayEquals(new int[] { 128, 128, 1 }, da.getBlockSize());
   }
 
+  /**
+   * Test more than one series.
+   */
+  @Test
+  public void testMultiSeries() throws Exception {
+    input = fake("series", "2");
+    assertTool();
+    N5ZarrReader z =
+      new N5ZarrReader(output.resolve("data.zarr").toString());
+    DatasetAttributes da = z.getDatasetAttributes("/0/0");
+    Assert.assertArrayEquals(new long[] { 512, 512, 1 }, da.getDimensions());
+    Assert.assertArrayEquals(new int[] { 512, 512, 1 }, da.getBlockSize());
+    da = z.getDatasetAttributes("/1/0");
+    Assert.assertArrayEquals(new long[] { 512, 512, 1 }, da.getDimensions());
+    Assert.assertArrayEquals(new int[] { 512, 512, 1 }, da.getBlockSize());
+  }
+
 }
