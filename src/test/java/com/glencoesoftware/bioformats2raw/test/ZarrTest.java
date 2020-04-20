@@ -9,6 +9,7 @@ package com.glencoesoftware.bioformats2raw.test;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -19,6 +20,7 @@ import java.util.Map;
 
 import com.glencoesoftware.bioformats2raw.Converter;
 import loci.common.LogbackTools;
+import loci.formats.in.FakeReader;
 
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.zarr.N5ZarrReader;
@@ -170,16 +172,28 @@ public class ZarrTest {
     assertTool();
     N5ZarrReader z =
       new N5ZarrReader(output.resolve("data.zarr").toString());
+
+    // Check series 0 dimensions and special pixels
     DatasetAttributes da = z.getDatasetAttributes("/0/0");
     Assert.assertArrayEquals(
         new long[] {512, 512, 1, 1, 1}, da.getDimensions());
     Assert.assertArrayEquals(
         new int[] {512, 512, 1, 1, 1}, da.getBlockSize());
+    ByteBuffer tile = z.readBlock("/0/0", da, new long[] {0, 0, 0, 0, 0})
+        .toByteBuffer();
+    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
+    Assert.assertArrayEquals(new int[] {0, 0, 0, 0, 0}, seriesPlaneNumberZCT);
+
+    // Check series 1 dimensions and special pixels
     da = z.getDatasetAttributes("/1/0");
     Assert.assertArrayEquals(
         new long[] {512, 512, 1, 1, 1}, da.getDimensions());
     Assert.assertArrayEquals(
         new int[] {512, 512, 1, 1, 1}, da.getBlockSize());
+    tile = z.readBlock("/1/0", da, new long[] {0, 0, 0, 0, 0})
+            .toByteBuffer();
+    seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
+    Assert.assertArrayEquals(new int[] {1, 0, 0, 0, 0}, seriesPlaneNumberZCT);
   }
 
   /**
@@ -191,11 +205,24 @@ public class ZarrTest {
     assertTool();
     N5ZarrReader z =
       new N5ZarrReader(output.resolve("data.zarr").toString());
+
+    // Check dimensions and block size
     DatasetAttributes da = z.getDatasetAttributes("/0/0");
     Assert.assertArrayEquals(
         new long[] {512, 512, 2, 1, 1}, da.getDimensions());
     Assert.assertArrayEquals(
         new int[] {512, 512, 1, 1, 1}, da.getBlockSize());
+
+    // Check Z 0 special pixels
+    ByteBuffer tile = z.readBlock("/0/0", da, new long[] {0, 0, 0, 0, 0})
+        .toByteBuffer();
+    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
+    Assert.assertArrayEquals(new int[] {0, 0, 0, 0, 0}, seriesPlaneNumberZCT);
+    // Check Z 1 special pixels
+    tile = z.readBlock("/0/0", da, new long[] {0, 0, 1, 0, 0})
+            .toByteBuffer();
+    seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
+    Assert.assertArrayEquals(new int[] {0, 1, 1, 0, 0}, seriesPlaneNumberZCT);
   }
 
   /**
@@ -207,11 +234,24 @@ public class ZarrTest {
     assertTool();
     N5ZarrReader z =
       new N5ZarrReader(output.resolve("data.zarr").toString());
+
+    // Check dimensions and block size
     DatasetAttributes da = z.getDatasetAttributes("/0/0");
     Assert.assertArrayEquals(
         new long[] {512, 512, 1, 2, 1}, da.getDimensions());
     Assert.assertArrayEquals(
         new int[] {512, 512, 1, 1, 1}, da.getBlockSize());
+
+    // Check C 0 special pixels
+    ByteBuffer tile = z.readBlock("/0/0", da, new long[] {0, 0, 0, 0, 0})
+        .toByteBuffer();
+    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
+    Assert.assertArrayEquals(new int[] {0, 0, 0, 0, 0}, seriesPlaneNumberZCT);
+    // Check C 1 special pixels
+    tile = z.readBlock("/0/0", da, new long[] {0, 0, 0, 1, 0})
+            .toByteBuffer();
+    seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
+    Assert.assertArrayEquals(new int[] {0, 1, 0, 1, 0}, seriesPlaneNumberZCT);
   }
 
   /**
@@ -223,11 +263,24 @@ public class ZarrTest {
     assertTool();
     N5ZarrReader z =
       new N5ZarrReader(output.resolve("data.zarr").toString());
+
+    // Check dimensions and block size
     DatasetAttributes da = z.getDatasetAttributes("/0/0");
     Assert.assertArrayEquals(
         new long[] {512, 512, 1, 1, 2}, da.getDimensions());
     Assert.assertArrayEquals(
         new int[] {512, 512, 1, 1, 1}, da.getBlockSize());
+
+    // Check T 0 special pixels
+    ByteBuffer tile = z.readBlock("/0/0", da, new long[] {0, 0, 0, 0, 0})
+        .toByteBuffer();
+    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
+    Assert.assertArrayEquals(new int[] {0, 0, 0, 0, 0}, seriesPlaneNumberZCT);
+    // Check T 1 special pixels
+    tile = z.readBlock("/0/0", da, new long[] {0, 0, 0, 0, 1})
+            .toByteBuffer();
+    seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
+    Assert.assertArrayEquals(new int[] {0, 1, 0, 0, 1}, seriesPlaneNumberZCT);
   }
 
 }
