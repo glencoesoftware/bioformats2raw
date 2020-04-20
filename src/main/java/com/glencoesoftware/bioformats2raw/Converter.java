@@ -476,13 +476,18 @@ public class Converter implements Callable<Void> {
 
     DatasetAttributes datasetAttributes = n5.getDatasetAttributes(pathName);
     long[] dimensions = datasetAttributes.getDimensions();
+    int[] blockSizes = datasetAttributes.getBlockSize();
+    int activeTileWidth = blockSizes[0];
+    int activeTileHeight = blockSizes[1];
 
     // Upscale our base X and Y offsets, and sizes to the previous resolution
     // based on the pyramid scaling factor
     xx *= PYRAMID_SCALE;
     yy *= PYRAMID_SCALE;
-    width = (int) Math.min(tileWidth * PYRAMID_SCALE, dimensions[0] - xx);
-    height = (int) Math.min(tileHeight * PYRAMID_SCALE, dimensions[1] - yy);
+    width = (int) Math.min(
+        activeTileWidth * PYRAMID_SCALE, dimensions[0] - xx);
+    height = (int) Math.min(
+        activeTileHeight * PYRAMID_SCALE, dimensions[1] - yy);
 
     IFormatReader reader = readers.take();
     int[] zct;
@@ -493,19 +498,19 @@ public class Converter implements Callable<Void> {
       readers.put(reader);
     }
     long[] startGridPosition = new long[] {
-      xx / tileWidth, yy / tileHeight, zct[0], zct[1], zct[2]
+      xx / activeTileWidth, yy / activeTileHeight, zct[0], zct[1], zct[2]
     };
-    int xBlocks = (int) Math.ceil((double) width / tileWidth);
-    int yBlocks = (int) Math.ceil((double) height / tileHeight);
+    int xBlocks = (int) Math.ceil((double) width / activeTileWidth);
+    int yBlocks = (int) Math.ceil((double) height / activeTileHeight);
 
     int bytesPerPixel = FormatTools.getBytesPerPixel(pixelType);
     byte[] tile = new byte[width * height * bytesPerPixel];
     for (int xBlock=0; xBlock<xBlocks; xBlock++) {
       for (int yBlock=0; yBlock<yBlocks; yBlock++) {
         int blockWidth = Math.min(
-          width - (xBlock * tileWidth), tileWidth);
+          width - (xBlock * activeTileWidth), activeTileWidth);
         int blockHeight = Math.min(
-          height - (yBlock * tileHeight),  tileHeight);
+          height - (yBlock * activeTileHeight), activeTileHeight);
         long[] gridPosition = new long[] {
           startGridPosition[0] + xBlock, startGridPosition[1] + yBlock,
           zct[0], zct[1], zct[2]
@@ -517,8 +522,8 @@ public class Converter implements Callable<Void> {
         int length = blockWidth * bytesPerPixel;
         for (int y=0; y<blockHeight; y++) {
           int srcPos = y * length;
-          int destPos = ((yBlock * width * tileHeight)
-            + (y * width) + (xBlock * tileWidth)) * bytesPerPixel;
+          int destPos = ((yBlock * width * activeTileHeight)
+            + (y * width) + (xBlock * activeTileWidth)) * bytesPerPixel;
           subTile.position(srcPos);
           subTile.get(tile, destPos, length);
         }
@@ -572,8 +577,14 @@ public class Converter implements Callable<Void> {
     }
     String pathName =
         "/" + String.format(scaleFormatString, series, resolution);
+    final String pyramidPath = outputPath.resolve(pyramidName).toString();
+    final N5Writer n5 = fileType.writer(pyramidPath);
+    DatasetAttributes datasetAttributes = n5.getDatasetAttributes(pathName);
+    int[] blockSizes = datasetAttributes.getBlockSize();
+    int activeTileWidth = blockSizes[0];
+    int activeTileHeight = blockSizes[1];
     long[] gridPosition = new long[] {
-      xx / tileWidth, yy / tileHeight, zct[0], zct[1], zct[2]
+      xx / activeTileWidth, yy / activeTileHeight, zct[0], zct[1], zct[2]
     };
     int[] size = new int[] {width, height, 1, 1, 1};
 
@@ -611,9 +622,6 @@ public class Converter implements Callable<Void> {
       LOGGER.info("tile read complete {}/{}", nTile.get(), tileCount);
       t0.stop();
     }
-
-    final String pyramidPath = outputPath.resolve(pyramidName).toString();
-    final N5Writer n5 = fileType.writer(pyramidPath);
 
     Slf4JStopWatch t1 = stopWatch();
     try {
