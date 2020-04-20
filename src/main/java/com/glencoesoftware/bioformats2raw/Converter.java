@@ -406,6 +406,9 @@ public class Converter implements Callable<Void> {
         String xml = getService().getOMEXML(meta);
 
         // write the original OME-XML to a file
+        if (!Files.exists(outputPath)) {
+            Files.createDirectories(outputPath);
+        }
         Path omexmlFile = outputPath.resolve("METADATA.ome.xml");
         Files.write(omexmlFile, xml.getBytes(Constants.ENCODING));
       }
