@@ -155,8 +155,8 @@ public class ZarrTest {
     N5ZarrReader z =
       new N5ZarrReader(output.resolve("data.zarr").toString());
     DatasetAttributes da = z.getDatasetAttributes("/0/0");
-    Assert.assertArrayEquals(new long[] { 512, 512, 1 }, da.getDimensions());
-    Assert.assertArrayEquals(new int[] { 128, 128, 1 }, da.getBlockSize());
+    Assert.assertArrayEquals(new long[] {512, 512, 1}, da.getDimensions());
+    Assert.assertArrayEquals(new int[] {128, 128, 1}, da.getBlockSize());
   }
 
   /**
@@ -169,11 +169,11 @@ public class ZarrTest {
     N5ZarrReader z =
       new N5ZarrReader(output.resolve("data.zarr").toString());
     DatasetAttributes da = z.getDatasetAttributes("/0/0");
-    Assert.assertArrayEquals(new long[] { 512, 512, 1 }, da.getDimensions());
-    Assert.assertArrayEquals(new int[] { 512, 512, 1 }, da.getBlockSize());
+    Assert.assertArrayEquals(new long[] {512, 512, 1}, da.getDimensions());
+    Assert.assertArrayEquals(new int[] {512, 512, 1}, da.getBlockSize());
     da = z.getDatasetAttributes("/1/0");
-    Assert.assertArrayEquals(new long[] { 512, 512, 1 }, da.getDimensions());
-    Assert.assertArrayEquals(new int[] { 512, 512, 1 }, da.getBlockSize());
+    Assert.assertArrayEquals(new long[] {512, 512, 1}, da.getDimensions());
+    Assert.assertArrayEquals(new int[] {512, 512, 1}, da.getBlockSize());
   }
 
 }
