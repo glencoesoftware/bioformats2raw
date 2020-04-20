@@ -481,8 +481,16 @@ public class Converter implements Callable<Void> {
     width = (int) Math.min(tileWidth * PYRAMID_SCALE, dimensions[0] - xx);
     height = (int) Math.min(tileHeight * PYRAMID_SCALE, dimensions[1] - yy);
 
+    IFormatReader reader = readers.take();
+    int zct[];
+    try {
+      zct = reader.getZCTCoords(plane);
+    }
+    finally {
+      readers.put(reader);
+    }
     long[] startGridPosition = new long[] {
-      xx / tileWidth, yy / tileHeight, plane
+      xx / tileWidth, yy / tileHeight, zct[0], zct[1], zct[2]
     };
     int xBlocks = (int) Math.ceil((double) width / tileWidth);
     int yBlocks = (int) Math.ceil((double) height / tileHeight);
@@ -496,7 +504,8 @@ public class Converter implements Callable<Void> {
         int blockHeight = Math.min(
           height - (yBlock * tileHeight),  tileHeight);
         long[] gridPosition = new long[] {
-          startGridPosition[0] + xBlock, startGridPosition[1] + yBlock, plane
+          startGridPosition[0] + xBlock, startGridPosition[1] + yBlock,
+          zct[0], zct[1], zct[2]
         };
         ByteBuffer subTile = n5.readBlock(
           pathName, datasetAttributes, gridPosition
@@ -550,12 +559,20 @@ public class Converter implements Callable<Void> {
         throws EnumerationException, FormatException, IOException,
           InterruptedException
   {
+    IFormatReader reader = readers.take();
+    int zct[];
+    try {
+      zct = reader.getZCTCoords(plane);
+    }
+    finally {
+      readers.put(reader);
+    }
     String pathName =
         "/" + String.format(scaleFormatString, series, resolution);
     long[] gridPosition = new long[] {
-      xx / tileWidth, yy / tileHeight, plane
+      xx / tileWidth, yy / tileHeight, zct[0], zct[1], zct[2]
     };
-    int[] size = new int[] {width, height, 1};
+    int[] size = new int[] {width, height, 1, 1, 1};
 
     Slf4JStopWatch t0 = new Slf4JStopWatch("getTile");
     DataBlock<?> dataBlock;
@@ -592,8 +609,6 @@ public class Converter implements Callable<Void> {
       t0.stop();
     }
 
-    // TODO: ZCT
-    // int[] zct = reader.getZCTCoords(plane);
     final String pyramidPath = outputPath.resolve(pyramidName).toString();
     final N5Writer n5 = fileType.writer(pyramidPath);
 
@@ -627,6 +642,9 @@ public class Converter implements Callable<Void> {
     int resolutions = 1;
     int sizeX;
     int sizeY;
+    int sizeZ;
+    int sizeC;
+    int sizeT;
     int imageCount;
     try {
       isLittleEndian = workingReader.isLittleEndian();
@@ -646,6 +664,9 @@ public class Converter implements Callable<Void> {
       LOGGER.info("Using {} pyramid resolutions", resolutions);
       sizeX = workingReader.getSizeX();
       sizeY = workingReader.getSizeY();
+      sizeZ = workingReader.getSizeZ();
+      sizeC = workingReader.getSizeC();
+      sizeT = workingReader.getSizeT();
       imageCount = workingReader.getImageCount();
       pixelType = workingReader.getPixelType();
     }
@@ -705,8 +726,8 @@ public class Converter implements Callable<Void> {
 
       n5.createDataset(
           "/" +  String.format(scaleFormatString, series, resolution),
-          new long[] {scaledWidth, scaledHeight, imageCount},
-          new int[] {activeTileWidth, activeTileHeight, 1},
+          new long[] {scaledWidth, scaledHeight, sizeZ, sizeC, sizeT},
+          new int[] {activeTileWidth, activeTileHeight, 1, 1, 1},
           dataType, compression
       );
 
