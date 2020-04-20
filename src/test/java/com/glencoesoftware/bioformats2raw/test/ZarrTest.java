@@ -166,6 +166,23 @@ public class ZarrTest {
   }
 
   /**
+   * Test using a different tile size from the default (1024) the does not
+   * divide evenly.
+   */
+  @Test
+  public void testSetSmallerDefaultWithRemainder() throws Exception {
+    input = fake();
+    assertTool("-h", "384", "-w", "384");
+    N5ZarrReader z =
+      new N5ZarrReader(output.resolve("data.zarr").toString());
+    DatasetAttributes da = z.getDatasetAttributes("/0/0");
+    Assert.assertArrayEquals(
+        new long[] {512, 512, 1, 1, 1}, da.getDimensions());
+    Assert.assertArrayEquals(
+        new int[] {384, 384, 1, 1, 1}, da.getBlockSize());
+  }
+
+  /**
    * Test more than one series.
    */
   @Test
