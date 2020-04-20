@@ -59,10 +59,12 @@ public class ZarrTest {
     }
     args.add("--file_type=zarr");
     args.add(input.toString());
-    output = tmp.newFolder().toPath();
+    output = tmp.newFolder().toPath().resolve("test");
     args.add(output.toString());
     try {
       Converter.main(args.toArray(new String[]{}));
+      Assert.assertTrue(Files.exists(output.resolve("data.zarr")));
+      Assert.assertTrue(Files.exists(output.resolve("METADATA.ome.xml")));
     }
     catch (RuntimeException rt) {
       throw rt;
