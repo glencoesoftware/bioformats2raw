@@ -144,8 +144,8 @@ public class ZarrTest {
    */
   @Test
   public void testSetSmallerDefault() throws Exception {
-    fake = fake("-h", "128", "-w", "128");
-    assertTool();
+    fake = fake();
+    assertTool("-h", "128", "-w", "128");
   }
 
 }
