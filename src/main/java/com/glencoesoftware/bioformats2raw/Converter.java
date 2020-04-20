@@ -260,7 +260,7 @@ public class Converter implements Callable<Void> {
           description = "Name of pyramid (default: ${DEFAULT-VALUE}) " +
                   "[Can break compatibility with raw2ometiff]"
   )
-  private volatile String pyramidName = "pyramid.n5";
+  private volatile String pyramidName = "data.n5";
 
   @Option(
           names = "--scale-format-string",
@@ -268,7 +268,7 @@ public class Converter implements Callable<Void> {
                   "[Can break compatibility with raw2ometiff] " +
                   "(default: ${DEFAULT-VALUE})"
   )
-  private volatile String scaleFormatString = "%d";
+  private volatile String scaleFormatString = "%d/%d";
 
 
   /** Scaling implementation that will be used during downsampling. */
@@ -335,12 +335,12 @@ public class Converter implements Callable<Void> {
       throws FormatException, IOException, InterruptedException
   {
 
-    if (fileType.equals(FileType.zarr) && pyramidName.equals("pyramid.n5")) {
-      pyramidName = "pyramid.zarr";
+    if (fileType.equals(FileType.zarr) && pyramidName.equals("data.n5")) {
+      pyramidName = "data.zarr";
     }
 
-    if (!pyramidName.equals("pyramid.n5") ||
-              !scaleFormatString.equals("%d"))
+    if (!pyramidName.equals("data.n5") ||
+              !scaleFormatString.equals("%d/%d"))
     {
       LOGGER.info("Output will be incompatible with raw2ometiff " +
               "(pyramidName: {}, scaleFormatString: {})",
@@ -393,26 +393,6 @@ public class Converter implements Callable<Void> {
 
     // Finally, perform conversion on all series
     try {
-      try {
-        // only process the first series here
-        // wait until all tiles have been written
-        // before processing the remaining series
-        //
-        // otherwise, the readers' series will be changed from under
-        // in-process tiles, leading to exceptions
-        write(0);
-      }
-      catch (Throwable t) {
-        LOGGER.error("Error while writing series 0", t);
-        unwrapException(t);
-        return;
-      }
-      finally {
-        // Shut down first, tasks may still be running
-        executor.shutdown();
-        executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
-      }
-
       int seriesCount;
       IFormatReader v = readers.take();
       try {
@@ -437,18 +417,21 @@ public class Converter implements Callable<Void> {
         readers.put(v);
       }
 
-      // write each of the extra images to a separate file
-      for (int i=1; i<seriesCount; i++) {
+      for (int i=0; i<seriesCount; i++) {
         try {
           write(i);
         }
-        catch (Exception e) {
-          LOGGER.error("Error while writing series {}", i, e);
+        catch (Throwable t) {
+          LOGGER.error("Error while writing series {}", i, t);
+          unwrapException(t);
           return;
         }
       }
     }
     finally {
+      // Shut down first, tasks may still be running
+      executor.shutdown();
+      executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
       readers.forEach((v) -> {
         try {
           v.close();
@@ -475,25 +458,16 @@ public class Converter implements Callable<Void> {
     readers.forEach((reader) -> {
       reader.setSeries(series);
     });
-
-    if (series == 0) {
-      saveResolutions();
-    }
-    else {
-      String filename = series + ".jpg";
-      if (series == 1) {
-        filename = "LABELIMAGE.jpg";
-      }
-      saveExtraImage(filename);
-    }
+    saveResolutions(series);
   }
 
   private byte[] getTileDownsampled(
-      int resolution, int plane, int xx, int yy, int width, int height)
+      int series, int resolution, int plane, int xx, int yy,
+      int width, int height)
           throws FormatException, IOException, InterruptedException
   {
     final String pathName = "/" +
-            String.format(scaleFormatString, resolution - 1);
+            String.format(scaleFormatString, series, resolution - 1);
     final String pyramidPath = outputPath.resolve(pyramidName).toString();
     final N5Reader n5 = fileType.reader(pyramidPath);
 
@@ -545,7 +519,8 @@ public class Converter implements Callable<Void> {
   }
 
   private byte[] getTile(
-      int resolution, int plane, int xx, int yy, int width, int height)
+      int series, int resolution, int plane, int xx, int yy,
+      int width, int height)
           throws FormatException, IOException, InterruptedException
   {
     if (resolution == 0) {
@@ -560,7 +535,8 @@ public class Converter implements Callable<Void> {
     else {
       Slf4JStopWatch t0 = new Slf4JStopWatch("getTileDownsampled");
       try {
-        return getTileDownsampled(resolution, plane, xx, yy, width, height);
+        return getTileDownsampled(
+            series, resolution, plane, xx, yy, width, height);
       }
       finally {
         t0.stop();
@@ -569,11 +545,13 @@ public class Converter implements Callable<Void> {
   }
 
   private void processTile(
-      int resolution, int plane, int xx, int yy, int width, int height)
+      int series, int resolution, int plane, int xx, int yy,
+      int width, int height)
         throws EnumerationException, FormatException, IOException,
           InterruptedException
   {
-    String pathName = "/" + String.format(scaleFormatString, resolution);
+    String pathName =
+        "/" + String.format(scaleFormatString, series, resolution);
     long[] gridPosition = new long[] {
       xx / tileWidth, yy / tileHeight, plane
     };
@@ -584,7 +562,7 @@ public class Converter implements Callable<Void> {
     try {
       LOGGER.info("requesting tile to write at {} to {}",
         gridPosition, pathName);
-      byte[] tile = getTile(resolution, plane, xx, yy, width, height);
+      byte[] tile = getTile(series, resolution, plane, xx, yy, width, height);
       if (tile == null) {
         return;
       }
@@ -637,11 +615,12 @@ public class Converter implements Callable<Void> {
    * Write all resolutions for the current series to an intermediate form.
    * Readers should be initialized and have the correct series state.
    *
+   * @param series the reader series index to be converted
    * @throws FormatException
    * @throws IOException
    * @throws InterruptedException
    */
-  public void saveResolutions()
+  public void saveResolutions(int series)
     throws FormatException, IOException, InterruptedException
   {
     IFormatReader workingReader = readers.take();
@@ -725,7 +704,7 @@ public class Converter implements Callable<Void> {
       }
 
       n5.createDataset(
-          "/" +  String.format(scaleFormatString, resolution),
+          "/" +  String.format(scaleFormatString, series, resolution),
           new long[] {scaledWidth, scaledHeight, imageCount},
           new int[] {activeTileWidth, activeTileHeight, 1},
           dataType, compression
@@ -750,7 +729,7 @@ public class Converter implements Callable<Void> {
             futures.add(future);
             executor.execute(() -> {
               try {
-                processTile(resolution, plane, xx, yy, width, height);
+                processTile(series, resolution, plane, xx, yy, width, height);
                 LOGGER.info(
                     "Successfully processed tile; resolution={} plane={} " +
                     "xx={} yy={} width={} height={}",
