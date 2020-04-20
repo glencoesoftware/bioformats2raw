@@ -77,6 +77,16 @@ public class ZarrTest {
     return fake(options, null);
   }
 
+  /**
+   * Create a Bio-Formats fake INI file to use for testing.
+   * @param options map of the options to assign as part of the fake filename
+   * from the allowed keys
+   * @param series map of the integer series index and options map (same format
+   * as <code>options</code> to add to the fake INI content
+   * @see https://docs.openmicroscopy.org/bio-formats/6.4.0/developers/
+   * generating-test-images.html#key-value-pairs
+   * @return path to the fake INI file that has been created
+   */
   static Path fake(Map<String, String> options,
           Map<Integer, Map<String, String>> series)
   {
