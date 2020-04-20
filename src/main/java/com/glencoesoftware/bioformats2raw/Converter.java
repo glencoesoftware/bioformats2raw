@@ -482,7 +482,7 @@ public class Converter implements Callable<Void> {
     height = (int) Math.min(tileHeight * PYRAMID_SCALE, dimensions[1] - yy);
 
     IFormatReader reader = readers.take();
-    int zct[];
+    int[] zct;
     try {
       zct = reader.getZCTCoords(plane);
     }
@@ -560,7 +560,7 @@ public class Converter implements Callable<Void> {
           InterruptedException
   {
     IFormatReader reader = readers.take();
-    int zct[];
+    int[] zct;
     try {
       zct = reader.getZCTCoords(plane);
     }
