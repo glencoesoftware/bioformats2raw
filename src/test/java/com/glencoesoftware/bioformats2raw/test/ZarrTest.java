@@ -146,7 +146,7 @@ public class ZarrTest {
   }
 
   /**
-   * Manually set the tile size.
+   * Test using a different tile size from the default (1024).
    */
   @Test
   public void testSetSmallerDefault() throws Exception {
