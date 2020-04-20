@@ -153,8 +153,8 @@ public class ZarrTest {
     input = fake();
     assertTool("-h", "128", "-w", "128");
     N5ZarrReader z =
-      new N5ZarrReader(output.resolve("pyramid.zarr").toString());
-    DatasetAttributes da = z.getDatasetAttributes("/0");
+      new N5ZarrReader(output.resolve("data.zarr").toString());
+    DatasetAttributes da = z.getDatasetAttributes("/0/0");
     Assert.assertArrayEquals(new long[] { 512, 512, 1 }, da.getDimensions());
     Assert.assertArrayEquals(new int[] { 128, 128, 1 }, da.getBlockSize());
   }
