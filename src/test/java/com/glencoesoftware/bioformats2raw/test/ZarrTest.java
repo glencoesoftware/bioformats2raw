@@ -19,6 +19,9 @@ import java.util.Map;
 
 import com.glencoesoftware.bioformats2raw.Converter;
 import loci.common.LogbackTools;
+
+import org.janelia.saalfeldlab.n5.DatasetAttributes;
+import org.janelia.saalfeldlab.n5.zarr.N5ZarrReader;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -27,10 +30,12 @@ import org.junit.rules.TemporaryFolder;
 
 public class ZarrTest {
 
-  Path fake;
+  Path input;
+
+  Path output;
 
   @Rule
-  public TemporaryFolder output = new TemporaryFolder();
+  public TemporaryFolder tmp = new TemporaryFolder();
 
   /**
    * Set logging to warn before all methods.
@@ -51,8 +56,9 @@ public class ZarrTest {
       args.add(arg);
     }
     args.add("--file_type=zarr");
-    args.add(fake.toString());
-    args.add(output.newFolder().toPath().toString());
+    args.add(input.toString());
+    output = tmp.newFolder().toPath();
+    args.add(output.toString());
     try {
       Converter.main(args.toArray(new String[]{}));
     }
@@ -135,7 +141,7 @@ public class ZarrTest {
    */
   @Test
   public void testDefaultIsTooBig() throws Exception {
-    fake = fake();
+    input = fake();
     assertTool();
   }
 
@@ -144,8 +150,13 @@ public class ZarrTest {
    */
   @Test
   public void testSetSmallerDefault() throws Exception {
-    fake = fake();
+    input = fake();
     assertTool("-h", "128", "-w", "128");
+    N5ZarrReader z =
+      new N5ZarrReader(output.resolve("pyramid.zarr").toString());
+    DatasetAttributes da = z.getDatasetAttributes("/0");
+    Assert.assertArrayEquals(new long[] { 512, 512, 1 }, da.getDimensions());
+    Assert.assertArrayEquals(new int[] { 128, 128, 1 }, da.getBlockSize());
   }
 
 }
