@@ -21,7 +21,6 @@ import java.util.Map;
 import com.glencoesoftware.bioformats2raw.Converter;
 import loci.common.LogbackTools;
 import loci.formats.in.FakeReader;
-import ome.xml.model.enums.DimensionOrder;
 import picocli.CommandLine;
 
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
@@ -153,7 +152,22 @@ public class ZarrTest {
   public void testDefaultIsTooBig() throws Exception {
     input = fake();
     assertTool();
-    Assert.assertEquals(DimensionOrder.XYZCT, converter.getDimensionOrder());
+  }
+
+  /**
+   * Test alternative dimension order.
+   */
+  @Test
+  public void testSetXYCZTDimensionOrder() throws Exception {
+    input = fake("sizeC", "2");
+    assertTool("--dimension-order", "XYCZT");
+    N5ZarrReader z =
+      new N5ZarrReader(output.resolve("data.zarr").toString());
+    DatasetAttributes da = z.getDatasetAttributes("/0/0");
+    Assert.assertArrayEquals(
+        new long[] {512, 512, 2, 1, 1}, da.getDimensions());
+    Assert.assertArrayEquals(
+        new int[] {512, 512, 1, 1, 1}, da.getBlockSize());
   }
 
   /**
