@@ -1,7 +1,6 @@
 plugins {
     id 'application'
     id 'eclipse'
-    id 'java'
     id 'checkstyle'
 }
 
@@ -14,9 +13,11 @@ targetCompatibility = 1.8
 
 repositories {
     jcenter()
-    mavenCentral()
     maven {
         url 'https://artifacts.openmicroscopy.org/artifactory/repo/'
+    }
+    maven {
+        url 'https://repo.glencoesoftware.com/repository/n5-zarr-snapshots/'
     }
     maven {
         url 'https://saalfeldlab.github.io/maven'
@@ -24,30 +25,36 @@ repositories {
 }
 
 dependencies {
-    compile ('ome:formats-gpl:6.4.0')
-    compile ('info.picocli:picocli:3.9.6')
-    compile ('org.janelia.saalfeldlab:n5:2.1.6')
-    compile ('org.janelia.saalfeldlab:n5-blosc:1.0.1')
-    compile ('org.janelia.saalfeldlab:n5-zarr:0.0.2-beta')
+    implementation 'ome:formats-gpl:6.4.0'
+    implementation 'info.picocli:picocli:3.9.6'
+    implementation 'org.janelia.saalfeldlab:n5:2.1.6'
+    implementation 'org.janelia.saalfeldlab:n5-blosc:1.0.1'
+    implementation 'org.janelia.saalfeldlab:n5-zarr:0.0.3-SNAPSHOT'
 
     // https://github.com/junit-team/junit5-samples/blob/master/junit5-migration-gradle/build.gradle
     def junit4Version        = '4.12'
     def junitVintageVersion  = '5.2.0'
     def junitJupiterVersion  = '5.2.0'
     def junitPlatformVersion = '1.2.0'
-    testCompile("org.junit.jupiter:junit-jupiter-api:${junitJupiterVersion}")
-    testRuntime("org.junit.jupiter:junit-jupiter-engine:${junitJupiterVersion}")
-    testCompile("junit:junit:${junit4Version}")
-    testRuntime("org.junit.vintage:junit-vintage-engine:${junitVintageVersion}")
-    testRuntime("org.junit.platform:junit-platform-launcher:${junitPlatformVersion}")
+    testImplementation "org.junit.jupiter:junit-jupiter-api:${junitJupiterVersion}"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:${junitJupiterVersion}"
+    testImplementation "junit:junit:${junit4Version}"
+    testRuntimeOnly "org.junit.vintage:junit-vintage-engine:${junitVintageVersion}"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher:${junitPlatformVersion}"
 
     // https://stackoverflow.com/questions/45462987/junit5-with-intellij-and-gradle
-    testImplementation "org.junit.jupiter:junit-jupiter-params:$junitJupiterVersion"
+    testImplementation "org.junit.jupiter:junit-jupiter-params:${junitJupiterVersion}"
 }
 
-applicationDistribution.from("$projectDir") {
-    include 'LICENSE.txt'
-    include 'bin/*'
+distributions {
+    main {
+        contents {
+            from("$projectDir") {
+                include 'README.md'
+                include 'LICENSE.txt'
+            }
+        }
+    }
 }
 
 checkstyle {
