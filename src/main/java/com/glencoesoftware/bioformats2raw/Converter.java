@@ -373,10 +373,6 @@ public class Converter implements Callable<Void> {
     try {
       imageReader.setId(inputPath.toString());
       readerClass = imageReader.getReader().getClass();
-      if (dimensionOrder == null) {
-        dimensionOrder =
-            DimensionOrder.fromString(imageReader.getDimensionOrder());
-      }
     }
     finally {
       imageReader.close();
