@@ -158,6 +158,20 @@ public class ZarrTest {
    * Test alternative dimension order.
    */
   @Test
+  public void testXYCZTDimensionOrder() throws Exception {
+    input = fake("sizeC", "2", "dimOrder", "XYCZT");
+    assertTool();
+    N5ZarrReader z =
+      new N5ZarrReader(output.resolve("data.zarr").toString());
+    DatasetAttributes da = z.getDatasetAttributes("/0/0");
+    Assert.assertArrayEquals(
+        new long[] {512, 512, 2, 1, 1}, da.getDimensions());
+  }
+
+  /**
+   * Test using a forced dimension order.
+   */
+  @Test
   public void testSetXYCZTDimensionOrder() throws Exception {
     input = fake("sizeC", "2");
     assertTool("--dimension-order", "XYCZT");
@@ -166,8 +180,6 @@ public class ZarrTest {
     DatasetAttributes da = z.getDatasetAttributes("/0/0");
     Assert.assertArrayEquals(
         new long[] {512, 512, 2, 1, 1}, da.getDimensions());
-    Assert.assertArrayEquals(
-        new int[] {512, 512, 1, 1, 1}, da.getBlockSize());
   }
 
   /**
