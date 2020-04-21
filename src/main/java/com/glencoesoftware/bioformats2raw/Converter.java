@@ -92,6 +92,9 @@ public class Converter implements Callable<Void> {
   /** Scaling factor in X and Y between any two consecutive resolutions. */
   private static final int PYRAMID_SCALE = 2;
 
+  /** Version of the bioformats2raw layout. */
+  public static final Integer LAYOUT = 1;
+
   /** Enumeration that backs the --file_type flag. Instances can be used
    * as a factory method to create {@link N5Reader} and {@link N5Writer}
    * instances.
@@ -768,6 +771,7 @@ public class Converter implements Callable<Void> {
 
     final String pyramidPath = outputPath.resolve(pyramidName).toString();
     final N5Writer n5 = fileType.writer(pyramidPath);
+    n5.setAttribute("/", "bioformats2raw.layout", LAYOUT);
 
     for (int resCounter=0; resCounter<resolutions; resCounter++) {
       final int resolution = resCounter;

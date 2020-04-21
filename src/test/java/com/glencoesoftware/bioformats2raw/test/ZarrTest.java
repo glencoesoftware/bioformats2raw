@@ -155,6 +155,20 @@ public class ZarrTest {
   }
 
   /**
+   * Test a fake file conversion and ensure the layout is set.
+   */
+  @Test
+  public void testDefaultLayoutIsSet() throws Exception {
+    input = fake();
+    assertTool();
+    N5ZarrReader z =
+        new N5ZarrReader(output.resolve("data.zarr").toString());
+    Integer layout =
+        z.getAttribute("/", "bioformats2raw.layout", Integer.class);
+    Assert.assertEquals(Converter.LAYOUT, layout);
+  }
+
+  /**
    * Test alternative dimension order.
    */
   @Test
