@@ -466,9 +466,11 @@ public class Converter implements Callable<Void> {
    * @throws FormatException
    * @throws IOException
    * @throws InterruptedException
+   * @throws EnumerationException
    */
   public void write(int series)
-    throws FormatException, IOException, InterruptedException
+    throws FormatException, IOException, InterruptedException,
+           EnumerationException
   {
     readers.forEach((reader) -> {
       reader.setSeries(series);
@@ -476,19 +478,11 @@ public class Converter implements Callable<Void> {
     saveResolutions(series);
   }
 
-  /**
-   * Retrieves the configured dimension order pre-conversion and the configured
-   * dimension order or input file dimension order post-conversion.
-   * @return See above
-   */
-  public DimensionOrder getDimensionOrder() {
-    return dimensionOrder;
-  }
-
   private byte[] getTileDownsampled(
       int series, int resolution, int plane, int xx, int yy,
       int width, int height)
-          throws FormatException, IOException, InterruptedException
+          throws FormatException, IOException, InterruptedException,
+                 EnumerationException
   {
     final String pathName = "/" +
             String.format(scaleFormatString, series, resolution - 1);
@@ -511,16 +505,14 @@ public class Converter implements Callable<Void> {
         activeTileHeight * PYRAMID_SCALE, dimensions[1] - yy);
 
     IFormatReader reader = readers.take();
-    int[] zct;
+    long[] startGridPosition;
     try {
-      zct = reader.getZCTCoords(plane);
+        startGridPosition = getGridPosition(
+          reader, xx / activeTileWidth, yy / activeTileHeight, plane);
     }
     finally {
       readers.put(reader);
     }
-    long[] startGridPosition = new long[] {
-      xx / activeTileWidth, yy / activeTileHeight, zct[0], zct[1], zct[2]
-    };
     int xBlocks = (int) Math.ceil((double) width / activeTileWidth);
     int yBlocks = (int) Math.ceil((double) height / activeTileHeight);
 
@@ -534,7 +526,7 @@ public class Converter implements Callable<Void> {
           height - (yBlock * activeTileHeight), activeTileHeight);
         long[] gridPosition = new long[] {
           startGridPosition[0] + xBlock, startGridPosition[1] + yBlock,
-          zct[0], zct[1], zct[2]
+          startGridPosition[2], startGridPosition[3], startGridPosition[4]
         };
         ByteBuffer subTile = n5.readBlock(
           pathName, datasetAttributes, gridPosition
@@ -559,7 +551,8 @@ public class Converter implements Callable<Void> {
   private byte[] getTile(
       int series, int resolution, int plane, int xx, int yy,
       int width, int height)
-          throws FormatException, IOException, InterruptedException
+          throws FormatException, IOException, InterruptedException,
+                 EnumerationException
   {
     if (resolution == 0) {
       IFormatReader reader = readers.take();
@@ -582,20 +575,60 @@ public class Converter implements Callable<Void> {
     }
   }
 
+  /**
+   * Retrieve the dimensions based on either the configured or input file
+   * dimension order at the current resolution
+   * @param reader initialized reader for the input file
+   * @param scaledWidth size of the X dimension at the current resolution
+   * @param scaledHeight size of the Y dimension at the current resolution
+   * @return dimension array ready for use with N5
+   * @throws EnumerationException
+   */
+  private long[] getDimensions(
+    IFormatReader reader, int scaledWidth, int scaledHeight)
+      throws EnumerationException
+  {
+    int sizeZ = reader.getSizeZ();
+    int sizeC = reader.getSizeC();
+    int sizeT = reader.getSizeT();
+    String o = dimensionOrder != null? dimensionOrder.toString()
+        : reader.getDimensionOrder();
+    long[] dimensions = new long[] {scaledWidth, scaledHeight, 0, 0, 0};
+    dimensions[o.indexOf("Z")] = sizeZ;
+    dimensions[o.indexOf("C")] = sizeC;
+    dimensions[o.indexOf("T")] = sizeT;
+    return dimensions;
+  }
+
+  /**
+   * Retrieve the grid position based on either the configured or input file
+   * dimension order at the current resolution
+   * @param reader initialized reader for the input file
+   * @param x X position at the current resolution
+   * @param y Y position at the current resolution
+   * @param plane current plane being operated upon
+   * @return grid position array ready for use with N5
+   * @throws EnumerationException
+   */
+  private long[] getGridPosition(
+    IFormatReader reader, int x, int y, int plane) throws EnumerationException
+  {
+    String o = dimensionOrder != null? dimensionOrder.toString()
+        : reader.getDimensionOrder();
+    int[] zct = reader.getZCTCoords(plane);
+    long[] gridPosition = new long[] {x, y, 0, 0, 0};
+    gridPosition[o.indexOf("Z")] = zct[0];
+    gridPosition[o.indexOf("C")] = zct[1];
+    gridPosition[o.indexOf("T")] = zct[2];
+    return gridPosition;
+  }
+
   private void processTile(
       int series, int resolution, int plane, int xx, int yy,
       int width, int height)
         throws EnumerationException, FormatException, IOException,
           InterruptedException
   {
-    IFormatReader reader = readers.take();
-    int[] zct;
-    try {
-      zct = reader.getZCTCoords(plane);
-    }
-    finally {
-      readers.put(reader);
-    }
     String pathName =
         "/" + String.format(scaleFormatString, series, resolution);
     final String pyramidPath = outputPath.resolve(pyramidName).toString();
@@ -604,9 +637,15 @@ public class Converter implements Callable<Void> {
     int[] blockSizes = datasetAttributes.getBlockSize();
     int activeTileWidth = blockSizes[0];
     int activeTileHeight = blockSizes[1];
-    long[] gridPosition = new long[] {
-      xx / activeTileWidth, yy / activeTileHeight, zct[0], zct[1], zct[2]
-    };
+    IFormatReader reader = readers.take();
+    long[] gridPosition;
+    try {
+      gridPosition = getGridPosition(
+          reader, xx / activeTileWidth, yy / activeTileHeight, plane);
+    }
+    finally {
+      readers.put(reader);
+    }
     int[] size = new int[] {width, height, 1, 1, 1};
 
     Slf4JStopWatch t0 = new Slf4JStopWatch("getTile");
@@ -666,17 +705,16 @@ public class Converter implements Callable<Void> {
    * @throws FormatException
    * @throws IOException
    * @throws InterruptedException
+   * @throws EnumerationException
    */
   public void saveResolutions(int series)
-    throws FormatException, IOException, InterruptedException
+    throws FormatException, IOException, InterruptedException,
+           EnumerationException
   {
     IFormatReader workingReader = readers.take();
     int resolutions = 1;
     int sizeX;
     int sizeY;
-    int sizeZ;
-    int sizeC;
-    int sizeT;
     int imageCount;
     try {
       isLittleEndian = workingReader.isLittleEndian();
@@ -696,9 +734,6 @@ public class Converter implements Callable<Void> {
       LOGGER.info("Using {} pyramid resolutions", resolutions);
       sizeX = workingReader.getSizeX();
       sizeY = workingReader.getSizeY();
-      sizeZ = workingReader.getSizeZ();
-      sizeC = workingReader.getSizeC();
-      sizeT = workingReader.getSizeT();
       imageCount = workingReader.getImageCount();
       pixelType = workingReader.getPixelType();
     }
@@ -758,7 +793,7 @@ public class Converter implements Callable<Void> {
 
       n5.createDataset(
           "/" +  String.format(scaleFormatString, series, resolution),
-          new long[] {scaledWidth, scaledHeight, sizeZ, sizeC, sizeT},
+          getDimensions(workingReader, scaledWidth, scaledHeight),
           new int[] {activeTileWidth, activeTileHeight, 1, 1, 1},
           dataType, compression
       );
