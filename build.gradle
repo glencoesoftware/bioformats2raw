@@ -17,6 +17,9 @@ repositories {
         url 'https://artifacts.openmicroscopy.org/artifactory/repo/'
     }
     maven {
+        url 'https://repo.glencoesoftware.com/repository/n5-zarr-snapshots/'
+    }
+    maven {
         url 'https://saalfeldlab.github.io/maven'
     }
 }
@@ -26,7 +29,7 @@ dependencies {
     implementation 'info.picocli:picocli:3.9.6'
     implementation 'org.janelia.saalfeldlab:n5:2.1.6'
     implementation 'org.janelia.saalfeldlab:n5-blosc:1.0.1'
-    implementation 'org.janelia.saalfeldlab:n5-zarr:0.0.2-beta'
+    implementation 'org.janelia.saalfeldlab:n5-zarr:0.0.3-SNAPSHOT'
 
     // https://github.com/junit-team/junit5-samples/blob/master/junit5-migration-gradle/build.gradle
     def junit4Version        = '4.12'

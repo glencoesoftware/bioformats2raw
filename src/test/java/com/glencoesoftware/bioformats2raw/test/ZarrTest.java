@@ -27,7 +27,6 @@ import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.zarr.N5ZarrReader;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -216,7 +215,6 @@ public class ZarrTest {
    * Test using a different tile size from the default (1024) the does not
    * divide evenly.
    */
-  @Ignore("n5-zarr padCrop() is broken")
   @Test
   public void testSetSmallerDefaultWithRemainder() throws Exception {
     input = fake();
