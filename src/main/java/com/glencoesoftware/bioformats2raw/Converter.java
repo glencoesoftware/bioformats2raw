@@ -42,6 +42,7 @@ import loci.formats.MissingLibraryException;
 import loci.formats.meta.IMetadata;
 import loci.formats.services.OMEXMLService;
 import loci.formats.services.OMEXMLServiceImpl;
+import ome.xml.model.enums.DimensionOrder;
 import ome.xml.model.enums.EnumerationException;
 
 import org.janelia.saalfeldlab.n5.ByteArrayDataBlock;
@@ -270,6 +271,13 @@ public class Converter implements Callable<Void> {
   )
   private volatile String scaleFormatString = "%d/%d";
 
+  @Option(
+          names = "--dimension-order",
+          description = "Override the input file dimension order in the " +
+                  "output file [Can break compatibility with raw2ometiff] " +
+                  "(${COMPLETION-CANDIDATES})"
+  )
+  private volatile DimensionOrder dimensionOrder;
 
   /** Scaling implementation that will be used during downsampling. */
   private volatile IImageScaler scaler = new SimpleImageScaler();
@@ -304,9 +312,7 @@ public class Converter implements Callable<Void> {
   private volatile AtomicInteger nTile;
 
   @Override
-  public Void call()
-      throws FormatException, IOException, InterruptedException
-  {
+  public Void call() throws Exception {
     ch.qos.logback.classic.Logger root = (ch.qos.logback.classic.Logger)
         LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
     if (debug) {
@@ -330,9 +336,11 @@ public class Converter implements Callable<Void> {
    * @throws FormatException
    * @throws IOException
    * @throws InterruptedException
+   * @throws EnumerationException
    */
   public void convert()
-      throws FormatException, IOException, InterruptedException
+      throws FormatException, IOException, InterruptedException,
+             EnumerationException
   {
 
     if (fileType.equals(FileType.zarr) && pyramidName.equals("data.n5")) {
@@ -365,6 +373,10 @@ public class Converter implements Callable<Void> {
     try {
       imageReader.setId(inputPath.toString());
       readerClass = imageReader.getReader().getClass();
+      if (dimensionOrder == null) {
+        dimensionOrder =
+            DimensionOrder.fromString(imageReader.getDimensionOrder());
+      }
     }
     finally {
       imageReader.close();
@@ -462,6 +474,15 @@ public class Converter implements Callable<Void> {
       reader.setSeries(series);
     });
     saveResolutions(series);
+  }
+
+  /**
+   * Retrieves the configured dimension order pre-conversion and the configured
+   * dimension order or input file dimension order post-conversion.
+   * @return See above
+   */
+  public DimensionOrder getDimensionOrder() {
+    return dimensionOrder;
   }
 
   private byte[] getTileDownsampled(

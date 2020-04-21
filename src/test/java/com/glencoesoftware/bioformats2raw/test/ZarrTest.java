@@ -21,6 +21,8 @@ import java.util.Map;
 import com.glencoesoftware.bioformats2raw.Converter;
 import loci.common.LogbackTools;
 import loci.formats.in.FakeReader;
+import ome.xml.model.enums.DimensionOrder;
+import picocli.CommandLine;
 
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.zarr.N5ZarrReader;
@@ -36,6 +38,8 @@ public class ZarrTest {
   Path input;
 
   Path output;
+
+  Converter converter;
 
   @Rule
   public TemporaryFolder tmp = new TemporaryFolder();
@@ -63,7 +67,8 @@ public class ZarrTest {
     output = tmp.newFolder().toPath().resolve("test");
     args.add(output.toString());
     try {
-      Converter.main(args.toArray(new String[]{}));
+      converter = new Converter();
+      CommandLine.call(converter, args.toArray(new String[]{}));
       Assert.assertTrue(Files.exists(output.resolve("data.zarr")));
       Assert.assertTrue(Files.exists(output.resolve("METADATA.ome.xml")));
     }
@@ -148,6 +153,7 @@ public class ZarrTest {
   public void testDefaultIsTooBig() throws Exception {
     input = fake();
     assertTool();
+    Assert.assertEquals(DimensionOrder.XYZCT, converter.getDimensionOrder());
   }
 
   /**
