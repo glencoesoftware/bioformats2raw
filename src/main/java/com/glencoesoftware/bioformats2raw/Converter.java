@@ -503,8 +503,8 @@ public class Converter implements Callable<Void> {
     IFormatReader reader = readers.take();
     long[] startGridPosition;
     try {
-        startGridPosition = getGridPosition(
-          reader, xx / activeTileWidth, yy / activeTileHeight, plane);
+      startGridPosition = getGridPosition(
+        reader, xx / activeTileWidth, yy / activeTileHeight, plane);
     }
     finally {
       readers.put(reader);
@@ -573,7 +573,7 @@ public class Converter implements Callable<Void> {
 
   /**
    * Retrieve the dimensions based on either the configured or input file
-   * dimension order at the current resolution
+   * dimension order at the current resolution.
    * @param reader initialized reader for the input file
    * @param scaledWidth size of the X dimension at the current resolution
    * @param scaledHeight size of the Y dimension at the current resolution
@@ -598,7 +598,7 @@ public class Converter implements Callable<Void> {
 
   /**
    * Retrieve the grid position based on either the configured or input file
-   * dimension order at the current resolution
+   * dimension order at the current resolution.
    * @param reader initialized reader for the input file
    * @param x X position at the current resolution
    * @param y Y position at the current resolution
