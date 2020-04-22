@@ -26,7 +26,7 @@ repositories {
 
 dependencies {
     implementation 'ome:formats-gpl:6.4.0'
-    implementation 'info.picocli:picocli:3.9.6'
+    implementation 'info.picocli:picocli:4.2.0'
     implementation 'org.janelia.saalfeldlab:n5:2.1.6'
     implementation 'org.janelia.saalfeldlab:n5-blosc:1.0.1'
     implementation 'org.janelia.saalfeldlab:n5-zarr:0.0.3-SNAPSHOT'
