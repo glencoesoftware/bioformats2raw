@@ -669,7 +669,8 @@ public class Converter implements Callable<Void> {
           dataBlock = new ByteArrayDataBlock(size, gridPosition, tile);
           break;
         }
-        case FormatTools.INT16: {
+        case FormatTools.INT16:
+        case FormatTools.UINT16: {
           short[] asShort = new short[tile.length / 2];
           bb.asShortBuffer().get(asShort);
           dataBlock = new ShortArrayDataBlock(size, gridPosition, asShort);
