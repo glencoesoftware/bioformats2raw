@@ -51,6 +51,7 @@ import org.janelia.saalfeldlab.n5.Compression;
 import org.janelia.saalfeldlab.n5.DataBlock;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
+import org.janelia.saalfeldlab.n5.DoubleArrayDataBlock;
 import org.janelia.saalfeldlab.n5.FloatArrayDataBlock;
 import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.Lz4Compression;
@@ -658,6 +659,10 @@ public class Converter implements Callable<Void> {
         return;
       }
 
+      ByteBuffer bb = ByteBuffer.wrap(tile);
+      if (resolution == 0 && isLittleEndian) {
+        bb = bb.order(ByteOrder.LITTLE_ENDIAN);
+      }
       switch (pixelType) {
         case FormatTools.INT8:
         case FormatTools.UINT8: {
@@ -666,22 +671,20 @@ public class Converter implements Callable<Void> {
         }
         case FormatTools.INT16: {
           short[] asShort = new short[tile.length / 2];
-          ByteBuffer bb = ByteBuffer.wrap(tile);
-          if (resolution == 0 && isLittleEndian) {
-            bb = bb.order(ByteOrder.LITTLE_ENDIAN);
-          }
           bb.asShortBuffer().get(asShort);
           dataBlock = new ShortArrayDataBlock(size, gridPosition, asShort);
           break;
         }
         case FormatTools.FLOAT: {
           float[] asFloat = new float[tile.length / 4];
-          ByteBuffer bb = ByteBuffer.wrap(tile);
-          if (resolution == 0 && isLittleEndian) {
-            bb = bb.order(ByteOrder.LITTLE_ENDIAN);
-          }
           bb.asFloatBuffer().get(asFloat);
           dataBlock = new FloatArrayDataBlock(size, gridPosition, asFloat);
+          break;
+        }
+        case FormatTools.DOUBLE: {
+          double[] asDouble = new double[tile.length / 8];
+          bb.asDoubleBuffer().get(asDouble);
+          dataBlock = new DoubleArrayDataBlock(size, gridPosition, asDouble);
           break;
         }
         default:
@@ -776,6 +779,9 @@ public class Converter implements Callable<Void> {
         break;
       case FormatTools.FLOAT:
         dataType = DataType.FLOAT32;
+        break;
+      case FormatTools.DOUBLE:
+        dataType = DataType.FLOAT64;
         break;
       default:
         throw new FormatException("Unsupported pixel type: "
