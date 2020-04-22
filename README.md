@@ -1,8 +1,8 @@
 bioformats2raw converter
 ========================
 
-Java application to convert whole slide imaging file formats, including .mrxs,
-to an intermediate N5 structure.
+Java application to convert image file formats, including .mrxs,
+to an intermediate N5/Zarr structure.
 The raw2ometiff application can then be used to produce a
 Bio-Formats 5.9.x ("Faas") or Bio-Formats 6.x (true OME-TIFF) pyramid.
 
@@ -44,3 +44,28 @@ Either or both of these readers can be excluded with the `--extra-readers` optio
     bin/bioformats2raw /path/to/file.tiff /path/to/n5-pyramid --extra-readers com.glencoesoftware.bioformats2raw.MiraxReader
     # don't add any additional readers, just use the ones provided by Bio-Formats
     bin/bioformats2raw /path/to/file.mrxs /path/to/n5-pyramid --extra-readers
+
+Performance
+===========
+
+This package is __highly__ sensitive to underlying hardware as well as
+the following configuration options:
+
+ * `--max_workers`
+ * `--tile_width`
+ * `--tile_height`
+
+On systems with significant I/O bandwidth, particularly SATA or
+NVMe based storage, you may find sharply diminishing returns with high
+worker counts.  There are significant performance gains to be had utilizing
+larger tile sizes but be mindful of the consequences on the downstream
+workflow.
+
+In general, expect to need to tune the above settings and measure
+relative performance.
+
+License
+=======
+
+The converter is distributed under the terms of the GPL license.
+Please see `LICENSE.txt` for further details.
