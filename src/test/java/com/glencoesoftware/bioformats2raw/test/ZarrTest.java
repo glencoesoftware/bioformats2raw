@@ -23,6 +23,7 @@ import loci.common.LogbackTools;
 import loci.formats.in.FakeReader;
 import picocli.CommandLine;
 
+import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.zarr.N5ZarrReader;
 import org.junit.Assert;
@@ -346,6 +347,29 @@ public class ZarrTest {
             .toByteBuffer();
     seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
     Assert.assertArrayEquals(new int[] {0, 1, 0, 0, 1}, seriesPlaneNumberZCT);
+  }
+
+  /**
+   * Test float pixel type.
+   */
+  @Test
+  public void testFloatPixelType() throws Exception {
+    input = fake("pixelType", "float");
+    assertTool();
+    N5ZarrReader z =
+            new N5ZarrReader(output.resolve("data.zarr").toString());
+
+    // Check series dimensions and special pixels
+    DatasetAttributes da = z.getDatasetAttributes("/0/0");
+    Assert.assertEquals(DataType.FLOAT32, da.getDataType());
+    Assert.assertArrayEquals(
+        new long[] {512, 512, 1, 1, 1}, da.getDimensions());
+    Assert.assertArrayEquals(
+        new int[] {512, 512, 1, 1, 1}, da.getBlockSize());
+    ByteBuffer tile = z.readBlock("/0/0", da, new long[] {0, 0, 0, 0, 0})
+        .toByteBuffer();
+    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
+    Assert.assertArrayEquals(new int[] {0, 0, 0, 0, 0}, seriesPlaneNumberZCT);
   }
 
 }
