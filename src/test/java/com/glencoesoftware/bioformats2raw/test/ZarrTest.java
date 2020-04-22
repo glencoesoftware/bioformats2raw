@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -151,6 +152,28 @@ public class ZarrTest {
   public void testDefaultIsTooBig() throws Exception {
     input = fake();
     assertTool();
+  }
+
+  /**
+   * Test additional format string args.
+   */
+  @Test
+  public void testAdditionalScaleFormatStringArgs() throws Exception {
+    input = fake("series", "2");
+    Path csv = Files.createTempFile(null, ".csv");
+    Files.write(csv, Arrays.asList((new String[] {
+      "abc,888,def",
+      "ghi,999,jkl"
+    })));
+    csv.toFile().deleteOnExit();
+    assertTool(
+        "--scale-format-string", "%3$s/%4$s/%1$s/%2$s",
+        "--additional-scale-format-string-args", csv.toString()
+    );
+    N5ZarrReader z =
+            new N5ZarrReader(output.resolve("data.zarr").toString());
+    Assert.assertTrue(z.exists("/abc/888/0/0"));
+    Assert.assertTrue(z.exists("/ghi/999/1/0"));
   }
 
   /**

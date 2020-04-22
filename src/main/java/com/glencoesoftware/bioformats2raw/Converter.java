@@ -70,6 +70,8 @@ import org.slf4j.LoggerFactory;
 import com.glencoesoftware.bioformats2raw.MiraxReader.TilePointer;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.univocity.parsers.csv.CsvParser;
+import com.univocity.parsers.csv.CsvParserSettings;
 
 import ch.qos.logback.classic.Level;
 import picocli.CommandLine;
@@ -268,11 +270,28 @@ public class Converter implements Callable<Void> {
 
   @Option(
           names = "--scale-format-string",
-          description = "Format string for scale paths "+
+          description = "Format string for scale paths; the first two " +
+                  "arguments will always be series and resolution followed " +
+                  "by any additional arguments brought in from " +
+                  "`--additional-scale-format-string-args` " +
                   "[Can break compatibility with raw2ometiff] " +
                   "(default: ${DEFAULT-VALUE})"
   )
   private volatile String scaleFormatString = "%d/%d";
+
+  @Option(
+          names = "--additional-scale-format-string-args",
+          description = "Additional format string argument CSV file (without " +
+                  "header row).  Arguments will be added to the end of the " +
+                  "scale format string mapping the at the corresponding CSV " +
+                  "row index.  It is expected that the CSV file contain " +
+                  "exactly the same number of rows as the input file has " +
+                  "series"
+  )
+  private volatile Path additionalScaleFormatStringArgsCsv;
+
+  /** Additional scale format string arguments after parsing. */
+  private volatile List<String[]> additionalScaleFormatStringArgs;
 
   @Option(
           names = "--dimension-order",
@@ -356,6 +375,16 @@ public class Converter implements Callable<Void> {
       LOGGER.info("Output will be incompatible with raw2ometiff " +
               "(pyramidName: {}, scaleFormatString: {})",
               pyramidName, scaleFormatString);
+    }
+
+    if (additionalScaleFormatStringArgsCsv != null) {
+      CsvParserSettings parserSettings = new CsvParserSettings();
+      parserSettings.detectFormatAutomatically();
+      parserSettings.setLineSeparatorDetectionEnabled(true);
+
+      CsvParser parser = new CsvParser(parserSettings);
+      additionalScaleFormatStringArgs =
+          parser.parseAll(additionalScaleFormatStringArgsCsv.toFile());
     }
 
     Cache<TilePointer, byte[]> tileCache = CacheBuilder.newBuilder()
@@ -477,6 +506,31 @@ public class Converter implements Callable<Void> {
     saveResolutions(series);
   }
 
+  /**
+   * Retrieves the scaled format string arguments, adding additional ones
+   * from a provided CSV file.
+   * @param series current series to be prepended to the argument list
+   * @param resolution current resolution to be prepended to the argument list
+   * @return Array of arguments to be used in format string application.  Order
+   * will be <code>[series, resolution, &lt;additionalArgs&gt;...]</code> where
+   * <code>additionalArgs</code> is sourced from an optionally provided CSV
+   * file.
+   */
+  private Object[] getScaleFormatStringArgs(
+      Integer series, Integer resolution)
+  {
+    List<Object> args = new ArrayList<Object>();
+    args.add(series);
+    args.add(resolution);
+    if (additionalScaleFormatStringArgs != null) {
+      String[] row = additionalScaleFormatStringArgs.get(series);
+      for (String arg : row) {
+        args.add(arg);
+      }
+    }
+    return args.toArray();
+  }
+
   private byte[] getTileDownsampled(
       int series, int resolution, int plane, int xx, int yy,
       int width, int height)
@@ -484,7 +538,8 @@ public class Converter implements Callable<Void> {
                  EnumerationException
   {
     final String pathName = "/" +
-            String.format(scaleFormatString, series, resolution - 1);
+        String.format(scaleFormatString,
+            getScaleFormatStringArgs(series, resolution - 1));
     final String pyramidPath = outputPath.resolve(pyramidName).toString();
     final N5Reader n5 = fileType.reader(pyramidPath);
 
@@ -629,7 +684,8 @@ public class Converter implements Callable<Void> {
           InterruptedException
   {
     String pathName =
-        "/" + String.format(scaleFormatString, series, resolution);
+        "/" + String.format(scaleFormatString,
+            getScaleFormatStringArgs(series, resolution));
     final String pyramidPath = outputPath.resolve(pyramidName).toString();
     final N5Writer n5 = fileType.writer(pyramidPath);
     DatasetAttributes datasetAttributes = n5.getDatasetAttributes(pathName);
@@ -792,7 +848,8 @@ public class Converter implements Callable<Void> {
       }
 
       n5.createDataset(
-          "/" +  String.format(scaleFormatString, series, resolution),
+          "/" +  String.format(
+              scaleFormatString, getScaleFormatStringArgs(series, resolution)),
           getDimensions(workingReader, scaledWidth, scaledHeight),
           new int[] {activeTileWidth, activeTileHeight, 1, 1, 1},
           dataType, compression
