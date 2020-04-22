@@ -51,6 +51,8 @@ import org.janelia.saalfeldlab.n5.Compression;
 import org.janelia.saalfeldlab.n5.DataBlock;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
+import org.janelia.saalfeldlab.n5.DoubleArrayDataBlock;
+import org.janelia.saalfeldlab.n5.FloatArrayDataBlock;
 import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.Lz4Compression;
 import org.janelia.saalfeldlab.n5.N5FSReader;
@@ -713,23 +715,38 @@ public class Converter implements Callable<Void> {
         return;
       }
 
-      int bytesPerPixel = FormatTools.getBytesPerPixel(pixelType);
-      switch (bytesPerPixel) {
-        case 1:
+      ByteBuffer bb = ByteBuffer.wrap(tile);
+      if (resolution == 0 && isLittleEndian) {
+        bb = bb.order(ByteOrder.LITTLE_ENDIAN);
+      }
+      switch (pixelType) {
+        case FormatTools.INT8:
+        case FormatTools.UINT8: {
           dataBlock = new ByteArrayDataBlock(size, gridPosition, tile);
           break;
-        case 2:
+        }
+        case FormatTools.INT16:
+        case FormatTools.UINT16: {
           short[] asShort = new short[tile.length / 2];
-          ByteBuffer bb = ByteBuffer.wrap(tile);
-          if (resolution == 0 && isLittleEndian) {
-            bb = bb.order(ByteOrder.LITTLE_ENDIAN);
-          }
           bb.asShortBuffer().get(asShort);
           dataBlock = new ShortArrayDataBlock(size, gridPosition, asShort);
           break;
+        }
+        case FormatTools.FLOAT: {
+          float[] asFloat = new float[tile.length / 4];
+          bb.asFloatBuffer().get(asFloat);
+          dataBlock = new FloatArrayDataBlock(size, gridPosition, asFloat);
+          break;
+        }
+        case FormatTools.DOUBLE: {
+          double[] asDouble = new double[tile.length / 8];
+          bb.asDoubleBuffer().get(asDouble);
+          dataBlock = new DoubleArrayDataBlock(size, gridPosition, asDouble);
+          break;
+        }
         default:
-          throw new FormatException(
-              "Unsupported bytes per pixel: " + bytesPerPixel);
+          throw new FormatException("Unsupported pixel type: "
+              + FormatTools.getPixelTypeString(pixelType));
       }
     }
     finally {
@@ -816,6 +833,12 @@ public class Converter implements Callable<Void> {
         break;
       case FormatTools.UINT16:
         dataType = DataType.UINT16;
+        break;
+      case FormatTools.FLOAT:
+        dataType = DataType.FLOAT32;
+        break;
+      case FormatTools.DOUBLE:
+        dataType = DataType.FLOAT64;
         break;
       default:
         throw new FormatException("Unsupported pixel type: "
