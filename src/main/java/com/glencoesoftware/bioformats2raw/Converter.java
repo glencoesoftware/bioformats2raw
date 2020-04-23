@@ -945,7 +945,7 @@ public class Converter implements Callable<Void> {
    *
    * @param n5 Active {@link N5Writer}.
    * @param series Series which is currently being written.
-   * @param resolutions Total number of resolutions from from
+   * @param resolutions Total number of resolutions from which
    *                    names will be generated.
    * @throws IOException
    */
