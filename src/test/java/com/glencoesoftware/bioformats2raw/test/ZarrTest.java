@@ -192,6 +192,27 @@ public class ZarrTest {
   }
 
   /**
+   * Test that multiscales metadata is present.
+   */
+  @Test
+  public void testMultiscalesMetadata() throws Exception {
+    input = fake();
+    assertTool();
+    N5ZarrReader z =
+            new N5ZarrReader(output.resolve("data.zarr").toString());
+    //
+    List<Map<String, Object>> multiscales =
+            z.getAttribute("/0", "multiscales", List.class);
+    Assert.assertEquals(1, multiscales.size());
+    Map<String, Object> multiscale = multiscales.get(0);
+    Assert.assertEquals("0.1", multiscale.get("version"));
+    List<Map<String, Object>> datasets =
+            (List<Map<String, Object>>) multiscale.get("datasets");
+    Assert.assertTrue(datasets.size() > 0);
+    Assert.assertEquals("0", datasets.get(0).get("path"));
+  }
+
+  /**
    * Test alternative dimension order.
    */
   @Test
