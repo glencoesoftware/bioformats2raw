@@ -966,7 +966,7 @@ public class Converter implements Callable<Void> {
       resolutionString = "/" +  String.format(
               scaleFormatString, getScaleFormatStringArgs(series, r));
       String lastPath = resolutionString.substring(
-              resolutionString.lastIndexOf('/'+1));
+              resolutionString.lastIndexOf('/') + 1);
       datasets.add(Collections.singletonMap("path", lastPath));
     }
     multiscale.put("datasets", datasets);
