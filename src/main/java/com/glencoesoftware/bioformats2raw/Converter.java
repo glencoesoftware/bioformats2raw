@@ -13,7 +13,10 @@ import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
@@ -848,9 +851,13 @@ public class Converter implements Callable<Void> {
     Compression compression = N5Compression.getCompressor(compressionType,
             compressionParameter);
 
+    // fileset level metadata
     final String pyramidPath = outputPath.resolve(pyramidName).toString();
     final N5Writer n5 = fileType.writer(pyramidPath);
     n5.setAttribute("/", "bioformats2raw.layout", LAYOUT);
+
+    // series level metadata
+    setSeriesLevelMetadata(n5, series, resolutions);
 
     for (int resCounter=0; resCounter<resolutions; resCounter++) {
       final int resolution = resCounter;
@@ -869,6 +876,9 @@ public class Converter implements Callable<Void> {
         LOGGER.warn("Reducing active tileHeight to {}", scaledHeight);
         activeTileHeight = scaledHeight;
       }
+
+      String resolutionString = "/" +  String.format(
+              scaleFormatString, getScaleFormatStringArgs(series, resolution));
 
       n5.createDataset(
           "/" +  String.format(
@@ -926,6 +936,42 @@ public class Converter implements Callable<Void> {
 
     }
 
+  }
+
+  /**
+   * Use {@link N5Writer#setAttribute(String, String, Object)}
+   * to attach the multiscales metadata to the group containing
+   * the pyramids.
+   *
+   * @param n5 Active {@link N5Writer}.
+   * @param series Series which is currently being written.
+   * @param resolutions Total number of resolutions from which
+   *                    names will be generated.
+   * @throws IOException
+   */
+  private void setSeriesLevelMetadata(N5Writer n5, int series, int resolutions)
+          throws IOException
+  {
+    String resolutionString = "/" +  String.format(
+            scaleFormatString, getScaleFormatStringArgs(series, 0));
+    String seriesString = resolutionString.substring(0,
+            resolutionString.lastIndexOf('/'));
+    List<Map<String, Object>> multiscales =
+            new ArrayList<Map<String, Object>>();
+    Map<String, Object> multiscale = new HashMap<String, Object>();
+    multiscale.put("version", "0.1");
+    multiscales.add(multiscale);
+    List<Map<String, String>> datasets = new ArrayList<Map<String, String>>();
+    for (int r = 0; r < resolutions; r++) {
+      resolutionString = "/" +  String.format(
+              scaleFormatString, getScaleFormatStringArgs(series, r));
+      String lastPath = resolutionString.substring(
+              resolutionString.lastIndexOf('/') + 1);
+      datasets.add(Collections.singletonMap("path", lastPath));
+    }
+    multiscale.put("datasets", datasets);
+    n5.createGroup(seriesString);
+    n5.setAttribute(seriesString, "multiscales", multiscales);
   }
 
   /**
