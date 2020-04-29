@@ -884,10 +884,8 @@ public class Converter implements Callable<Void> {
 
       String resolutionString = "/" +  String.format(
               scaleFormatString, getScaleFormatStringArgs(series, resolution));
-
       n5.createDataset(
-          "/" +  String.format(
-              scaleFormatString, getScaleFormatStringArgs(series, resolution)),
+          resolutionString,
           getDimensions(workingReader, scaledWidth, scaledHeight),
           new int[] {activeTileWidth, activeTileHeight, 1, 1, 1},
           dataType, compression
