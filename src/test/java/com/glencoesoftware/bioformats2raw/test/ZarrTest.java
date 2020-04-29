@@ -439,4 +439,28 @@ public class ZarrTest {
     Assert.assertArrayEquals(new int[] {0, 0, 0, 0, 0}, seriesPlaneNumberZCT);
   }
 
+  /**
+   * Test that there are no edge effects when tiles do not divide evenly
+   * and downsampling.
+   */
+  @Test
+  public void testDownsampleEdgeEffects() throws Exception {
+    input = fake("sizeX", "60", "sizeY", "300");
+    assertTool("-w", "50", "-h", "75");
+    N5ZarrReader z =
+        new N5ZarrReader(output.resolve("data.zarr").toString());
+
+    // Check series dimensions
+    DatasetAttributes da = z.getDatasetAttributes("/0/1");
+    Assert.assertArrayEquals(
+        new long[] {30, 150, 1, 1, 1}, da.getDimensions());
+    Assert.assertArrayEquals(
+        new int[] {30, 75, 1, 1, 1}, da.getBlockSize());
+    ByteBuffer tile = z.readBlock("/0/1", da, new long[] {0, 0, 0, 0, 0})
+        .toByteBuffer();
+    // Second row edge pixel should be the 2x2 downsampled value;
+    // test will break if the downsampling algorithm changes
+    Assert.assertEquals(58, tile.get(59));
+  }
+
 }
