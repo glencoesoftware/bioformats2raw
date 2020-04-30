@@ -591,13 +591,18 @@ public class Converter implements Callable<Void> {
           pathName, datasetAttributes, gridPosition
         ).toByteBuffer();
 
-        int length = blockWidth * bytesPerPixel;
+        int destLength = blockWidth * bytesPerPixel;
+        int srcLength = destLength;
+        if (fileType == FileType.zarr) {
+          // n5/n5-zarr does not de-pad on read
+          srcLength = activeTileWidth * bytesPerPixel;
+        }
         for (int y=0; y<blockHeight; y++) {
-          int srcPos = y * length;
+          int srcPos = y * srcLength;
           int destPos = ((yBlock * width * activeTileHeight)
             + (y * width) + (xBlock * activeTileWidth)) * bytesPerPixel;
           subTile.position(srcPos);
-          subTile.get(tile, destPos, length);
+          subTile.get(tile, destPos, destLength);
         }
       }
     }
@@ -879,10 +884,8 @@ public class Converter implements Callable<Void> {
 
       String resolutionString = "/" +  String.format(
               scaleFormatString, getScaleFormatStringArgs(series, resolution));
-
       n5.createDataset(
-          "/" +  String.format(
-              scaleFormatString, getScaleFormatStringArgs(series, resolution)),
+          resolutionString,
           getDimensions(workingReader, scaledWidth, scaledHeight),
           new int[] {activeTileWidth, activeTileHeight, 1, 1, 1},
           dataType, compression

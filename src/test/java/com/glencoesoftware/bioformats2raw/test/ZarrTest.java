@@ -10,6 +10,7 @@ package com.glencoesoftware.bioformats2raw.test;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.ShortBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -437,6 +438,55 @@ public class ZarrTest {
         .toByteBuffer();
     int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
     Assert.assertArrayEquals(new int[] {0, 0, 0, 0, 0}, seriesPlaneNumberZCT);
+  }
+
+  /**
+   * Test that there are no edge effects when tiles do not divide evenly
+   * and downsampling.
+   */
+  @Test
+  public void testDownsampleEdgeEffectsUInt8() throws Exception {
+    input = fake("sizeX", "60", "sizeY", "300");
+    assertTool("-w", "25", "-h", "75");
+    N5ZarrReader z =
+        new N5ZarrReader(output.resolve("data.zarr").toString());
+
+    // Check series dimensions
+    DatasetAttributes da = z.getDatasetAttributes("/0/1");
+    Assert.assertArrayEquals(
+        new long[] {30, 150, 1, 1, 1}, da.getDimensions());
+    Assert.assertArrayEquals(
+        new int[] {25, 75, 1, 1, 1}, da.getBlockSize());
+    ByteBuffer tile = z.readBlock("/0/1", da, new long[] {1, 0, 0, 0, 0})
+        .toByteBuffer();
+    // Last row first pixel should be the 2x2 downsampled value;
+    // test will break if the downsampling algorithm changes
+    Assert.assertEquals(50, tile.get(75 * 24));
+  }
+
+  /**
+   * Test that there are no edge effects when tiles do not divide evenly
+   * and downsampling.
+   */
+  @Test
+  public void testDownsampleEdgeEffectsUInt16() throws Exception {
+    input = fake("sizeX", "60", "sizeY", "300", "pixelType", "uint16");
+    assertTool("-w", "25", "-h", "75");
+    N5ZarrReader z =
+        new N5ZarrReader(output.resolve("data.zarr").toString());
+
+    // Check series dimensions
+    DatasetAttributes da = z.getDatasetAttributes("/0/1");
+    Assert.assertEquals(DataType.UINT16, da.getDataType());
+    Assert.assertArrayEquals(
+        new long[] {30, 150, 1, 1, 1}, da.getDimensions());
+    Assert.assertArrayEquals(
+        new int[] {25, 75, 1, 1, 1}, da.getBlockSize());
+    ShortBuffer tile = z.readBlock("/0/1", da, new long[] {1, 0, 0, 0, 0})
+        .toByteBuffer().asShortBuffer();
+    // Last row first pixel should be the 2x2 downsampled value;
+    // test will break if the downsampling algorithm changes
+    Assert.assertEquals(50, tile.get(75 * 24));
   }
 
 }
