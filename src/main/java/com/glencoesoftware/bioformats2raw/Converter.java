@@ -595,7 +595,7 @@ public class Converter implements Callable<Void> {
         int srcLength = destLength;
         if (fileType == FileType.zarr) {
           // n5/n5-zarr does not de-pad on read
-          srcLength = activeTileWidth;
+          srcLength = activeTileWidth * bytesPerPixel;
         }
         for (int y=0; y<blockHeight; y++) {
           int srcPos = y * srcLength;
