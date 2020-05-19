@@ -17,12 +17,16 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 
 import com.glencoesoftware.bioformats2raw.Converter;
 import loci.common.LogbackTools;
+import loci.common.services.ServiceFactory;
 import loci.formats.in.FakeReader;
+import loci.formats.ome.OMEXMLMetadata;
+import loci.formats.services.OMEXMLService;
 import picocli.CommandLine;
 
 import org.janelia.saalfeldlab.n5.DataType;
@@ -107,6 +111,13 @@ public class ZarrTest {
   static Path fake(Map<String, String> options,
           Map<Integer, Map<String, String>> series)
   {
+    return fake(options, series, null);
+  }
+
+  static Path fake(Map<String, String> options,
+          Map<Integer, Map<String, String>> series,
+          Map<String, String> originalMetadata)
+  {
     StringBuilder sb = new StringBuilder();
     sb.append("image");
     if (options != null) {
@@ -120,6 +131,12 @@ public class ZarrTest {
     sb.append("&");
     try {
       List<String> lines = new ArrayList<String>();
+      if (originalMetadata != null) {
+        lines.add("[GlobalMetadata]");
+        for (String key : originalMetadata.keySet()) {
+          lines.add(String.format("%s=%s", key, originalMetadata.get(key)));
+        }
+      }
       if (series != null) {
         for (int s : series.keySet()) {
           Map<String, String> seriesOptions = series.get(s);
@@ -487,6 +504,33 @@ public class ZarrTest {
     // Last row first pixel should be the 2x2 downsampled value;
     // test will break if the downsampling algorithm changes
     Assert.assertEquals(50, tile.get(75 * 24));
+  }
+
+  /**
+   * Test that original metadata is saved.
+   */
+  @Test
+  public void testOriginalMetadata() throws Exception {
+    Map<String, String> originalMetadata = new HashMap<String, String>();
+    originalMetadata.put("key1", "value1");
+    originalMetadata.put("key2", "value2");
+
+    input = fake(null, null, originalMetadata);
+    assertTool();
+    Path omexml = output.resolve("METADATA.ome.xml");
+    StringBuilder xml = new StringBuilder();
+    Files.lines(omexml).forEach(v -> xml.append(v));
+
+    OMEXMLService service =
+      new ServiceFactory().getInstance(OMEXMLService.class);
+    OMEXMLMetadata retrieve =
+      (OMEXMLMetadata) service.createOMEXMLMetadata(xml.toString());
+    Hashtable convertedMetadata = service.getOriginalMetadata(retrieve);
+    Assert.assertEquals(originalMetadata.size(), convertedMetadata.size());
+    for (String key : originalMetadata.keySet()) {
+      Assert.assertEquals(
+        originalMetadata.get(key), convertedMetadata.get(key));
+    }
   }
 
 }
