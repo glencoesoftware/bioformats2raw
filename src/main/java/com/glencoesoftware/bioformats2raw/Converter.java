@@ -8,6 +8,7 @@
 package com.glencoesoftware.bioformats2raw;
 
 import java.io.IOException;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.Files;
@@ -601,7 +602,12 @@ public class Converter implements Callable<Void> {
           int srcPos = y * srcLength;
           int destPos = ((yBlock * width * activeTileHeight)
             + (y * width) + (xBlock * activeTileWidth)) * bytesPerPixel;
-          subTile.position(srcPos);
+          // Cast to Buffer to avoid issues if compilation is performed
+          // on JDK9+ and execution is performed on JDK8.  This is due
+          // to the existence of covariant return types in the resultant
+          // byte code if compiled on JDK0+.  For reference:
+          //   https://issues.apache.org/jira/browse/MRESOLVER-85
+          ((Buffer) subTile).position(srcPos);
           subTile.get(tile, destPos, destLength);
         }
       }
