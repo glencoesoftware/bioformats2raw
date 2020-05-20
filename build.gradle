@@ -1,6 +1,7 @@
 plugins {
     id 'application'
     id 'eclipse'
+    id 'maven-publish'
     id 'checkstyle'
 }
 
@@ -53,6 +54,24 @@ distributions {
             from("$projectDir") {
                 include 'README.md'
                 include 'LICENSE.txt'
+            }
+        }
+    }
+}
+
+publishing {
+    publications {
+        bioformats2raw(MavenPublication) {
+            from components.java
+        }
+    }
+
+    repositories {
+        maven {
+            url 'https://repo.glencoesoftware.com/repository/bioformats2raw2ometiff/'
+            credentials {
+               username = project.properties.ArtifactoryUserName
+               password = project.properties.ArtifactoryPassword
             }
         }
     }
