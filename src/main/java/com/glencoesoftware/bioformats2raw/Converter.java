@@ -426,6 +426,7 @@ public class Converter implements Callable<Void> {
         LOGGER.error("Failed to instantiate reader: {}", readerClass, e);
         return;
       }
+      reader.setOriginalMetadataPopulated(true);
       reader.setFlattenedResolutions(false);
       reader.setMetadataFiltered(true);
       reader.setMetadataStore(createMetadata());
