@@ -41,6 +41,7 @@ import loci.formats.FormatTools;
 import loci.formats.IFormatReader;
 import loci.formats.ImageReader;
 import loci.formats.ImageWriter;
+import loci.formats.Memoizer;
 import loci.formats.MetadataTools;
 import loci.formats.MissingLibraryException;
 import loci.formats.meta.IMetadata;
@@ -419,23 +420,25 @@ public class Converter implements Callable<Void> {
     // during conversion
     for (int i=0; i < maxWorkers; i++) {
       IFormatReader reader;
+      Memoizer memoizer;
       try {
         reader = (IFormatReader) readerClass.getConstructor().newInstance();
+        memoizer = new Memoizer(reader);
       }
       catch (Exception e) {
         LOGGER.error("Failed to instantiate reader: {}", readerClass, e);
         return;
       }
-      reader.setOriginalMetadataPopulated(true);
-      reader.setFlattenedResolutions(false);
-      reader.setMetadataFiltered(true);
-      reader.setMetadataStore(createMetadata());
-      reader.setId(inputPath.toString());
-      reader.setResolution(0);
+      memoizer.setOriginalMetadataPopulated(true);
+      memoizer.setFlattenedResolutions(false);
+      memoizer.setMetadataFiltered(true);
+      memoizer.setMetadataStore(createMetadata());
+      memoizer.setId(inputPath.toString());
+      memoizer.setResolution(0);
       if (reader instanceof MiraxReader) {
         ((MiraxReader) reader).setTileCache(tileCache);
       }
-      readers.add(new ChannelSeparator(reader));
+      readers.add(new ChannelSeparator(memoizer));
     }
 
     // Finally, perform conversion on all series
