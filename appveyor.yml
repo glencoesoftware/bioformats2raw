@@ -16,7 +16,7 @@ install:
 build: off
 
 build_script:
-  - ./gradlew build
+  - ./gradlew --stacktrace build
 
 after_test:
   - ./gradlew distZip
