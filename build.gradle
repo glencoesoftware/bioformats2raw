@@ -21,7 +21,7 @@ repositories {
         url 'https://repo.glencoesoftware.com/repository/n5-zarr-snapshots/'
     }
     maven {
-        url 'https://saalfeldlab.github.io/maven'
+        url 'https://maven.scijava.org/content/groups/public'
     }
 }
 
@@ -29,9 +29,9 @@ dependencies {
     implementation 'ome:formats-gpl:6.4.0'
     implementation 'info.picocli:picocli:4.2.0'
     implementation 'com.univocity:univocity-parsers:2.8.4'
-    implementation 'org.janelia.saalfeldlab:n5:2.1.6'
-    implementation 'org.janelia.saalfeldlab:n5-blosc:1.0.1'
-    implementation 'org.janelia.saalfeldlab:n5-zarr:0.0.3-SNAPSHOT'
+    implementation 'org.janelia.saalfeldlab:n5:2.2.0'
+    implementation 'org.janelia.saalfeldlab:n5-blosc:1.1.0'
+    implementation 'org.janelia.saalfeldlab:n5-zarr:0.0.4'
 
     // https://github.com/junit-team/junit5-samples/blob/master/junit5-migration-gradle/build.gradle
     def junit4Version        = '4.12'
