@@ -125,9 +125,7 @@ public class MiraxReader extends FormatReader {
 
   private transient JPEGXRCodec jpegxrCodec = new JPEGXRCodec();
 
-  private Cache<TilePointer, byte[]> tileCache = CacheBuilder.newBuilder()
-      .maximumSize(0)  // Disabled
-      .build();
+  private transient Cache<TilePointer, byte[]> tileCache;
 
   // -- Constructor --
 
@@ -197,6 +195,12 @@ public class MiraxReader extends FormatReader {
     // set background color to black instead of the stored fill color
     // this is to match the default behavior of Pannoramic Viewer
     Arrays.fill(buf, (byte) 0);
+
+    if (tileCache == null) {
+      tileCache = CacheBuilder.newBuilder()
+        .maximumSize(0)  // Disabled
+        .build();
+    }
 
     int index = getCoreIndex();
 
