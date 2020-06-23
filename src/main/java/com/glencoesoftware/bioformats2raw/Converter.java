@@ -7,6 +7,7 @@
  */
 package com.glencoesoftware.bioformats2raw;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
@@ -308,6 +309,12 @@ public class Converter implements Callable<Void> {
   )
   private volatile DimensionOrder dimensionOrder;
 
+  @Option(
+          names = "--memo-directory",
+          description = "Directory used to store .bfmemo cache files"
+  )
+  private volatile File memoDirectory;
+
   /** Scaling implementation that will be used during downsampling. */
   private volatile IImageScaler scaler = new SimpleImageScaler();
 
@@ -423,7 +430,13 @@ public class Converter implements Callable<Void> {
       Memoizer memoizer;
       try {
         reader = (IFormatReader) readerClass.getConstructor().newInstance();
-        memoizer = new Memoizer(reader);
+        if (memoDirectory == null) {
+          memoizer = new Memoizer(reader);
+        }
+        else {
+          memoizer = new Memoizer(
+            reader, Memoizer.DEFAULT_MINIMUM_ELAPSED, memoDirectory);
+        }
       }
       catch (Exception e) {
         LOGGER.error("Failed to instantiate reader: {}", readerClass, e);
