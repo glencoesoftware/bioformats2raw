@@ -10,7 +10,7 @@ image: Ubuntu
 stack: jdk 11
 
 install:
-  - sh: sudo apt-get update
+#  - sh: sudo apt-get update
   - sh: sudo apt-get install -y libblosc1
 
 build: off
