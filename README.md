@@ -56,9 +56,9 @@ By default, two additional readers (MiraxReader and PyramidTiffReader) are added
 Either or both of these readers can be excluded with the `--extra-readers` option:
 
     # only include the reader for .mrxs, exclude the reader for Faas pyramids
-    bin/bioformats2raw /path/to/file.tiff /path/to/n5-pyramid --extra-readers com.glencoesoftware.bioformats2raw.MiraxReader
+    bioformats2raw /path/to/file.tiff /path/to/n5-pyramid --extra-readers com.glencoesoftware.bioformats2raw.MiraxReader
     # don't add any additional readers, just use the ones provided by Bio-Formats
-    bin/bioformats2raw /path/to/file.mrxs /path/to/n5-pyramid --extra-readers
+    bioformats2raw /path/to/file.mrxs /path/to/n5-pyramid --extra-readers
 
 Performance
 ===========
