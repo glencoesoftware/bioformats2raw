@@ -15,26 +15,41 @@ The native libraries are not packaged with any relevant jars.  See also note in 
  * Mac OSX: `brew install c-blosc`
  * Ubuntu 18.04+: `apt-get install libblosc1`
 
+Installation
+============
+
+1. Download and unpack a release artifact:
+
+    https://github.com/glencoesoftware/bioformats2raw/releases
+
+Development Installation
+========================
+
+1. Clone the repository:
+
+    git clone git@github.com:glencoesoftware/bioformats2raw.git
+
+2. Run the Gradle build as required, a list of available tasks can be found by running:
+
+    ./gradlew tasks
+
+Eclipse Configuration
+=====================
+
+1. Run the Gradle Eclipse task:
+
+    ./gradlew eclipse
+
 Usage
 =====
 
-Build with Gradle:
-
-    gradle clean build
-
-Unpack the distribution:
-
-    cd build/distributions
-    unzip bioformats2raw-$VERSION.zip
-    cd bioformats2raw-$VERSION
-
 Run the conversion:
 
-    bin/bioformats2raw /path/to/file.mrxs /path/to/n5-pyramid --resolutions 6
-    bin/bioformats2raw /path/to/file.svs /path/to/n5-pyramid --resolutions 6
+    bioformats2raw /path/to/file.mrxs /path/to/n5-pyramid --resolutions 6
+    bioformats2raw /path/to/file.svs /path/to/n5-pyramid --resolutions 6
 
 Maximum tile dimensions are can be configured with the `--tile_width` and `--tile_height` options.  Defaults can be viewed with
-`bin/bioformats2raw --help`.  `--resolutions` is optional; if omitted, the number of resolutions is set so that the smallest
+`bioformats2raw --help`.  `--resolutions` is optional; if omitted, the number of resolutions is set so that the smallest
 resolution is no greater than 256x256.
 
 By default, two additional readers (MiraxReader and PyramidTiffReader) are added to the beginning of Bio-Formats' list of reader classes.
