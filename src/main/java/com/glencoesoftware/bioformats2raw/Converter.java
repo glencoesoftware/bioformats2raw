@@ -224,7 +224,10 @@ public class Converter implements Callable<Void> {
     names = "--max_workers",
     description = "Maximum number of workers (default: ${DEFAULT-VALUE})"
   )
-  private volatile int maxWorkers = Runtime.getRuntime().availableProcessors();
+  // cap the default worker count at 4, to prevent problems with
+  // large images that are not tiled
+  private volatile int maxWorkers =
+      (int) Math.min(4, Runtime.getRuntime().availableProcessors());
 
   @Option(
     names = "--max_cached_tiles",
