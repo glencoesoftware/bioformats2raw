@@ -25,8 +25,9 @@ repositories {
     }
 }
 
+def bfVersion = '6.4.0'
 dependencies {
-    implementation 'ome:formats-gpl:6.4.0'
+    implementation "ome:formats-gpl:${bfVersion}"
     implementation 'info.picocli:picocli:4.2.0'
     implementation 'com.univocity:univocity-parsers:2.8.4'
     implementation 'org.janelia.saalfeldlab:n5:2.2.0'
@@ -46,6 +47,27 @@ dependencies {
 
     // https://stackoverflow.com/questions/45462987/junit5-with-intellij-and-gradle
     testImplementation "org.junit.jupiter:junit-jupiter-params:${junitJupiterVersion}"
+}
+
+task generateSources {
+    def outputDir = file("$buildDir/resources/properties/com/glencoesoftware/bioformats2raw")
+    outputs.dir outputDir
+    doFirst {
+        def srcFile = new File(outputDir, "version.properties")
+        srcFile.parentFile.mkdirs()
+        srcFile.write("""Version=$project.version
+Bio-Formats version=${bfVersion}""")
+    }
+}
+compileJava.dependsOn generateSources
+compileJava.source generateSources.outputs.files, sourceSets.main.java
+
+sourceSets {
+    main {
+        resources {
+            srcDirs "$buildDir/resources/properties"
+        }
+    }
 }
 
 distributions {
