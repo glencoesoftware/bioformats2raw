@@ -16,7 +16,7 @@ ARG BUILD_IMAGE=gradle:6.2.1-jdk8
 #
 FROM ${BUILD_IMAGE} as build
 USER root
-RUN apt-get update -qq && apt-get install -y -qq zeroc-ice-all-runtime libblosc1
+RUN apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq zeroc-ice-all-runtime libblosc1
 RUN mkdir /bioformats2raw && chown 1000:1000 /bioformats2raw
 
 # Build all
