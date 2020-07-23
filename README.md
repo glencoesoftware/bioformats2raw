@@ -3,7 +3,8 @@ bioformats2raw converter
 
 Java application to convert image file formats, including .mrxs,
 to an intermediate N5/Zarr structure.
-The raw2ometiff application can then be used to produce a
+The [raw2ometiff](https://github.com/glencoesoftware/raw2ometiff)
+application can then be used to produce a
 Bio-Formats 5.9.x ("Faas") or Bio-Formats 6.x (true OME-TIFF) pyramid.
 
 Requirements
@@ -59,6 +60,10 @@ Either or both of these readers can be excluded with the `--extra-readers` optio
     bioformats2raw /path/to/file.tiff /path/to/n5-pyramid --extra-readers com.glencoesoftware.bioformats2raw.MiraxReader
     # don't add any additional readers, just use the ones provided by Bio-Formats
     bioformats2raw /path/to/file.mrxs /path/to/n5-pyramid --extra-readers
+
+The output in `/path/to/n5-pyramid` can be passed to `raw2ometiff` to produce
+an OME-TIFF that can be opened in ImageJ, imported into OMERO, etc. See
+https://github.com/glencoesoftware/raw2ometiff for more information.
 
 Performance
 ===========
