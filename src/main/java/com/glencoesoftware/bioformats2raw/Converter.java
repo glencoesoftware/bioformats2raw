@@ -7,11 +7,8 @@
  */
 package com.glencoesoftware.bioformats2raw;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -22,6 +19,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
@@ -107,8 +105,6 @@ public class Converter implements Callable<Void> {
 
   /** Version of the bioformats2raw layout. */
   public static final Integer LAYOUT = 1;
-
-  private static final String PROPERTIES_FILE = "version.properties";
 
   /** Enumeration that backs the --file_type flag. Instances can be used
    * as a factory method to create {@link N5Reader} and {@link N5Writer}
@@ -365,17 +361,11 @@ public class Converter implements Callable<Void> {
   @Override
   public Void call() throws Exception {
     if (printVersion) {
-      InputStream props = this.getClass().getResourceAsStream(PROPERTIES_FILE);
-      try (BufferedReader r =
-        new BufferedReader(new InputStreamReader(props)))
-      {
-        String line = r.readLine();
-        while (line != null) {
-          String[] property = line.split("=");
-          LOGGER.info("{}: {}", property[0], property[1]);
-          line = r.readLine();
-        }
-      }
+      String version = Optional.ofNullable(
+        this.getClass().getPackage().getImplementationVersion()
+        ).orElse("development");
+      LOGGER.info("Version = {}", version);
+      LOGGER.info("Bio-Formats version = {}", FormatTools.VERSION);
       return null;
     }
 
