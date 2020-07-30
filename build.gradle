@@ -26,7 +26,7 @@ repositories {
 }
 
 dependencies {
-    implementation "ome:formats-gpl:6.4.0"
+    implementation 'ome:formats-gpl:6.4.0'
     implementation 'info.picocli:picocli:4.2.0'
     implementation 'com.univocity:univocity-parsers:2.8.4'
     implementation 'org.janelia.saalfeldlab:n5:2.2.0'

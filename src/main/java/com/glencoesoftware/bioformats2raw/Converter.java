@@ -364,8 +364,8 @@ public class Converter implements Callable<Void> {
       String version = Optional.ofNullable(
         this.getClass().getPackage().getImplementationVersion()
         ).orElse("development");
-      LOGGER.info("Version = {}", version);
-      LOGGER.info("Bio-Formats version = {}", FormatTools.VERSION);
+      System.out.println("Version = " + version);
+      System.out.println("Bio-Formats version = " + FormatTools.VERSION);
       return null;
     }
 
