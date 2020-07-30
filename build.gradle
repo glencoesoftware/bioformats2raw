@@ -48,6 +48,15 @@ dependencies {
     testImplementation "org.junit.jupiter:junit-jupiter-params:${junitJupiterVersion}"
 }
 
+jar {
+    manifest {
+        attributes(
+            "Main-Class": mainClassName,
+            "Implementation-Version": version
+        )
+    }
+}
+
 distributions {
     main {
         contents {
