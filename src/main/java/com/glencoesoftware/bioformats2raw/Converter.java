@@ -31,6 +31,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import loci.common.Constants;
+import loci.common.DataTools;
 import loci.common.image.IImageScaler;
 import loci.common.image.SimpleImageScaler;
 import loci.common.services.DependencyException;
@@ -42,15 +43,15 @@ import loci.formats.FormatException;
 import loci.formats.FormatTools;
 import loci.formats.IFormatReader;
 import loci.formats.ImageReader;
-import loci.formats.ImageWriter;
 import loci.formats.Memoizer;
-import loci.formats.MetadataTools;
 import loci.formats.MissingLibraryException;
 import loci.formats.meta.IMetadata;
 import loci.formats.services.OMEXMLService;
 import loci.formats.services.OMEXMLServiceImpl;
 import ome.xml.model.enums.DimensionOrder;
 import ome.xml.model.enums.EnumerationException;
+import ome.xml.model.enums.PixelType;
+import ome.xml.model.primitives.PositiveInteger;
 
 import org.janelia.saalfeldlab.n5.ByteArrayDataBlock;
 import org.janelia.saalfeldlab.n5.Bzip2Compression;
@@ -326,6 +327,12 @@ public class Converter implements Callable<Void> {
   )
   private volatile File memoDirectory;
 
+  @Option(
+          names = "--pixel-type",
+          description = "Output pixel type"
+  )
+  private PixelType outputPixelType;
+
   /** Scaling implementation that will be used during downsampling. */
   private volatile IImageScaler scaler = new SimpleImageScaler();
 
@@ -484,6 +491,16 @@ public class Converter implements Callable<Void> {
 
         for (int s=0; s<meta.getImageCount(); s++) {
           meta.setPixelsBigEndian(true, s);
+
+          PixelType type = meta.getPixelsType(s);
+          int bfType =
+            getRealType(FormatTools.pixelTypeFromString(type.getValue()));
+          String realType = FormatTools.getPixelTypeString(bfType);
+          if (!type.getValue().equals(realType)) {
+            meta.setPixelsType(PixelType.fromString(realType), s);
+            meta.setPixelsSignificantBits(new PositiveInteger(
+              FormatTools.getBytesPerPixel(bfType) * 8), s);
+          }
         }
 
         String xml = getService().getOMEXML(meta);
@@ -664,7 +681,9 @@ public class Converter implements Callable<Void> {
     if (resolution == 0) {
       IFormatReader reader = readers.take();
       try {
-        return reader.openBytes(plane, xx, yy, width, height);
+        return changePixelType(
+          reader.openBytes(plane, xx, yy, width, height),
+          reader.getPixelType(), reader.isLittleEndian());
       }
       finally {
         readers.put(reader);
@@ -858,7 +877,7 @@ public class Converter implements Callable<Void> {
       sizeX = workingReader.getSizeX();
       sizeY = workingReader.getSizeY();
       imageCount = workingReader.getImageCount();
-      pixelType = workingReader.getPixelType();
+      pixelType = getRealType(workingReader.getPixelType());
     }
     finally {
       readers.put(workingReader);
@@ -1053,28 +1072,6 @@ public class Converter implements Callable<Void> {
     }
   }
 
-  /**
-   * Save the current series as a separate image (label/barcode, etc.).
-   *
-   * @param filename the relative path to the output file
-   */
-  public void saveExtraImage(String filename)
-    throws FormatException, IOException, InterruptedException
-  {
-    IFormatReader reader = readers.take();
-    try (ImageWriter writer = new ImageWriter()) {
-      IMetadata metadata = MetadataTools.createOMEXMLMetadata();
-      MetadataTools.populateMetadata(metadata, 0, null,
-        reader.getCoreMetadataList().get(reader.getCoreIndex()));
-      writer.setMetadataRetrieve(metadata);
-      writer.setId(outputPath.resolve(filename).toString());
-      writer.saveBytes(0, reader.openBytes(0));
-    }
-    finally {
-      readers.put(reader);
-    }
-  }
-
   private OMEXMLService getService() throws FormatException {
     try {
       ServiceFactory factory = new ServiceFactory();
@@ -1096,6 +1093,94 @@ public class Converter implements Callable<Void> {
     catch (ServiceException se) {
       throw new FormatException(se);
     }
+  }
+
+  private int getRealType(int srcPixelType) {
+    if (outputPixelType == null) {
+      return srcPixelType;
+    }
+    int bfPixelType =
+      FormatTools.pixelTypeFromString(outputPixelType.getValue());
+    if (bfPixelType == srcPixelType ||
+      (srcPixelType != FormatTools.FLOAT && srcPixelType != FormatTools.DOUBLE))
+    {
+      return srcPixelType;
+    }
+    return bfPixelType;
+  }
+
+  private byte[] changePixelType(byte[] tile, int srcPixelType,
+    boolean littleEndian)
+  {
+    if (outputPixelType == null) {
+      return tile;
+    }
+    int bfPixelType =
+      FormatTools.pixelTypeFromString(outputPixelType.getValue());
+
+    if (bfPixelType == srcPixelType ||
+      (srcPixelType != FormatTools.FLOAT && srcPixelType != FormatTools.DOUBLE))
+    {
+      return tile;
+    }
+
+    int bpp = FormatTools.getBytesPerPixel(bfPixelType);
+    int srcBpp = FormatTools.getBytesPerPixel(srcPixelType);
+    byte[] output = new byte[bpp * (tile.length / srcBpp)];
+
+    double[] range = getRange(bfPixelType);
+    if (range == null) {
+      throw new IllegalArgumentException(
+        "Cannot convert to " + outputPixelType);
+    }
+
+    if (srcPixelType == FormatTools.FLOAT) {
+      float[] pixels = DataTools.normalizeFloats(
+        (float[]) DataTools.makeDataArray(tile, 4, true, littleEndian));
+
+      for (int pixel=0; pixel<pixels.length; pixel++) {
+        long v = (long) ((pixels[pixel] * (range[1] - range[0])) + range[0]);
+        DataTools.unpackBytes(v, output, pixel * bpp, bpp, littleEndian);
+      }
+
+    }
+    else if (srcPixelType == FormatTools.DOUBLE) {
+      double[] pixels = DataTools.normalizeDoubles(
+        (double[]) DataTools.makeDataArray(tile, 8, true, littleEndian));
+
+      for (int pixel=0; pixel<pixels.length; pixel++) {
+        long v = (long) ((pixels[pixel] * (range[1] - range[0])) + range[0]);
+        DataTools.unpackBytes(v, output, pixel * bpp, bpp, littleEndian);
+      }
+    }
+
+    return output;
+  }
+
+  private double[] getRange(int bfPixeltype) {
+    double[] range = new double[2];
+    switch (bfPixeltype) {
+      case FormatTools.INT8:
+        range[0] = -128.0;
+        range[1] = 127.0;
+        break;
+      case FormatTools.UINT8:
+        range[0] = 0.0;
+        range[1] = 255.0;
+        break;
+      case FormatTools.INT16:
+        range[0] = -32768.0;
+        range[1] = 32767.0;
+        break;
+      case FormatTools.UINT16:
+        range[0] = 0.0;
+        range[1] = 65535.0;
+        break;
+      default:
+        return null;
+    }
+
+    return range;
   }
 
   private Slf4JStopWatch stopWatch() {
