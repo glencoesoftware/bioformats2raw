@@ -329,7 +329,8 @@ public class Converter implements Callable<Void> {
 
   @Option(
           names = "--pixel-type",
-          description = "Output pixel type"
+          description = "Pixel type to write if input data is " +
+                  " float or double (${COMPLETION-CANDIDATES})"
   )
   private PixelType outputPixelType;
 
@@ -1095,6 +1096,17 @@ public class Converter implements Callable<Void> {
     }
   }
 
+  /**
+   * Get the actual pixel type to write based upon the given input type
+   * and command line options.  Input and output pixel types are Bio-Formats
+   * types as defined in FormatTools.
+   *
+   * Changing the pixel type during export is only supported when the input
+   * type is float or double.
+   *
+   * @param srcPixelType pixel type of the input data
+   * @return pixel type of the output data
+   */
   private int getRealType(int srcPixelType) {
     if (outputPixelType == null) {
       return srcPixelType;
@@ -1109,6 +1121,14 @@ public class Converter implements Callable<Void> {
     return bfPixelType;
   }
 
+  /**
+   * Change the pixel type of the input tile as appropriate.
+   *
+   * @param tile input pixel data
+   * @param srcPixelType pixel type of the input data
+   * @param littleEndian true if tile bytes have little-endian ordering
+   * @return pixel data with the correct output pixel type
+   */
   private byte[] changePixelType(byte[] tile, int srcPixelType,
     boolean littleEndian)
   {
@@ -1157,9 +1177,17 @@ public class Converter implements Callable<Void> {
     return output;
   }
 
-  private double[] getRange(int bfPixeltype) {
+  /**
+   * Get the minimum and maximum pixel values for the given pixel type.
+   *
+   * @param bfPixelType pixel type as defined in FormatTools
+   * @return array of length 2 representing the minimum and maximum
+   *         pixel values, or null if converting to the given type is
+   *         not supported
+   */
+  private double[] getRange(int bfPixelType) {
     double[] range = new double[2];
-    switch (bfPixeltype) {
+    switch (bfPixelType) {
       case FormatTools.INT8:
         range[0] = -128.0;
         range[1] = 127.0;
