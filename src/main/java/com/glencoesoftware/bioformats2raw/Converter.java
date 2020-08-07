@@ -31,8 +31,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import loci.common.Constants;
-import loci.common.image.IImageScaler;
-import loci.common.image.SimpleImageScaler;
+import loci.common.DataTools;
 import loci.common.services.DependencyException;
 import loci.common.services.ServiceException;
 import loci.common.services.ServiceFactory;
@@ -75,6 +74,12 @@ import org.janelia.saalfeldlab.n5.blosc.BloscCompression;
 import org.perf4j.slf4j.Slf4JStopWatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import org.opencv.core.Core;
+import org.opencv.core.CvType;
+import org.opencv.core.Mat;
+import org.opencv.core.Size;
+import org.opencv.imgproc.Imgproc;
 
 import com.glencoesoftware.bioformats2raw.MiraxReader.TilePointer;
 import com.google.common.cache.Cache;
@@ -326,9 +331,6 @@ public class Converter implements Callable<Void> {
   )
   private volatile File memoDirectory;
 
-  /** Scaling implementation that will be used during downsampling. */
-  private volatile IImageScaler scaler = new SimpleImageScaler();
-
   /**
    * Set of readers that can be used concurrently, size will be equal to
    * {@link #maxWorkers}.
@@ -368,6 +370,9 @@ public class Converter implements Callable<Void> {
       System.out.println("Bio-Formats version = " + FormatTools.VERSION);
       return null;
     }
+
+    nu.pattern.OpenCV.loadShared();
+    System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
 
     ch.qos.logback.classic.Logger root = (ch.qos.logback.classic.Logger)
         LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
@@ -649,10 +654,61 @@ public class Converter implements Callable<Void> {
         }
       }
     }
-    return scaler.downsample(tile, width, height,
-        PYRAMID_SCALE, bytesPerPixel, false,
-        FormatTools.isFloatingPoint(pixelType),
-        1, false);
+
+    boolean floatingPoint = FormatTools.isFloatingPoint(pixelType);
+    Object pixels =
+      DataTools.makeDataArray(tile, bytesPerPixel, floatingPoint, false);
+    int scaleWidth = width / PYRAMID_SCALE;
+    int scaleHeight = height / PYRAMID_SCALE;
+
+    int cvType = getCvType(pixelType);
+    Mat sourceMat = new Mat(height, width, cvType);
+    Mat destMat = new Mat(scaleHeight, scaleWidth, cvType);
+    Size destSize = new Size(scaleWidth, scaleHeight);
+
+    try {
+      if (pixels instanceof byte[]) {
+        sourceMat.put(0, 0, (byte[]) pixels);
+        Imgproc.pyrDown(sourceMat, destMat, destSize);
+        byte[] dest = new byte[scaleWidth * scaleHeight];
+        destMat.get(0, 0, dest);
+        return dest;
+      }
+      else if (pixels instanceof short[]) {
+        sourceMat.put(0, 0, (short[]) pixels);
+        Imgproc.pyrDown(sourceMat, destMat, destSize);
+        short[] dest = new short[scaleWidth * scaleHeight];
+        destMat.get(0, 0, dest);
+        return DataTools.shortsToBytes(dest, false);
+      }
+      else if (pixels instanceof int[]) {
+        sourceMat.put(0, 0, (int[]) pixels);
+        Imgproc.pyrDown(sourceMat, destMat, destSize);
+        int[] dest = new int[scaleWidth * scaleHeight];
+        destMat.get(0, 0, dest);
+        return DataTools.intsToBytes(dest, false);
+      }
+      else if (pixels instanceof float[]) {
+        sourceMat.put(0, 0, (float[]) pixels);
+        Imgproc.pyrDown(sourceMat, destMat, destSize);
+        float[] dest = new float[scaleWidth * scaleHeight];
+        destMat.get(0, 0, dest);
+        return DataTools.floatsToBytes(dest, false);
+      }
+      else if (pixels instanceof double[]) {
+        sourceMat.put(0, 0, (double[]) pixels);
+        Imgproc.pyrDown(sourceMat, destMat, destSize);
+        double[] dest = new double[scaleWidth * scaleHeight];
+        destMat.get(0, 0, dest);
+        return DataTools.doublesToBytes(dest, false);
+      }
+    }
+    finally {
+      sourceMat.release();
+      destMat.release();
+    }
+    throw new IllegalArgumentException(
+      "Unsupported array type: " + pixels.getClass());
   }
 
   private byte[] getTile(
@@ -1095,6 +1151,35 @@ public class Converter implements Callable<Void> {
     }
     catch (ServiceException se) {
       throw new FormatException(se);
+    }
+  }
+
+  /**
+   * Convert Bio-Formats pixel type to OpenCV pixel type.
+   *
+   * @param bfPixelType Bio-Formats pixels type
+   * @return corresponding OpenCV pixel type
+   */
+  private int getCvType(int bfPixelType) {
+    switch (bfPixelType) {
+      case FormatTools.UINT8:
+        return CvType.CV_8U;
+      case FormatTools.INT8:
+        return CvType.CV_8S;
+      case FormatTools.UINT16:
+        return CvType.CV_16U;
+      case FormatTools.INT16:
+        return CvType.CV_16S;
+      case FormatTools.INT32:
+        return CvType.CV_32S;
+      case FormatTools.FLOAT:
+        return CvType.CV_32F;
+      case FormatTools.DOUBLE:
+        return CvType.CV_64F;
+      default:
+        throw new IllegalArgumentException(
+          "Unsupported pixel type: " +
+           FormatTools.getPixelTypeString(bfPixelType));
     }
   }
 
