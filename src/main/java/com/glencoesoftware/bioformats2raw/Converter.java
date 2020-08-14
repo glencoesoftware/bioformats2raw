@@ -1061,6 +1061,11 @@ public class Converter implements Callable<Void> {
     List<Map<String, Object>> multiscales =
             new ArrayList<Map<String, Object>>();
     Map<String, Object> multiscale = new HashMap<String, Object>();
+    Map<String, String> metadata = new HashMap<String, String>();
+    metadata.put("method", "org.opencv.imgproc.Imgproc.pyrDown");
+    metadata.put("version", Core.VERSION);
+    multiscale.put("metadata", metadata);
+    multiscale.put("type", "gaussian");
     multiscale.put("version", "0.1");
     multiscales.add(multiscale);
     List<Map<String, String>> datasets = new ArrayList<Map<String, String>>();
