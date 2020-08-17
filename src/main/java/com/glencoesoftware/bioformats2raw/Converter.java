@@ -687,35 +687,35 @@ public class Converter implements Callable<Void> {
     try {
       if (pixels instanceof byte[]) {
         sourceMat.put(0, 0, (byte[]) pixels);
-        Imgproc.pyrDown(sourceMat, destMat, destSize);
+        opencvDownsample(sourceMat, destMat, destSize);
         byte[] dest = new byte[scaleWidth * scaleHeight];
         destMat.get(0, 0, dest);
         return dest;
       }
       else if (pixels instanceof short[]) {
         sourceMat.put(0, 0, (short[]) pixels);
-        Imgproc.pyrDown(sourceMat, destMat, destSize);
+        opencvDownsample(sourceMat, destMat, destSize);
         short[] dest = new short[scaleWidth * scaleHeight];
         destMat.get(0, 0, dest);
         return DataTools.shortsToBytes(dest, false);
       }
       else if (pixels instanceof int[]) {
         sourceMat.put(0, 0, (int[]) pixels);
-        Imgproc.pyrDown(sourceMat, destMat, destSize);
+        opencvDownsample(sourceMat, destMat, destSize);
         int[] dest = new int[scaleWidth * scaleHeight];
         destMat.get(0, 0, dest);
         return DataTools.intsToBytes(dest, false);
       }
       else if (pixels instanceof float[]) {
         sourceMat.put(0, 0, (float[]) pixels);
-        Imgproc.pyrDown(sourceMat, destMat, destSize);
+        opencvDownsample(sourceMat, destMat, destSize);
         float[] dest = new float[scaleWidth * scaleHeight];
         destMat.get(0, 0, dest);
         return DataTools.floatsToBytes(dest, false);
       }
       else if (pixels instanceof double[]) {
         sourceMat.put(0, 0, (double[]) pixels);
-        Imgproc.pyrDown(sourceMat, destMat, destSize);
+        opencvDownsample(sourceMat, destMat, destSize);
         double[] dest = new double[scaleWidth * scaleHeight];
         destMat.get(0, 0, dest);
         return DataTools.doublesToBytes(dest, false);
@@ -1086,9 +1086,11 @@ public class Converter implements Callable<Void> {
       metadata.put("version", "Bio-Formats " + FormatTools.VERSION);
     }
     else {
-      metadata.put("method", "org.opencv.imgproc.Imgproc.pyrDown");
+      String method =
+        downsampling == Downsampling.GAUSSIAN ? "pyrDown" : "resize";
+      metadata.put("method", "org.opencv.imgproc.Imgproc." + method);
       metadata.put("version", Core.VERSION);
-      multiscale.put("type", "gaussian");
+      multiscale.put("type", downsampling.getName());
     }
     multiscale.put("metadata", metadata);
     multiscale.put("version", "0.1");
@@ -1210,6 +1212,22 @@ public class Converter implements Callable<Void> {
         throw new IllegalArgumentException(
           "Unsupported pixel type: " +
            FormatTools.getPixelTypeString(bfPixelType));
+    }
+  }
+
+  /**
+   * Downsample the given source tile using OpenCV.
+   *
+   * @param source source matrix
+   * @param dest destination matrix
+   * @param destSize destination matrix size
+   */
+  private void opencvDownsample(Mat source, Mat dest, Size destSize) {
+    if (downsampling == Downsampling.GAUSSIAN) {
+      Imgproc.pyrDown(source, dest, destSize);
+    }
+    else {
+      Imgproc.resize(source, dest, destSize, 0, 0, downsampling.getCode());
     }
   }
 

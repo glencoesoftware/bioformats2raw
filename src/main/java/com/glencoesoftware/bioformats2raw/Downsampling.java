@@ -8,11 +8,37 @@
 
 package com.glencoesoftware.bioformats2raw;
 
+import org.opencv.imgproc.Imgproc;
 
 /**
  */
 public enum Downsampling {
-  SIMPLE,
-  GAUSSIAN
-  // TODO
+  SIMPLE(-1, "simple"),
+  GAUSSIAN(-1, "gaussian"),
+  AREA(Imgproc.INTER_AREA, "area"),
+  LINEAR(Imgproc.INTER_LINEAR, "linear"),
+  CUBIC(Imgproc.INTER_CUBIC, "cubic"),
+  LANCZOS(Imgproc.INTER_LANCZOS4, "lanczos");
+
+  private final int code;
+  private final String name;
+
+  private Downsampling(int newCode, String newName) {
+    this.code = newCode;
+    this.name = newName;
+  }
+
+  /**
+   * @return OpenCV interpolation code, or -1 if not defined
+   */
+  public int getCode() {
+    return code;
+  }
+
+  /**
+   * @return name to be written in metadata
+   */
+  public String getName() {
+    return name;
+  }
 }
