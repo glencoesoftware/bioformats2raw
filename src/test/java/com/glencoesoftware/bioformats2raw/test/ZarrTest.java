@@ -478,7 +478,7 @@ public class ZarrTest {
         .toByteBuffer();
     // Last row first pixel should be the 2x2 downsampled value;
     // test will break if the downsampling algorithm changes
-    Assert.assertEquals(51, tile.get(75 * 24));
+    Assert.assertEquals(50, tile.get(75 * 24));
   }
 
   /**
@@ -503,7 +503,7 @@ public class ZarrTest {
         .toByteBuffer().asShortBuffer();
     // Last row first pixel should be the 2x2 downsampled value;
     // test will break if the downsampling algorithm changes
-    Assert.assertEquals(51, tile.get(75 * 24));
+    Assert.assertEquals(50, tile.get(75 * 24));
   }
 
   /**
