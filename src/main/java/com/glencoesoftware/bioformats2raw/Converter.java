@@ -32,6 +32,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import loci.common.Constants;
 import loci.common.DataTools;
+import loci.common.image.IImageScaler;
+import loci.common.image.SimpleImageScaler;
 import loci.common.services.DependencyException;
 import loci.common.services.ServiceException;
 import loci.common.services.ServiceFactory;
@@ -330,6 +332,15 @@ public class Converter implements Callable<Void> {
           description = "Directory used to store .bfmemo cache files"
   )
   private volatile File memoDirectory;
+
+  @Option(
+          names = "--downsample-type",
+          description = "Tile downsampling algorithm (${COMPLETION-CANDIDATES})"
+  )
+  private volatile Downsampling downsampling = Downsampling.SIMPLE;
+
+  /** Scaling implementation that will be used during downsampling. */
+  private volatile IImageScaler scaler = new SimpleImageScaler();
 
   /**
    * Set of readers that can be used concurrently, size will be equal to
@@ -653,6 +664,13 @@ public class Converter implements Callable<Void> {
           subTile.get(tile, destPos, destLength);
         }
       }
+    }
+
+    if (downsampling == Downsampling.SIMPLE) {
+      return scaler.downsample(tile, width, height,
+        PYRAMID_SCALE, bytesPerPixel, false,
+        FormatTools.isFloatingPoint(pixelType),
+        1, false);
     }
 
     boolean floatingPoint = FormatTools.isFloatingPoint(pixelType);
@@ -1062,10 +1080,17 @@ public class Converter implements Callable<Void> {
             new ArrayList<Map<String, Object>>();
     Map<String, Object> multiscale = new HashMap<String, Object>();
     Map<String, String> metadata = new HashMap<String, String>();
-    metadata.put("method", "org.opencv.imgproc.Imgproc.pyrDown");
-    metadata.put("version", Core.VERSION);
+
+    if (downsampling == Downsampling.SIMPLE) {
+      metadata.put("method", "loci.common.image.SimpleImageScaler");
+      metadata.put("version", "Bio-Formats " + FormatTools.VERSION);
+    }
+    else {
+      metadata.put("method", "org.opencv.imgproc.Imgproc.pyrDown");
+      metadata.put("version", Core.VERSION);
+      multiscale.put("type", "gaussian");
+    }
     multiscale.put("metadata", metadata);
-    multiscale.put("type", "gaussian");
     multiscale.put("version", "0.1");
     multiscales.add(multiscale);
     List<Map<String, String>> datasets = new ArrayList<Map<String, String>>();
