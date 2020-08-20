@@ -377,6 +377,11 @@ public class Converter implements Callable<Void> {
     else {
       root.setLevel(Level.INFO);
     }
+
+    if (Files.exists(outputPath)) {
+      LOGGER.warn("Output path {} already exists", outputPath);
+    }
+
     readers = new ArrayBlockingQueue<IFormatReader>(maxWorkers);
     queue = new LimitedQueue<Runnable>(maxWorkers);
     executor = new ThreadPoolExecutor(
