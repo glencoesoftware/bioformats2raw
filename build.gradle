@@ -89,5 +89,5 @@ publishing {
 }
 
 checkstyle {
-    toolVersion = "8.26"
+    toolVersion = "8.29"
 }
