@@ -80,6 +80,9 @@ public class ZarrTest {
     catch (RuntimeException rt) {
       throw rt;
     }
+    catch (AssertionError ae) {
+      throw ae;
+    }
     catch (Throwable t) {
       throw new RuntimeException(t);
     }
