@@ -12,8 +12,10 @@ import java.io.IOException;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -55,6 +57,7 @@ import ome.xml.model.enums.EnumerationException;
 import org.janelia.saalfeldlab.n5.ByteArrayDataBlock;
 import org.janelia.saalfeldlab.n5.Bzip2Compression;
 import org.janelia.saalfeldlab.n5.Compression;
+import org.janelia.saalfeldlab.n5.CompressionAdapter;
 import org.janelia.saalfeldlab.n5.DataBlock;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
@@ -79,10 +82,26 @@ import org.slf4j.LoggerFactory;
 import com.glencoesoftware.bioformats2raw.MiraxReader.TilePointer;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.univocity.parsers.csv.CsvParser;
 import com.univocity.parsers.csv.CsvParserSettings;
 
 import ch.qos.logback.classic.Level;
+import io.tiledb.java.api.Array;
+import io.tiledb.java.api.ArraySchema;
+import io.tiledb.java.api.ArrayType;
+import io.tiledb.java.api.Attribute;
+import io.tiledb.java.api.Context;
+import io.tiledb.java.api.Datatype;
+import io.tiledb.java.api.Dimension;
+import io.tiledb.java.api.Domain;
+import io.tiledb.java.api.Layout;
+import io.tiledb.java.api.NativeArray;
+import io.tiledb.java.api.Pair;
+import io.tiledb.java.api.Query;
+import io.tiledb.java.api.QueryType;
+import io.tiledb.java.api.TileDBError;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -106,30 +125,10 @@ public class Converter implements Callable<Void> {
   /** Version of the bioformats2raw layout. */
   public static final Integer LAYOUT = 1;
 
-  /** Enumeration that backs the --file_type flag. Instances can be used
-   * as a factory method to create {@link N5Reader} and {@link N5Writer}
-   * instances.
+  /**
+   * Enumeration that backs the --file_type flag.
    */
-  enum FileType {
-    n5 {
-      N5Reader reader(String path) throws IOException {
-        return new N5FSReader(path);
-      }
-      N5Writer writer(String path) throws IOException {
-        return new N5FSWriter(path);
-      }
-    },
-    zarr {
-      N5Reader reader(String path) throws IOException {
-        return new N5ZarrReader(path);
-      }
-      N5Writer writer(String path) throws IOException {
-        return new N5ZarrWriter(path);
-      }
-    };
-    abstract N5Reader reader(String path) throws IOException;
-    abstract N5Writer writer(String path) throws IOException;
-  }
+  enum FileType { n5, zarr, tiledb };
 
   static class N5Compression {
     enum CompressionTypes { blosc, bzip2, gzip, lz4, raw, xz };
@@ -318,7 +317,7 @@ public class Converter implements Callable<Void> {
                   "output file [Can break compatibility with raw2ometiff] " +
                   "(${COMPLETION-CANDIDATES})"
   )
-  private volatile DimensionOrder dimensionOrder;
+  private volatile DimensionOrder dimensionOrder = null;
 
   @Option(
           names = "--memo-directory",
@@ -357,6 +356,21 @@ public class Converter implements Callable<Void> {
 
   /** Current number of tiles processed at the current resolution. */
   private volatile AtomicInteger nTile;
+
+  /** Gson instance configured similarly to the N5 library itself. */
+  private final Gson gson;
+
+  /**
+   * Default constructor.
+   */
+  public Converter() {
+    gson = new GsonBuilder()
+        .registerTypeAdapter(DataType.class, new DataType.JsonAdapter())
+        .registerTypeHierarchyAdapter(
+            Compression.class, CompressionAdapter.getJsonAdapter())
+        .disableHtmlEscaping()
+        .create();
+  }
 
   @Override
   public Void call() throws Exception {
@@ -398,9 +412,20 @@ public class Converter implements Callable<Void> {
       throws FormatException, IOException, InterruptedException,
              EnumerationException
   {
-
-    if (fileType.equals(FileType.zarr) && pyramidName.equals("data.n5")) {
-      pyramidName = "data.zarr";
+    if (pyramidName.equals("data.n5")) {
+      switch (fileType) {
+        case n5:
+          break;
+        case zarr:
+          pyramidName = "data.zarr";
+          break;
+        case tiledb:
+          pyramidName = "data.tiledb";
+          break;
+        default:
+          throw new IllegalArgumentException(
+              "Unsupported file type: " + fileType);
+      }
     }
 
     if (!pyramidName.equals("data.n5") ||
@@ -538,10 +563,11 @@ public class Converter implements Callable<Void> {
    * @throws IOException
    * @throws InterruptedException
    * @throws EnumerationException
+   * @throws TileDBError
    */
   public void write(int series)
     throws FormatException, IOException, InterruptedException,
-           EnumerationException
+           EnumerationException, TileDBError
   {
     readers.forEach((reader) -> {
       reader.setSeries(series);
@@ -574,19 +600,381 @@ public class Converter implements Callable<Void> {
     return args.toArray();
   }
 
+  /**
+   * Converts from an N5 data type to a TileDB data type.
+   * @param dataType N5 data type
+   * @return TileDB data type
+   */
+  public static DataType n5TypeFromTileDbType(Datatype dataType) {
+    switch (dataType) {
+      case TILEDB_INT8:
+        return DataType.INT8;
+      case TILEDB_UINT8:
+        return DataType.UINT8;
+      case TILEDB_INT16:
+        return DataType.INT16;
+      case TILEDB_UINT16:
+        return DataType.UINT16;
+      case TILEDB_INT32:
+        return DataType.INT32;
+      case TILEDB_UINT32:
+        return DataType.UINT32;
+      case TILEDB_INT64:
+        return DataType.INT64;
+      case TILEDB_UINT64:
+        return DataType.UINT64;
+      case TILEDB_FLOAT32:
+        return DataType.FLOAT32;
+      case TILEDB_FLOAT64:
+        return DataType.FLOAT64;
+      default:
+        throw new IllegalArgumentException(
+            "Unsupported TileDB datatype: " + dataType);
+    }
+  }
+
+  /**
+   * Converts from a TileDB data type to an N5 data type.
+   * @param dataType TileDB data type
+   * @return N5 data type
+   */
+  public static Datatype tileDbTypeFromN5Type(DataType dataType) {
+    switch (dataType) {
+      case INT8:
+        return Datatype.TILEDB_INT8;
+      case UINT8:
+        return Datatype.TILEDB_UINT8;
+      case INT16:
+        return Datatype.TILEDB_INT16;
+      case UINT16:
+        return Datatype.TILEDB_UINT16;
+      case INT32:
+        return Datatype.TILEDB_INT32;
+      case UINT32:
+        return Datatype.TILEDB_UINT32;
+      case INT64:
+        return Datatype.TILEDB_INT64;
+      case UINT64:
+        return Datatype.TILEDB_UINT64;
+      case FLOAT32:
+        return Datatype.TILEDB_FLOAT32;
+      case FLOAT64:
+        return Datatype.TILEDB_FLOAT64;
+      default:
+        throw new IllegalArgumentException(
+            "Unsupported N5 datatype: " + dataType);
+    }
+  }
+
+  private DatasetAttributes getDatasetAttributes(
+      String pyramidPath, String pathName) throws IOException, TileDBError
+  {
+    switch (fileType) {
+      case n5: {
+        N5Reader n5 = new N5FSReader(pyramidPath);
+        return n5.getDatasetAttributes(pathName);
+      }
+      case zarr: {
+        N5ZarrReader n5 = new N5ZarrReader(pyramidPath);
+        return n5.getDatasetAttributes(pathName);
+      }
+      case tiledb: {
+        pathName = pathName.replaceAll("^/+", "");
+        String uri = Paths.get(pyramidPath).resolve(pathName).toString();
+        try (Context ctx = new Context();
+             Array array = new Array(ctx, uri, QueryType.TILEDB_READ);
+             ArraySchema schema = array.getSchema();
+             Domain domain = schema.getDomain())
+        {
+          int ndim = (int) domain.getNDim();
+          final long[] dimensions = new long[ndim];
+          final int[] blockSize = new int[ndim];
+          for (int i = 0; i < ndim; i++) {
+            try (Dimension<Long> dimension = domain.getDimension(i)) {
+              Pair<Long, Long> dimensionDomain = dimension.getDomain();
+              dimensions[ndim - i - 1] = dimensionDomain.getSecond() + 1;
+              blockSize[ndim - i - 1] = dimension.getTileExtent().intValue();
+            }
+          }
+          Attribute attribute = schema.getAttribute("a1");
+          DataType dataType = n5TypeFromTileDbType(attribute.getType());
+          // TODO: Compression type conversion?
+          return new DatasetAttributes(
+              dimensions, blockSize, dataType, new RawCompression());
+        }
+      }
+      default:
+        throw new IllegalArgumentException(
+            "Unsupported file type: " + fileType);
+    }
+  }
+
+  private void createDataset(
+      String pyramidPath, String resolutionString, long[] dimensions,
+      int[] blockSize, DataType dataType, Compression compression)
+          throws IOException, TileDBError
+  {
+    switch (fileType) {
+      case n5: {
+        N5Writer n5 = new N5FSWriter(pyramidPath);
+        n5.createDataset(
+            resolutionString, dimensions, blockSize, dataType, compression);
+        break;
+      }
+      case zarr: {
+        N5Writer n5 = new N5ZarrWriter(pyramidPath);
+        n5.createDataset(
+            resolutionString, dimensions, blockSize, dataType, compression);
+        break;
+      }
+      case tiledb: {
+        resolutionString = resolutionString.replaceAll("^/+", "");
+        Path path = Paths.get(pyramidPath).resolve(resolutionString);
+        Files.createDirectories(path.getParent());
+        Datatype datatype = tileDbTypeFromN5Type(dataType);
+        try (Context ctx = new Context();
+             Domain domain = new Domain(ctx);
+             Attribute a1 = new Attribute(ctx, "a1", datatype);
+             ArraySchema schema = new ArraySchema(ctx, ArrayType.TILEDB_DENSE);
+            )
+        {
+          // FIXME: Need to handle compression
+          for (int i = dimensions.length - 1; i >= 0; i--) {
+            long dimension = dimensions[i];
+            long extent = blockSize[i];
+            domain.addDimension(new Dimension<Long>(
+                ctx, dimensionOrder.toString().substring(i).toLowerCase(),
+                Long.class, new Pair<Long, Long>(0L, dimension - 1), extent));
+          }
+          schema.setDomain(domain);
+          schema.addAttribute(a1);
+          Array.create(path.toString(), schema);
+        }
+        break;
+      }
+      default:
+        throw new IllegalArgumentException(
+            "Unsupported file type: " + fileType);
+    }
+  }
+
+  private DataBlock<?> readBlock(
+      String pyramidPath, String pathName, DatasetAttributes datasetAttributes,
+      long[] gridPosition)
+          throws IOException, TileDBError
+  {
+    switch (fileType) {
+      case n5: {
+        N5Reader n5 = new N5FSReader(pyramidPath);
+        return n5.readBlock(pathName, datasetAttributes, gridPosition);
+      }
+      case zarr: {
+        N5ZarrReader n5 = new N5ZarrReader(pyramidPath);
+        return n5.readBlock(pathName, datasetAttributes, gridPosition);
+      }
+      case tiledb: {
+        pathName = pathName.replaceAll("^/+", "");
+        String uri = Paths.get(pyramidPath).resolve(pathName).toString();
+        long[] dimensions = datasetAttributes.getDimensions();
+        long sizeX = dimensions[0];
+        long sizeY = dimensions[1];
+        int[] blockSize = datasetAttributes.getBlockSize().clone();
+        int blockSizeX = blockSize[0];
+        int blockSizeY = blockSize[1];
+        long yStart = gridPosition[1] * blockSizeY;
+        long yEnd = Math.min(sizeY - 1, yStart + blockSizeY - 1);
+        int ySize = (int) (yEnd - yStart + 1);
+        blockSize[1] = ySize;
+        long xStart = gridPosition[0] * blockSizeX;
+        long xEnd = Math.min(sizeX - 1, xStart + blockSizeX - 1);
+        int xSize = (int) (xEnd - xStart + 1);
+        long[] offsets = new long[] {
+          gridPosition[4], gridPosition[4],  // Z, C, or T
+          gridPosition[3], gridPosition[3],  // Z, C, or T
+          gridPosition[2], gridPosition[2],  // Z, C, or T
+          yStart, yEnd,
+          xStart, xEnd
+        };
+        blockSize[0] = xSize;
+        ByteBuffer buffer;
+        try (Context ctx = new Context();
+             Array array = new Array(ctx, uri, QueryType.TILEDB_READ);
+             Query query = new Query(array, QueryType.TILEDB_READ);
+             NativeArray subarray = new NativeArray(ctx, offsets, Long.class);
+            )
+        {
+          query.setLayout(Layout.TILEDB_ROW_MAJOR);
+          DataType dataType = datasetAttributes.getDataType();
+          int bytesPerPixel = tileDbTypeFromN5Type(dataType).getNativeSize();
+          int size = ySize * xSize * bytesPerPixel;
+          buffer = ByteBuffer.allocateDirect(size)
+              .order(ByteOrder.nativeOrder());
+
+          query.setSubarray(subarray);
+          query.setBuffer("a1", buffer);
+          query.submit();
+          DataBlock<?> dataBlock =
+              dataType.createDataBlock(blockSize, gridPosition);
+
+          switch (dataType) {
+            case INT8:
+            case UINT8:
+              buffer.get((byte[]) dataBlock.getData());
+              break;
+            case INT16:
+            case UINT16:
+              buffer.asShortBuffer().get((short[]) dataBlock.getData());
+              break;
+            case INT32:
+            case UINT32:
+              buffer.asIntBuffer().get((int[]) dataBlock.getData());
+              break;
+            case INT64:
+            case UINT64:
+              buffer.asLongBuffer().get((long[]) dataBlock.getData());
+              break;
+            case FLOAT32:
+              buffer.asFloatBuffer().get((float[]) dataBlock.getData());
+              break;
+            case FLOAT64:
+              buffer.asDoubleBuffer().get((double[]) dataBlock.getData());
+              break;
+            default:
+              throw new IllegalArgumentException(
+                  "Unsupported N5 datatype: " + dataType);
+          }
+          return dataBlock;
+        }
+      }
+      default:
+        throw new IllegalArgumentException(
+            "Unsupported file type: " + fileType);
+    }
+  }
+
+  private DataBlock<?> writeBlock(
+      String pyramidPath, String pathName, DatasetAttributes datasetAttributes,
+      DataBlock<?> dataBlock)
+          throws IOException, TileDBError
+  {
+    switch (fileType) {
+      case n5: {
+        N5Writer n5 = new N5FSWriter(pyramidPath);
+        n5.writeBlock(pathName, datasetAttributes, dataBlock);
+        break;
+      }
+      case zarr: {
+        N5Writer n5 = new N5ZarrWriter(pyramidPath);
+        n5.writeBlock(pathName, datasetAttributes, dataBlock);
+        break;
+      }
+      case tiledb: {
+        pathName = pathName.replaceAll("^/+", "");
+        long[] gridPosition = dataBlock.getGridPosition();
+        String uri = Paths.get(pyramidPath).resolve(pathName).toString();
+        long[] dimensions = datasetAttributes.getDimensions();
+        long sizeX = dimensions[0];
+        long sizeY = dimensions[1];
+        int[] blockSize = datasetAttributes.getBlockSize();
+        int blockSizeX = blockSize[0];
+        int blockSizeY = blockSize[1];
+        long yStart = gridPosition[1] * blockSizeY;
+        long yEnd = Math.min(sizeY - 1, yStart + blockSizeY - 1);
+        int ySize = (int) (yEnd - yStart + 1);
+        long xStart = gridPosition[0] * blockSizeX;
+        long xEnd = Math.min(sizeX - 1, xStart + blockSizeX - 1);
+        int xSize = (int) (xEnd - xStart + 1);
+        long[] offsets = new long[] {
+          gridPosition[4], gridPosition[4],  // Z, C, or T
+          gridPosition[3], gridPosition[3],  // Z, C, or T
+          gridPosition[2], gridPosition[2],  // Z, C, or T
+          yStart, yEnd,
+          xStart, xEnd
+        };
+        ByteBuffer buffer;
+        try (Context ctx = new Context();
+             Array array = new Array(ctx, uri, QueryType.TILEDB_WRITE);
+             Query query = new Query(array, QueryType.TILEDB_WRITE);
+             NativeArray subarray = new NativeArray(ctx, offsets, Long.class);
+            )
+        {
+          query.setLayout(Layout.TILEDB_ROW_MAJOR);
+
+          DataType dataType = datasetAttributes.getDataType();
+          int bytesPerPixel = tileDbTypeFromN5Type(dataType).getNativeSize();
+          int size = ySize * xSize * bytesPerPixel;
+          buffer = ByteBuffer.allocateDirect(size)
+              .order(ByteOrder.nativeOrder());
+          buffer.put(dataBlock.toByteBuffer().array());
+          query.setSubarray(subarray);
+          query.setBuffer("a1", buffer);
+          query.submit();
+        }
+        break;
+      }
+      default:
+        throw new IllegalArgumentException(
+            "Unsupported file type: " + fileType);
+    }
+    return null;
+  }
+
+  private void setAttribute(
+      String pyramidPath, String pathName, String key, Object value)
+          throws IOException, TileDBError
+  {
+    switch (fileType) {
+      case n5: {
+        N5Writer n5 = new N5FSWriter(pyramidPath);
+        n5.setAttribute(pathName, key, value);
+        break;
+      }
+      case zarr: {
+        N5Writer n5 = new N5ZarrWriter(pyramidPath);
+        n5.setAttribute(pathName, key, value);
+        break;
+      }
+      case tiledb: {
+        pathName = pathName.replaceAll("^/+", "");
+        String uri = Paths.get(pyramidPath).resolve(pathName).toString();
+        try (Context ctx = new Context()) {
+          if (!Array.exists(ctx, uri)) {
+            // FIXME: Hack, can we do this better?
+            createDataset(
+                pyramidPath, pathName, new long[] {1}, new int[] {1},
+                DataType.INT8, null);
+          }
+
+          try (Array array = new Array(ctx, uri, QueryType.TILEDB_WRITE);
+               NativeArray metadata = new NativeArray(
+                   ctx, gson.toJson(value).getBytes(StandardCharsets.UTF_8),
+                   byte[].class)
+              )
+          {
+            array.putMetadata(key, metadata);
+          }
+        }
+        break;
+      }
+      default:
+        throw new IllegalArgumentException(
+            "Unsupported file type: " + fileType);
+    }
+  }
+
   private byte[] getTileDownsampled(
       int series, int resolution, int plane, int xx, int yy,
       int width, int height)
           throws FormatException, IOException, InterruptedException,
-                 EnumerationException
+                 EnumerationException, TileDBError
   {
     final String pathName = "/" +
         String.format(scaleFormatString,
             getScaleFormatStringArgs(series, resolution - 1));
     final String pyramidPath = outputPath.resolve(pyramidName).toString();
-    final N5Reader n5 = fileType.reader(pyramidPath);
 
-    DatasetAttributes datasetAttributes = n5.getDatasetAttributes(pathName);
+    DatasetAttributes datasetAttributes = getDatasetAttributes(
+        pyramidPath, pathName);
     long[] dimensions = datasetAttributes.getDimensions();
     int[] blockSizes = datasetAttributes.getBlockSize();
     int activeTileWidth = blockSizes[0];
@@ -625,8 +1013,8 @@ public class Converter implements Callable<Void> {
           startGridPosition[0] + xBlock, startGridPosition[1] + yBlock,
           startGridPosition[2], startGridPosition[3], startGridPosition[4]
         };
-        ByteBuffer subTile = n5.readBlock(
-          pathName, datasetAttributes, gridPosition
+        ByteBuffer subTile = readBlock(
+            pyramidPath, pathName, datasetAttributes, gridPosition
         ).toByteBuffer();
 
         int destLength = blockWidth * bytesPerPixel;
@@ -659,7 +1047,7 @@ public class Converter implements Callable<Void> {
       int series, int resolution, int plane, int xx, int yy,
       int width, int height)
           throws FormatException, IOException, InterruptedException,
-                 EnumerationException
+                 EnumerationException, TileDBError
   {
     if (resolution == 0) {
       IFormatReader reader = readers.take();
@@ -698,8 +1086,7 @@ public class Converter implements Callable<Void> {
     int sizeZ = reader.getSizeZ();
     int sizeC = reader.getSizeC();
     int sizeT = reader.getSizeT();
-    String o = dimensionOrder != null? dimensionOrder.toString()
-        : reader.getDimensionOrder();
+    String o = this.dimensionOrder.toString();
     long[] dimensions = new long[] {scaledWidth, scaledHeight, 0, 0, 0};
     dimensions[o.indexOf("Z")] = sizeZ;
     dimensions[o.indexOf("C")] = sizeC;
@@ -720,8 +1107,7 @@ public class Converter implements Callable<Void> {
   private long[] getGridPosition(
     IFormatReader reader, int x, int y, int plane) throws EnumerationException
   {
-    String o = dimensionOrder != null? dimensionOrder.toString()
-        : reader.getDimensionOrder();
+    String o = this.dimensionOrder.toString();
     int[] zct = reader.getZCTCoords(plane);
     long[] gridPosition = new long[] {x, y, 0, 0, 0};
     gridPosition[o.indexOf("Z")] = zct[0];
@@ -734,14 +1120,14 @@ public class Converter implements Callable<Void> {
       int series, int resolution, int plane, int xx, int yy,
       int width, int height)
         throws EnumerationException, FormatException, IOException,
-          InterruptedException
+          InterruptedException, TileDBError
   {
     String pathName =
         "/" + String.format(scaleFormatString,
             getScaleFormatStringArgs(series, resolution));
     final String pyramidPath = outputPath.resolve(pyramidName).toString();
-    final N5Writer n5 = fileType.writer(pyramidPath);
-    DatasetAttributes datasetAttributes = n5.getDatasetAttributes(pathName);
+    DatasetAttributes datasetAttributes =
+        getDatasetAttributes(pyramidPath, pathName);
     int[] blockSizes = datasetAttributes.getBlockSize();
     int activeTileWidth = blockSizes[0];
     int activeTileHeight = blockSizes[1];
@@ -808,11 +1194,7 @@ public class Converter implements Callable<Void> {
 
     Slf4JStopWatch t1 = stopWatch();
     try {
-      n5.writeBlock(
-        pathName,
-        n5.getDatasetAttributes(pathName),
-        dataBlock
-      );
+      writeBlock(pyramidPath, pathName, datasetAttributes, dataBlock);
       LOGGER.info("successfully wrote at {} to {}", gridPosition, pathName);
     }
     finally {
@@ -829,10 +1211,11 @@ public class Converter implements Callable<Void> {
    * @throws IOException
    * @throws InterruptedException
    * @throws EnumerationException
+   * @throws TileDBError
    */
   public void saveResolutions(int series)
     throws FormatException, IOException, InterruptedException,
-           EnumerationException
+           EnumerationException, TileDBError
   {
     IFormatReader workingReader = readers.take();
     int resolutions = 1;
@@ -859,6 +1242,10 @@ public class Converter implements Callable<Void> {
       sizeY = workingReader.getSizeY();
       imageCount = workingReader.getImageCount();
       pixelType = workingReader.getPixelType();
+      if (dimensionOrder == null) {
+        dimensionOrder = DimensionOrder.fromString(
+            workingReader.getDimensionOrder());
+      }
     }
     finally {
       readers.put(workingReader);
@@ -901,11 +1288,7 @@ public class Converter implements Callable<Void> {
 
     // fileset level metadata
     final String pyramidPath = outputPath.resolve(pyramidName).toString();
-    final N5Writer n5 = fileType.writer(pyramidPath);
-    n5.setAttribute("/", "bioformats2raw.layout", LAYOUT);
-
-    // series level metadata
-    setSeriesLevelMetadata(n5, series, resolutions);
+    setAttribute(pyramidPath, "/", "bioformats2raw.layout", LAYOUT);
 
     for (int resCounter=0; resCounter<resolutions; resCounter++) {
       final int resolution = resCounter;
@@ -927,8 +1310,8 @@ public class Converter implements Callable<Void> {
 
       String resolutionString = "/" +  String.format(
               scaleFormatString, getScaleFormatStringArgs(series, resolution));
-      n5.createDataset(
-          resolutionString,
+      createDataset(
+          pyramidPath, resolutionString,
           getDimensions(workingReader, scaledWidth, scaledHeight),
           new int[] {activeTileWidth, activeTileHeight, 1, 1, 1},
           dataType, compression
@@ -982,6 +1365,8 @@ public class Converter implements Callable<Void> {
 
     }
 
+    // series level metadata
+    setSeriesLevelMetadata(pyramidPath, series, resolutions);
   }
 
   /**
@@ -989,14 +1374,16 @@ public class Converter implements Callable<Void> {
    * to attach the multiscales metadata to the group containing
    * the pyramids.
    *
-   * @param n5 Active {@link N5Writer}.
+   * @param pyramidPath Pyramid root path.
    * @param series Series which is currently being written.
    * @param resolutions Total number of resolutions from which
    *                    names will be generated.
    * @throws IOException
+   * @throws TileDBError
    */
-  private void setSeriesLevelMetadata(N5Writer n5, int series, int resolutions)
-          throws IOException
+  private void setSeriesLevelMetadata(
+      String pyramidPath, int series, int resolutions)
+          throws IOException, TileDBError
   {
     String resolutionString = "/" +  String.format(
             scaleFormatString, getScaleFormatStringArgs(series, 0));
@@ -1016,8 +1403,26 @@ public class Converter implements Callable<Void> {
       datasets.add(Collections.singletonMap("path", lastPath));
     }
     multiscale.put("datasets", datasets);
-    n5.createGroup(seriesString);
-    n5.setAttribute(seriesString, "multiscales", multiscales);
+
+    switch (fileType) {
+      case n5: {
+        N5Writer n5 = new N5FSWriter(pyramidPath);
+        n5.createGroup(seriesString);
+        break;
+      }
+      case zarr: {
+        N5Writer n5 = new N5ZarrWriter(pyramidPath);
+        n5.createGroup(seriesString);
+        break;
+      }
+      case tiledb: {
+        break;
+      }
+      default:
+        throw new IllegalArgumentException(
+            "Unsupported file type: " + fileType);
+    }
+    setAttribute(pyramidPath, seriesString, "multiscales", multiscales);
   }
 
   /**
