@@ -57,6 +57,10 @@ public class ZarrTest {
     LogbackTools.setRootLevel("warn");
   }
 
+  String getFileType() {
+    return "zarr";
+  }
+
   /**
    * Run the Converter main method and check for success or failure.
    *
@@ -67,14 +71,15 @@ public class ZarrTest {
     for (String arg : additionalArgs) {
       args.add(arg);
     }
-    args.add("--file_type=zarr");
+    String fileType = getFileType();
+    args.add("--file_type=" + fileType);
     args.add(input.toString());
     output = tmp.newFolder().toPath().resolve("test");
     args.add(output.toString());
     try {
       converter = new Converter();
       CommandLine.call(converter, args.toArray(new String[]{}));
-      Assert.assertTrue(Files.exists(output.resolve("data.zarr")));
+      Assert.assertTrue(Files.exists(output.resolve("data." + fileType)));
       Assert.assertTrue(Files.exists(output.resolve("METADATA.ome.xml")));
     }
     catch (RuntimeException rt) {
