@@ -14,6 +14,7 @@ targetCompatibility = 1.8
 
 repositories {
     jcenter()
+    mavenCentral()
     maven {
         url 'https://artifacts.openmicroscopy.org/artifactory/repo/'
     }
@@ -32,6 +33,7 @@ dependencies {
     implementation 'org.janelia.saalfeldlab:n5:2.2.0'
     implementation 'org.janelia.saalfeldlab:n5-blosc:1.1.0'
     implementation 'org.janelia.saalfeldlab:n5-zarr:0.0.4'
+    implementation 'io.tiledb:tiledb-java:0.3.1'
 
     // https://github.com/junit-team/junit5-samples/blob/master/junit5-migration-gradle/build.gradle
     def junit4Version        = '4.12'
