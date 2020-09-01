@@ -411,6 +411,26 @@ public class TileDBTest extends ZarrTest {
   }
 
   /**
+   * Test compression.
+   */
+  @Test
+  public void testCompression() throws Exception {
+    input = fake();
+    assertTool("--compression", "zstd");
+    String uri = output.resolve("data.tiledb").resolve("0/0").toString();
+
+    // check special pixels
+    long[] offsets = new long[] {
+      0, 0,   // T
+      0, 0,   // C
+      0, 0,   // Z
+      0, 511, // Y
+      0, 511  // X
+    };
+    assertSeriesPlaneNumberZCT(uri, offsets, new int[] {0, 0, 0, 0, 0});
+  }
+
+  /**
    * Test float pixel type.
    */
   @Test

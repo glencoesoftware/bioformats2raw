@@ -92,16 +92,24 @@ import io.tiledb.java.api.Array;
 import io.tiledb.java.api.ArraySchema;
 import io.tiledb.java.api.ArrayType;
 import io.tiledb.java.api.Attribute;
+import io.tiledb.java.api.Bzip2Filter;
+import io.tiledb.java.api.CompressionFilter;
 import io.tiledb.java.api.Context;
 import io.tiledb.java.api.Datatype;
 import io.tiledb.java.api.Dimension;
 import io.tiledb.java.api.Domain;
+import io.tiledb.java.api.DoubleDeltaFilter;
+import io.tiledb.java.api.FilterList;
+import io.tiledb.java.api.GzipFilter;
 import io.tiledb.java.api.Layout;
+import io.tiledb.java.api.LZ4Filter;
 import io.tiledb.java.api.NativeArray;
 import io.tiledb.java.api.Pair;
 import io.tiledb.java.api.Query;
 import io.tiledb.java.api.QueryType;
+import io.tiledb.java.api.RleFilter;
 import io.tiledb.java.api.TileDBError;
+import io.tiledb.java.api.ZstdFilter;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -130,9 +138,53 @@ public class Converter implements Callable<Void> {
    */
   enum FileType { n5, zarr, tiledb };
 
-  static class N5Compression {
-    enum CompressionTypes { blosc, bzip2, gzip, lz4, raw, xz };
+  enum CompressionTypes {
+    blosc, bzip2, delta, gzip, lz4, raw, rle, xz, zstd
+  }
 
+  class TileDBAttributes extends DatasetAttributes {
+    private CompressionFilter compression;
+
+    public TileDBAttributes(long[] dims, int[] blockSize,
+      DataType type, Compression codec)
+    {
+      super(dims, blockSize, type, codec);
+    }
+
+    public CompressionFilter getCompressionFilter() {
+      return compression;
+    }
+
+    public void setCompressionFilter(CompressionFilter c) {
+      compression = c;
+    }
+  }
+
+  static class TileDBCompression {
+
+    private static CompressionFilter getCompressor(
+            CompressionTypes type, Context ctx) throws TileDBError
+    {
+      switch (type) {
+        case bzip2:
+          return new Bzip2Filter(ctx);
+        case delta:
+          return new DoubleDeltaFilter(ctx);
+        case gzip:
+          return new GzipFilter(ctx);
+        case lz4:
+          return new LZ4Filter(ctx);
+        case rle:
+          return new RleFilter(ctx);
+        case zstd:
+          return new ZstdFilter(ctx);
+        default:
+          return null;
+      }
+    }
+  }
+
+  static class N5Compression {
     private static Compression getCompressor(
             CompressionTypes type,
             Integer compressionParameter)
@@ -249,8 +301,7 @@ public class Converter implements Callable<Void> {
           description = "Compression type for n5 " +
                   "(${COMPLETION-CANDIDATES}; default: ${DEFAULT-VALUE})"
   )
-  private volatile N5Compression.CompressionTypes compressionType =
-          N5Compression.CompressionTypes.blosc;
+  private volatile CompressionTypes compressionType = CompressionTypes.blosc;
 
   @Option(
           names = {"--compression-parameter"},
@@ -698,9 +749,16 @@ public class Converter implements Callable<Void> {
           }
           Attribute attribute = schema.getAttribute("a1");
           DataType dataType = n5TypeFromTileDbType(attribute.getType());
-          // TODO: Compression type conversion?
-          return new DatasetAttributes(
-              dimensions, blockSize, dataType, new RawCompression());
+
+          TileDBAttributes attributes = new TileDBAttributes(
+              dimensions, blockSize, dataType, null);
+
+          if (attribute.getFilterList().getNumFilters() == 1) {
+            CompressionFilter filter =
+              (CompressionFilter) attribute.getFilterList().getFilter(0);
+            attributes.setCompressionFilter(filter);
+          }
+          return attributes;
         }
       }
       default:
@@ -711,17 +769,21 @@ public class Converter implements Callable<Void> {
 
   private void createDataset(
       String pyramidPath, String resolutionString, long[] dimensions,
-      int[] blockSize, DataType dataType, Compression compression)
+      int[] blockSize, DataType dataType)
           throws IOException, TileDBError
   {
     switch (fileType) {
       case n5: {
+        Compression compression = N5Compression.getCompressor(compressionType,
+              compressionParameter);
         N5Writer n5 = new N5FSWriter(pyramidPath);
         n5.createDataset(
             resolutionString, dimensions, blockSize, dataType, compression);
         break;
       }
       case zarr: {
+        Compression compression = N5Compression.getCompressor(compressionType,
+              compressionParameter);
         N5Writer n5 = new N5ZarrWriter(pyramidPath);
         n5.createDataset(
             resolutionString, dimensions, blockSize, dataType, compression);
@@ -738,7 +800,12 @@ public class Converter implements Callable<Void> {
              ArraySchema schema = new ArraySchema(ctx, ArrayType.TILEDB_DENSE);
             )
         {
-          // FIXME: Need to handle compression
+          CompressionFilter filter =
+            TileDBCompression.getCompressor(compressionType, ctx);
+          if (filter != null) {
+            a1.setFilterList(new FilterList(ctx).addFilter(filter));
+          }
+
           for (int i = dimensions.length - 1; i >= 0; i--) {
             long dimension = dimensions[i];
             long extent = blockSize[i];
@@ -942,7 +1009,7 @@ public class Converter implements Callable<Void> {
             // FIXME: Hack, can we do this better?
             createDataset(
                 pyramidPath, pathName, new long[] {1}, new int[] {1},
-                DataType.INT8, null);
+                DataType.INT8);
           }
 
           try (Array array = new Array(ctx, uri, QueryType.TILEDB_WRITE);
@@ -1283,9 +1350,6 @@ public class Converter implements Callable<Void> {
             + FormatTools.getPixelTypeString(pixelType));
     }
 
-    Compression compression = N5Compression.getCompressor(compressionType,
-            compressionParameter);
-
     // fileset level metadata
     final String pyramidPath = outputPath.resolve(pyramidName).toString();
     setAttribute(pyramidPath, "/", "bioformats2raw.layout", LAYOUT);
@@ -1314,7 +1378,7 @@ public class Converter implements Callable<Void> {
           pyramidPath, resolutionString,
           getDimensions(workingReader, scaledWidth, scaledHeight),
           new int[] {activeTileWidth, activeTileHeight, 1, 1, 1},
-          dataType, compression
+          dataType
       );
 
       nTile = new AtomicInteger(0);
