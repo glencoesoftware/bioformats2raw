@@ -298,10 +298,12 @@ public class Converter implements Callable<Void> {
 
   @Option(
           names = {"-c", "--compression"},
-          description = "Compression type for n5 " +
-                  "(${COMPLETION-CANDIDATES}; default: ${DEFAULT-VALUE})"
+          description = "Compression type; not all compression types are " +
+                  "supported by all file types " +
+                  "(${COMPLETION-CANDIDATES}; default: blosc (n5/zarr), " +
+                  "zstd (tiledb)"
   )
-  private volatile CompressionTypes compressionType = CompressionTypes.blosc;
+  private volatile CompressionTypes compressionType = null;
 
   @Option(
           names = {"--compression-parameter"},
@@ -432,6 +434,20 @@ public class Converter implements Callable<Void> {
       System.out.println("Version = " + version);
       System.out.println("Bio-Formats version = " + FormatTools.VERSION);
       return null;
+    }
+    if (compressionType == null) {
+      switch (fileType) {
+        case n5:
+        case zarr:
+          compressionType = CompressionTypes.raw;
+          break;
+        case tiledb:
+          compressionType = CompressionTypes.zstd;
+          break;
+        default:
+          throw new IllegalArgumentException(
+            "Unknown compression type: " + compressionType);
+      }
     }
 
     ch.qos.logback.classic.Logger root = (ch.qos.logback.classic.Logger)
