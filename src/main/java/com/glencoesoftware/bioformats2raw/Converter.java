@@ -896,6 +896,7 @@ public class Converter implements Callable<Void> {
           query.setSubarray(subarray);
           query.setBuffer("a1", buffer);
           query.submit();
+          buffer.order(ByteOrder.BIG_ENDIAN);
           DataBlock<?> dataBlock =
               dataType.createDataBlock(blockSize, gridPosition);
 
