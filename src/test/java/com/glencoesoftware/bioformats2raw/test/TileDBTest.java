@@ -499,6 +499,68 @@ public class TileDBTest extends ZarrTest {
   }
 
   /**
+   * Test consistent endianness.
+   */
+  @Test
+  public void testConsistentEndianness() throws Exception {
+    input = fake("pixelType", "uint16", "scaleFactor", "100");
+    assertTool();
+    String uri = output.resolve("data.tiledb").resolve("0/0").toString();
+
+    // Check series dimensions and special pixels
+    long[] offsets = new long[] {
+      0, 0,   // T
+      0, 0,   // C
+      0, 0,   // Z
+      511, 511, // Y
+      510, 510  // X
+    };
+    try (Context ctx = new Context();
+        Array array = new Array(ctx, uri, QueryType.TILEDB_READ);
+        Query query = new Query(array, QueryType.TILEDB_READ);
+        NativeArray subarray = new NativeArray(ctx, offsets, Long.class)
+       )
+    {
+      ByteBuffer tile = ByteBuffer.allocateDirect(2)
+          .order(ByteOrder.nativeOrder());
+      query.setLayout(Layout.TILEDB_ROW_MAJOR);
+      query.setSubarray(subarray);
+      query.setBuffer("a1", tile);
+      query.submit();
+
+      // Bio-Formats always reads as big endian
+      tile.order(ByteOrder.BIG_ENDIAN);
+      Assert.assertEquals(51000, Short.toUnsignedInt(tile.getShort(0)));
+    }
+
+    offsets = new long[] {
+      0, 0,   // T
+      0, 0,   // C
+      0, 0,   // Z
+      255, 255, // Y
+      255, 255  // X
+    };
+    uri = output.resolve("data.tiledb").resolve("0/1").toString();
+    try (Context ctx = new Context();
+        Array array = new Array(ctx, uri, QueryType.TILEDB_READ);
+        Query query = new Query(array, QueryType.TILEDB_READ);
+        NativeArray subarray = new NativeArray(ctx, offsets, Long.class)
+       )
+    {
+      ByteBuffer tile = ByteBuffer.allocateDirect(2)
+          .order(ByteOrder.nativeOrder());
+      query.setLayout(Layout.TILEDB_ROW_MAJOR);
+      query.setSubarray(subarray);
+      query.setBuffer("a1", tile);
+      query.submit();
+
+      // Bio-Formats always reads as big endian
+      tile.order(ByteOrder.BIG_ENDIAN);
+      Assert.assertEquals(51000, Short.toUnsignedInt(tile.getShort(0)));
+    }
+  }
+
+  /**
    * Test that there are no edge effects when tiles do not divide evenly
    * and downsampling.
    */
