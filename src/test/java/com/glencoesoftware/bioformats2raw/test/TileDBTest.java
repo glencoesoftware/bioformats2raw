@@ -635,6 +635,7 @@ public class TileDBTest extends ZarrTest {
 
       // Last row first pixel should be the 2x2 downsampled value;
       // test will break if the downsampling algorithm changes
+      tile.order(ByteOrder.BIG_ENDIAN);
       Assert.assertEquals(50, tile.asShortBuffer().get(74 * 5));
     }
   }
