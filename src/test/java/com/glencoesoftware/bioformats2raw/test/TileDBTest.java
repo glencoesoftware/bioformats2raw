@@ -32,7 +32,9 @@ import io.tiledb.java.api.Layout;
 import io.tiledb.java.api.NativeArray;
 import io.tiledb.java.api.Query;
 import io.tiledb.java.api.QueryType;
+import io.tiledb.java.api.RleFilter;
 import io.tiledb.java.api.TileDBError;
+import io.tiledb.java.api.ZstdFilter;
 import loci.common.services.ServiceFactory;
 import loci.formats.in.FakeReader;
 import loci.formats.ome.OMEXMLMetadata;
@@ -411,23 +413,43 @@ public class TileDBTest extends ZarrTest {
   }
 
   /**
-   * Test compression.
+   * Test default compression.
+   */
+  @Test
+  public void testDefaultCompression() throws Exception {
+    input = fake();
+    assertTool();
+    String uri = output.resolve("data.tiledb").resolve("0/0").toString();
+    try (Context ctx = new Context();
+        Array array = new Array(ctx, uri, QueryType.TILEDB_READ);
+        ArraySchema arraySchema = array.getSchema();
+        Attribute attribute = arraySchema.getAttribute("a1")
+       )
+    {
+      Assert.assertEquals(
+          ZstdFilter.class,
+          attribute.getFilterList().getFilter(0).getClass());
+    }
+  }
+
+  /**
+   * Test non-default compression.
    */
   @Test
   public void testCompression() throws Exception {
     input = fake();
-    assertTool("--compression", "zstd");
+    assertTool("--compression", "rle");
     String uri = output.resolve("data.tiledb").resolve("0/0").toString();
-
-    // check special pixels
-    long[] offsets = new long[] {
-      0, 0,   // T
-      0, 0,   // C
-      0, 0,   // Z
-      0, 511, // Y
-      0, 511  // X
-    };
-    assertSeriesPlaneNumberZCT(uri, offsets, new int[] {0, 0, 0, 0, 0});
+    try (Context ctx = new Context();
+        Array array = new Array(ctx, uri, QueryType.TILEDB_READ);
+        ArraySchema arraySchema = array.getSchema();
+        Attribute attribute = arraySchema.getAttribute("a1")
+       )
+    {
+      Assert.assertEquals(
+          RleFilter.class,
+          attribute.getFilterList().getFilter(0).getClass());
+    }
   }
 
   /**
