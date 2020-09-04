@@ -117,7 +117,7 @@ import picocli.CommandLine.Parameters;
 /**
  * Command line tool for converting whole slide imaging files to N5.
  */
-public class Converter implements Callable<Void> {
+public class Converter implements Callable<Void>, AutoCloseable {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(Converter.class);
 
@@ -419,6 +419,9 @@ public class Converter implements Callable<Void> {
   /** Current number of tiles processed at the current resolution. */
   private volatile AtomicInteger nTile;
 
+  /** TileDB context if we are writing out in that file format. */
+  private volatile Context ctx;
+
   /** Gson instance configured similarly to the N5 library itself. */
   private final Gson gson;
 
@@ -484,10 +487,11 @@ public class Converter implements Callable<Void> {
    * @throws IOException
    * @throws InterruptedException
    * @throws EnumerationException
+   * @throws TileDBError
    */
   public void convert()
       throws FormatException, IOException, InterruptedException,
-             EnumerationException
+             EnumerationException, TileDBError
   {
     if (pyramidName.equals("data.n5")) {
       switch (fileType) {
@@ -497,6 +501,7 @@ public class Converter implements Callable<Void> {
           pyramidName = "data.zarr";
           break;
         case tiledb:
+          ctx = new Context();
           pyramidName = "data.tiledb";
           break;
         default:
@@ -758,8 +763,7 @@ public class Converter implements Callable<Void> {
       case tiledb: {
         pathName = pathName.replaceAll("^/+", "");
         String uri = Paths.get(pyramidPath).resolve(pathName).toString();
-        try (Context ctx = new Context();
-             Array array = new Array(ctx, uri, QueryType.TILEDB_READ);
+        try (Array array = new Array(ctx, uri, QueryType.TILEDB_READ);
              ArraySchema schema = array.getSchema();
              Domain domain = schema.getDomain();
              Attribute attribute = schema.getAttribute("a1");
@@ -822,8 +826,7 @@ public class Converter implements Callable<Void> {
         Path path = Paths.get(pyramidPath).resolve(resolutionString);
         Files.createDirectories(path.getParent());
         Datatype datatype = tileDbTypeFromN5Type(dataType);
-        try (Context ctx = new Context();
-             Domain domain = new Domain(ctx);
+        try (Domain domain = new Domain(ctx);
              Attribute a1 = new Attribute(ctx, "a1", datatype);
              ArraySchema schema = new ArraySchema(ctx, ArrayType.TILEDB_DENSE);
              FilterList filterList = new FilterList(ctx);
@@ -893,8 +896,7 @@ public class Converter implements Callable<Void> {
         };
         blockSize[0] = xSize;
         final ByteBuffer buffer = byteBuffers.take();
-        try (Context ctx = new Context();
-             Array array = new Array(ctx, uri, QueryType.TILEDB_READ);
+        try (Array array = new Array(ctx, uri, QueryType.TILEDB_READ);
              Query query = new Query(array, QueryType.TILEDB_READ);
              NativeArray subarray = new NativeArray(ctx, offsets, Long.class);
             )
@@ -991,8 +993,7 @@ public class Converter implements Callable<Void> {
           xStart, xEnd
         };
         final ByteBuffer buffer = byteBuffers.take();
-        try (Context ctx = new Context();
-             Array array = new Array(ctx, uri, QueryType.TILEDB_WRITE);
+        try (Array array = new Array(ctx, uri, QueryType.TILEDB_WRITE);
              Query query = new Query(array, QueryType.TILEDB_WRITE);
              NativeArray subarray = new NativeArray(ctx, offsets, Long.class);
             )
@@ -1038,22 +1039,20 @@ public class Converter implements Callable<Void> {
       case tiledb: {
         pathName = pathName.replaceAll("^/+", "");
         String uri = Paths.get(pyramidPath).resolve(pathName).toString();
-        try (Context ctx = new Context()) {
-          if (!Array.exists(ctx, uri)) {
-            // FIXME: Hack, can we do this better?
-            createDataset(
-                pyramidPath, pathName, new long[] {1}, new int[] {1},
-                DataType.INT8);
-          }
+        if (!Array.exists(ctx, uri)) {
+          // FIXME: Hack, can we do this better?
+          createDataset(
+              pyramidPath, pathName, new long[] {1}, new int[] {1},
+              DataType.INT8);
+        }
 
-          try (Array array = new Array(ctx, uri, QueryType.TILEDB_WRITE);
-               NativeArray metadata = new NativeArray(
-                   ctx, gson.toJson(value).getBytes(StandardCharsets.UTF_8),
-                   byte[].class)
-              )
-          {
-            array.putMetadata(key, metadata);
-          }
+        try (Array array = new Array(ctx, uri, QueryType.TILEDB_WRITE);
+             NativeArray metadata = new NativeArray(
+                 ctx, gson.toJson(value).getBytes(StandardCharsets.UTF_8),
+                 byte[].class)
+            )
+        {
+          array.putMetadata(key, metadata);
         }
         break;
       }
@@ -1615,9 +1614,19 @@ public class Converter implements Callable<Void> {
   /**
    * Perform file conversion as specified by command line arguments.
    * @param args command line arguments
+   * @throws Exception
    */
-  public static void main(String[] args) {
-    CommandLine.call(new Converter(), args);
+  public static void main(String[] args) throws Exception {
+    try (Converter converter = new Converter()) {
+      CommandLine.call(converter, args);
+    }
+  }
+
+  @Override
+  public void close() throws Exception {
+    if (ctx != null) {
+      ctx.close();
+    }
   }
 
 }
