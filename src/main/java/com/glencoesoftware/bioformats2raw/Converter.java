@@ -393,6 +393,12 @@ public class Converter implements Callable<Void> {
    */
   private volatile BlockingQueue<Runnable> queue;
 
+  /**
+   * Set of byte buffers that can be used concurrently, size will be equal to
+   * {@link #maxWorkers}.  Each buffer will be the size of one chunk.
+   */
+  private volatile BlockingQueue<ByteBuffer> byteBuffers;
+
   private volatile ExecutorService executor;
 
   /** Whether or not the source file is little endian. */
@@ -403,6 +409,9 @@ public class Converter implements Callable<Void> {
    * {@link IFormatReader#getPixelType()}.
    */
   private volatile int pixelType;
+
+  /** The source file's pixel type bytes per pixel. */
+  private volatile int bytesPerPixel;
 
   /** Total number of tiles at the current resolution during processing. */
   private volatile int tileCount;
@@ -462,6 +471,7 @@ public class Converter implements Callable<Void> {
     queue = new LimitedQueue<Runnable>(maxWorkers);
     executor = new ThreadPoolExecutor(
       maxWorkers, maxWorkers, 0L, TimeUnit.MILLISECONDS, queue);
+    byteBuffers = new ArrayBlockingQueue<ByteBuffer>(maxWorkers);
     convert();
     return null;
   }
@@ -844,7 +854,7 @@ public class Converter implements Callable<Void> {
   private DataBlock<?> readBlock(
       String pyramidPath, String pathName, DatasetAttributes datasetAttributes,
       long[] gridPosition)
-          throws IOException, TileDBError
+          throws IOException, TileDBError, InterruptedException
   {
     switch (fileType) {
       case n5: {
@@ -879,7 +889,7 @@ public class Converter implements Callable<Void> {
           xStart, xEnd
         };
         blockSize[0] = xSize;
-        ByteBuffer buffer;
+        final ByteBuffer buffer = byteBuffers.take();
         try (Context ctx = new Context();
              Array array = new Array(ctx, uri, QueryType.TILEDB_READ);
              Query query = new Query(array, QueryType.TILEDB_READ);
@@ -888,18 +898,18 @@ public class Converter implements Callable<Void> {
         {
           query.setLayout(Layout.TILEDB_ROW_MAJOR);
           DataType dataType = datasetAttributes.getDataType();
-          int bytesPerPixel = tileDbTypeFromN5Type(dataType).getNativeSize();
-          int size = ySize * xSize * bytesPerPixel;
-          buffer = ByteBuffer.allocateDirect(size)
-              .order(ByteOrder.nativeOrder());
 
+          buffer.clear();
+          buffer.position(buffer.capacity() - ySize * xSize * bytesPerPixel);
+          ByteBuffer bufferSlice = buffer.slice();
+          bufferSlice.order(ByteOrder.nativeOrder());
           query.setSubarray(subarray);
-          query.setBuffer("a1", buffer);
+          query.setBuffer("a1", bufferSlice);
           query.submit();
+
           buffer.order(ByteOrder.BIG_ENDIAN);
           DataBlock<?> dataBlock =
               dataType.createDataBlock(blockSize, gridPosition);
-
           switch (dataType) {
             case INT8:
             case UINT8:
@@ -928,6 +938,8 @@ public class Converter implements Callable<Void> {
                   "Unsupported N5 datatype: " + dataType);
           }
           return dataBlock;
+        } finally {
+          byteBuffers.put(buffer);
         }
       }
       default:
@@ -939,7 +951,7 @@ public class Converter implements Callable<Void> {
   private DataBlock<?> writeBlock(
       String pyramidPath, String pathName, DatasetAttributes datasetAttributes,
       DataBlock<?> dataBlock)
-          throws IOException, TileDBError
+          throws IOException, TileDBError, InterruptedException
   {
     switch (fileType) {
       case n5: {
@@ -975,7 +987,7 @@ public class Converter implements Callable<Void> {
           yStart, yEnd,
           xStart, xEnd
         };
-        ByteBuffer buffer;
+        final ByteBuffer buffer = byteBuffers.take();
         try (Context ctx = new Context();
              Array array = new Array(ctx, uri, QueryType.TILEDB_WRITE);
              Query query = new Query(array, QueryType.TILEDB_WRITE);
@@ -984,15 +996,17 @@ public class Converter implements Callable<Void> {
         {
           query.setLayout(Layout.TILEDB_ROW_MAJOR);
 
-          DataType dataType = datasetAttributes.getDataType();
-          int bytesPerPixel = tileDbTypeFromN5Type(dataType).getNativeSize();
           int size = ySize * xSize * bytesPerPixel;
-          buffer = ByteBuffer.allocateDirect(size)
-              .order(ByteOrder.nativeOrder());
-          buffer.put(dataBlock.toByteBuffer().array());
+          buffer.clear();
+          buffer.position(buffer.capacity() - size);
+          ByteBuffer bufferSlice = buffer.slice();
+          bufferSlice.order(ByteOrder.nativeOrder());
+          bufferSlice.put(dataBlock.toByteBuffer().array());
           query.setSubarray(subarray);
-          query.setBuffer("a1", buffer);
+          query.setBuffer("a1", bufferSlice);
           query.submit();
+        } finally {
+          byteBuffers.put(buffer);
         }
         break;
       }
@@ -1085,7 +1099,6 @@ public class Converter implements Callable<Void> {
     int xBlocks = (int) Math.ceil((double) width / activeTileWidth);
     int yBlocks = (int) Math.ceil((double) height / activeTileHeight);
 
-    int bytesPerPixel = FormatTools.getBytesPerPixel(pixelType);
     byte[] tile = new byte[width * height * bytesPerPixel];
     for (int xBlock=0; xBlock<xBlocks; xBlock++) {
       for (int yBlock=0; yBlock<yBlocks; yBlock++) {
@@ -1326,9 +1339,17 @@ public class Converter implements Callable<Void> {
       sizeY = workingReader.getSizeY();
       imageCount = workingReader.getImageCount();
       pixelType = workingReader.getPixelType();
+      bytesPerPixel = FormatTools.getBytesPerPixel(pixelType);
       if (dimensionOrder == null) {
         dimensionOrder = DimensionOrder.fromString(
             workingReader.getDimensionOrder());
+      }
+
+      byteBuffers.clear();
+      for (int i = 0; i < maxWorkers; i++) {
+        byteBuffers.add(ByteBuffer.allocateDirect(
+            tileWidth * PYRAMID_SCALE * tileHeight * PYRAMID_SCALE
+            * bytesPerPixel));
       }
     }
     finally {
