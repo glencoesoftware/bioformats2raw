@@ -761,7 +761,9 @@ public class Converter implements Callable<Void> {
         try (Context ctx = new Context();
              Array array = new Array(ctx, uri, QueryType.TILEDB_READ);
              ArraySchema schema = array.getSchema();
-             Domain domain = schema.getDomain())
+             Domain domain = schema.getDomain();
+             Attribute attribute = schema.getAttribute("a1");
+             FilterList filterList = attribute.getFilterList();)
         {
           int ndim = (int) domain.getNDim();
           final long[] dimensions = new long[ndim];
@@ -773,16 +775,16 @@ public class Converter implements Callable<Void> {
               blockSize[ndim - i - 1] = dimension.getTileExtent().intValue();
             }
           }
-          Attribute attribute = schema.getAttribute("a1");
           DataType dataType = n5TypeFromTileDbType(attribute.getType());
 
           TileDBAttributes attributes = new TileDBAttributes(
               dimensions, blockSize, dataType, null);
 
-          if (attribute.getFilterList().getNumFilters() == 1) {
-            CompressionFilter filter =
-              (CompressionFilter) attribute.getFilterList().getFilter(0);
-            attributes.setCompressionFilter(filter);
+          if (filterList.getNumFilters() == 1) {
+            try (CompressionFilter filter =
+                  (CompressionFilter) attribute.getFilterList().getFilter(0)) {
+              attributes.setCompressionFilter(filter);
+            }
           }
           return attributes;
         }
@@ -824,12 +826,13 @@ public class Converter implements Callable<Void> {
              Domain domain = new Domain(ctx);
              Attribute a1 = new Attribute(ctx, "a1", datatype);
              ArraySchema schema = new ArraySchema(ctx, ArrayType.TILEDB_DENSE);
+             FilterList filterList = new FilterList(ctx);
+             CompressionFilter filter =
+                 TileDBCompression.getCompressor(compressionType, ctx);
             )
         {
-          CompressionFilter filter =
-            TileDBCompression.getCompressor(compressionType, ctx);
           if (filter != null) {
-            a1.setFilterList(new FilterList(ctx).addFilter(filter));
+            a1.setFilterList(filterList.addFilter(filter));
           }
 
           for (int i = dimensions.length - 1; i >= 0; i--) {
