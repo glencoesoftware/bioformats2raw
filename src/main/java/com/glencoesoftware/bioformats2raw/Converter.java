@@ -786,7 +786,8 @@ public class Converter implements Callable<Void>, AutoCloseable {
 
           if (filterList.getNumFilters() == 1) {
             try (CompressionFilter filter =
-                  (CompressionFilter) attribute.getFilterList().getFilter(0)) {
+                  (CompressionFilter) attribute.getFilterList().getFilter(0))
+            {
               attributes.setCompressionFilter(filter);
             }
           }
@@ -943,7 +944,8 @@ public class Converter implements Callable<Void>, AutoCloseable {
                   "Unsupported N5 datatype: " + dataType);
           }
           return dataBlock;
-        } finally {
+        }
+        finally {
           byteBuffers.put(buffer);
         }
       }
@@ -1009,7 +1011,8 @@ public class Converter implements Callable<Void>, AutoCloseable {
           query.setSubarray(subarray);
           query.setBuffer("a1", bufferSlice);
           query.submit();
-        } finally {
+        }
+        finally {
           byteBuffers.put(buffer);
         }
         break;
