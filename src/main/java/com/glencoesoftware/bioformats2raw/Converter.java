@@ -15,7 +15,6 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -82,6 +81,9 @@ import org.slf4j.LoggerFactory;
 import com.glencoesoftware.bioformats2raw.MiraxReader.TilePointer;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
+import com.google.common.cache.RemovalNotification;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.univocity.parsers.csv.CsvParser;
@@ -422,6 +424,21 @@ public class Converter implements Callable<Void>, AutoCloseable {
   /** TileDB context if we are writing out in that file format. */
   private volatile Context ctx;
 
+  /**
+   * TileDB array cache with {@link QueryType.TILEDB_READ} if we are writing
+   * out in that file format.
+   */
+  private LoadingCache<String, Array> arrayReadCache;
+
+  /**
+   * TileDB array cache with {@link QueryType.TILEDB_READ} if we are writing
+   * out in that file format.
+   */
+  private LoadingCache<String, Array> arrayWriteCache;
+
+  /** Path vs. dataset attributes cach. */
+  private LoadingCache<String, DatasetAttributes> datasetAttributesCache;
+
   /** Gson instance configured similarly to the N5 library itself. */
   private final Gson gson;
 
@@ -475,6 +492,13 @@ public class Converter implements Callable<Void>, AutoCloseable {
     executor = new ThreadPoolExecutor(
       maxWorkers, maxWorkers, 0L, TimeUnit.MILLISECONDS, queue);
     byteBuffers = new ArrayBlockingQueue<ByteBuffer>(maxWorkers);
+    datasetAttributesCache = CacheBuilder.newBuilder()
+        .build(new CacheLoader<String, DatasetAttributes>() {
+          @Override
+          public DatasetAttributes load(String pathName) throws Exception {
+            return getDatasetAttributes(pathName);
+          }
+        });
     convert();
     return null;
   }
@@ -502,6 +526,34 @@ public class Converter implements Callable<Void>, AutoCloseable {
           break;
         case tiledb:
           ctx = new Context();
+          arrayReadCache = CacheBuilder.newBuilder()
+              .removalListener(
+                (RemovalNotification<String, Array> notification) -> {
+                  notification.getValue().close();
+                }
+              )
+              .build(new CacheLoader<String, Array>() {
+                @Override
+                public Array load(String uri) throws Exception {
+                  // All arrays are opened in write mode so they can be used
+                  // for writing or reading.
+                  return new Array(ctx, uri, QueryType.TILEDB_READ);
+                }
+              });
+          arrayWriteCache = CacheBuilder.newBuilder()
+              .removalListener(
+                (RemovalNotification<String, Array> notification) -> {
+                  notification.getValue().close();
+                }
+              )
+              .build(new CacheLoader<String, Array>() {
+                @Override
+                public Array load(String uri) throws Exception {
+                  // All arrays are opened in write mode so they can be used
+                  // for writing or reading.
+                  return new Array(ctx, uri, QueryType.TILEDB_WRITE);
+                }
+              });
           pyramidName = "data.tiledb";
           break;
         default:
@@ -748,21 +800,22 @@ public class Converter implements Callable<Void>, AutoCloseable {
     }
   }
 
-  private DatasetAttributes getDatasetAttributes(
-      String pyramidPath, String pathName) throws IOException, TileDBError
+  private DatasetAttributes getDatasetAttributes(String pathName)
+      throws IOException, TileDBError
   {
+    Path pyramidPath = outputPath.resolve(pyramidName);
     switch (fileType) {
       case n5: {
-        N5Reader n5 = new N5FSReader(pyramidPath);
+        N5Reader n5 = new N5FSReader(pyramidPath.toString());
         return n5.getDatasetAttributes(pathName);
       }
       case zarr: {
-        N5ZarrReader n5 = new N5ZarrReader(pyramidPath);
+        N5ZarrReader n5 = new N5ZarrReader(pyramidPath.toString());
         return n5.getDatasetAttributes(pathName);
       }
       case tiledb: {
         pathName = pathName.replaceAll("^/+", "");
-        String uri = Paths.get(pyramidPath).resolve(pathName).toString();
+        final String uri = pyramidPath.resolve(pathName).toString();
         try (Array array = new Array(ctx, uri, QueryType.TILEDB_READ);
              ArraySchema schema = array.getSchema();
              Domain domain = schema.getDomain();
@@ -801,15 +854,16 @@ public class Converter implements Callable<Void>, AutoCloseable {
   }
 
   private void createDataset(
-      String pyramidPath, String resolutionString, long[] dimensions,
+      String resolutionString, long[] dimensions,
       int[] blockSize, DataType dataType)
           throws IOException, TileDBError
   {
+    Path pyramidPath = outputPath.resolve(pyramidName);
     switch (fileType) {
       case n5: {
         Compression compression = N5Compression.getCompressor(compressionType,
               compressionParameter);
-        N5Writer n5 = new N5FSWriter(pyramidPath);
+        N5Writer n5 = new N5FSWriter(pyramidPath.toString());
         n5.createDataset(
             resolutionString, dimensions, blockSize, dataType, compression);
         break;
@@ -817,14 +871,14 @@ public class Converter implements Callable<Void>, AutoCloseable {
       case zarr: {
         Compression compression = N5Compression.getCompressor(compressionType,
               compressionParameter);
-        N5Writer n5 = new N5ZarrWriter(pyramidPath);
+        N5Writer n5 = new N5ZarrWriter(pyramidPath.toString());
         n5.createDataset(
             resolutionString, dimensions, blockSize, dataType, compression);
         break;
       }
       case tiledb: {
         resolutionString = resolutionString.replaceAll("^/+", "");
-        Path path = Paths.get(pyramidPath).resolve(resolutionString);
+        Path path = pyramidPath.resolve(resolutionString);
         Files.createDirectories(path.getParent());
         Datatype datatype = tileDbTypeFromN5Type(dataType);
         try (Domain domain = new Domain(ctx);
@@ -859,22 +913,22 @@ public class Converter implements Callable<Void>, AutoCloseable {
   }
 
   private DataBlock<?> readBlock(
-      String pyramidPath, String pathName, DatasetAttributes datasetAttributes,
-      long[] gridPosition)
+      String pathName, DatasetAttributes datasetAttributes, long[] gridPosition)
           throws IOException, TileDBError, InterruptedException
   {
+    Path pyramidPath = outputPath.resolve(pyramidName);
     switch (fileType) {
       case n5: {
-        N5Reader n5 = new N5FSReader(pyramidPath);
+        N5Reader n5 = new N5FSReader(pyramidPath.toString());
         return n5.readBlock(pathName, datasetAttributes, gridPosition);
       }
       case zarr: {
-        N5ZarrReader n5 = new N5ZarrReader(pyramidPath);
+        N5ZarrReader n5 = new N5ZarrReader(pyramidPath.toString());
         return n5.readBlock(pathName, datasetAttributes, gridPosition);
       }
       case tiledb: {
         pathName = pathName.replaceAll("^/+", "");
-        String uri = Paths.get(pyramidPath).resolve(pathName).toString();
+        String uri = pyramidPath.resolve(pathName).toString();
         long[] dimensions = datasetAttributes.getDimensions();
         long sizeX = dimensions[0];
         long sizeY = dimensions[1];
@@ -897,8 +951,8 @@ public class Converter implements Callable<Void>, AutoCloseable {
         };
         blockSize[0] = xSize;
         final ByteBuffer buffer = byteBuffers.take();
-        try (Array array = new Array(ctx, uri, QueryType.TILEDB_READ);
-             Query query = new Query(array, QueryType.TILEDB_READ);
+        final Array array = arrayReadCache.getUnchecked(uri);
+        try (Query query = new Query(array, QueryType.TILEDB_READ);
              NativeArray subarray = new NativeArray(ctx, offsets, Long.class);
             )
         {
@@ -956,25 +1010,26 @@ public class Converter implements Callable<Void>, AutoCloseable {
   }
 
   private DataBlock<?> writeBlock(
-      String pyramidPath, String pathName, DatasetAttributes datasetAttributes,
+      String pathName, DatasetAttributes datasetAttributes,
       DataBlock<?> dataBlock)
           throws IOException, TileDBError, InterruptedException
   {
+    Path pyramidPath = outputPath.resolve(pyramidName);
     switch (fileType) {
       case n5: {
-        N5Writer n5 = new N5FSWriter(pyramidPath);
+        N5Writer n5 = new N5FSWriter(pyramidPath.toString());
         n5.writeBlock(pathName, datasetAttributes, dataBlock);
         break;
       }
       case zarr: {
-        N5Writer n5 = new N5ZarrWriter(pyramidPath);
+        N5Writer n5 = new N5ZarrWriter(pyramidPath.toString());
         n5.writeBlock(pathName, datasetAttributes, dataBlock);
         break;
       }
       case tiledb: {
         pathName = pathName.replaceAll("^/+", "");
         long[] gridPosition = dataBlock.getGridPosition();
-        String uri = Paths.get(pyramidPath).resolve(pathName).toString();
+        String uri = pyramidPath.resolve(pathName).toString();
         long[] dimensions = datasetAttributes.getDimensions();
         long sizeX = dimensions[0];
         long sizeY = dimensions[1];
@@ -995,8 +1050,8 @@ public class Converter implements Callable<Void>, AutoCloseable {
           xStart, xEnd
         };
         final ByteBuffer buffer = byteBuffers.take();
-        try (Array array = new Array(ctx, uri, QueryType.TILEDB_WRITE);
-             Query query = new Query(array, QueryType.TILEDB_WRITE);
+        final Array array = arrayWriteCache.getUnchecked(uri);
+        try (Query query = new Query(array, QueryType.TILEDB_WRITE);
              NativeArray subarray = new NativeArray(ctx, offsets, Long.class);
             )
         {
@@ -1024,29 +1079,28 @@ public class Converter implements Callable<Void>, AutoCloseable {
     return null;
   }
 
-  private void setAttribute(
-      String pyramidPath, String pathName, String key, Object value)
-          throws IOException, TileDBError
+  private void setAttribute(String pathName, String key, Object value)
+      throws IOException, TileDBError
   {
+    Path pyramidPath = outputPath.resolve(pyramidName);
     switch (fileType) {
       case n5: {
-        N5Writer n5 = new N5FSWriter(pyramidPath);
+        N5Writer n5 = new N5FSWriter(pyramidPath.toString());
         n5.setAttribute(pathName, key, value);
         break;
       }
       case zarr: {
-        N5Writer n5 = new N5ZarrWriter(pyramidPath);
+        N5Writer n5 = new N5ZarrWriter(pyramidPath.toString());
         n5.setAttribute(pathName, key, value);
         break;
       }
       case tiledb: {
         pathName = pathName.replaceAll("^/+", "");
-        String uri = Paths.get(pyramidPath).resolve(pathName).toString();
+        final String uri = pyramidPath.resolve(pathName).toString();
         if (!Array.exists(ctx, uri)) {
           // FIXME: Hack, can we do this better?
           createDataset(
-              pyramidPath, pathName, new long[] {1}, new int[] {1},
-              DataType.INT8);
+              pathName, new long[] {1}, new int[] {1}, DataType.INT8);
         }
 
         try (Array array = new Array(ctx, uri, QueryType.TILEDB_WRITE);
@@ -1074,10 +1128,9 @@ public class Converter implements Callable<Void>, AutoCloseable {
     final String pathName = "/" +
         String.format(scaleFormatString,
             getScaleFormatStringArgs(series, resolution - 1));
-    final String pyramidPath = outputPath.resolve(pyramidName).toString();
 
-    DatasetAttributes datasetAttributes = getDatasetAttributes(
-        pyramidPath, pathName);
+    DatasetAttributes datasetAttributes =
+        datasetAttributesCache.getUnchecked(pathName);
     long[] dimensions = datasetAttributes.getDimensions();
     int[] blockSizes = datasetAttributes.getBlockSize();
     int activeTileWidth = blockSizes[0];
@@ -1116,7 +1169,7 @@ public class Converter implements Callable<Void>, AutoCloseable {
           startGridPosition[2], startGridPosition[3], startGridPosition[4]
         };
         ByteBuffer subTile = readBlock(
-            pyramidPath, pathName, datasetAttributes, gridPosition
+            pathName, datasetAttributes, gridPosition
         ).toByteBuffer();
 
         int destLength = blockWidth * bytesPerPixel;
@@ -1227,9 +1280,8 @@ public class Converter implements Callable<Void>, AutoCloseable {
     String pathName =
         "/" + String.format(scaleFormatString,
             getScaleFormatStringArgs(series, resolution));
-    final String pyramidPath = outputPath.resolve(pyramidName).toString();
     DatasetAttributes datasetAttributes =
-        getDatasetAttributes(pyramidPath, pathName);
+        datasetAttributesCache.getUnchecked(pathName);
     int[] blockSizes = datasetAttributes.getBlockSize();
     int activeTileWidth = blockSizes[0];
     int activeTileHeight = blockSizes[1];
@@ -1296,7 +1348,7 @@ public class Converter implements Callable<Void>, AutoCloseable {
 
     Slf4JStopWatch t1 = stopWatch();
     try {
-      writeBlock(pyramidPath, pathName, datasetAttributes, dataBlock);
+      writeBlock(pathName, datasetAttributes, dataBlock);
       LOGGER.info("successfully wrote at {} to {}", gridPosition, pathName);
     }
     finally {
@@ -1395,7 +1447,7 @@ public class Converter implements Callable<Void>, AutoCloseable {
 
     // fileset level metadata
     final String pyramidPath = outputPath.resolve(pyramidName).toString();
-    setAttribute(pyramidPath, "/", "bioformats2raw.layout", LAYOUT);
+    setAttribute("/", "bioformats2raw.layout", LAYOUT);
 
     for (int resCounter=0; resCounter<resolutions; resCounter++) {
       final int resolution = resCounter;
@@ -1418,7 +1470,7 @@ public class Converter implements Callable<Void>, AutoCloseable {
       String resolutionString = "/" +  String.format(
               scaleFormatString, getScaleFormatStringArgs(series, resolution));
       createDataset(
-          pyramidPath, resolutionString,
+          resolutionString,
           getDimensions(workingReader, scaledWidth, scaledHeight),
           new int[] {activeTileWidth, activeTileHeight, 1, 1, 1},
           dataType
@@ -1529,7 +1581,7 @@ public class Converter implements Callable<Void>, AutoCloseable {
         throw new IllegalArgumentException(
             "Unsupported file type: " + fileType);
     }
-    setAttribute(pyramidPath, seriesString, "multiscales", multiscales);
+    setAttribute(seriesString, "multiscales", multiscales);
   }
 
   /**
@@ -1629,6 +1681,12 @@ public class Converter implements Callable<Void>, AutoCloseable {
   public void close() throws Exception {
     if (ctx != null) {
       ctx.close();
+    }
+    if (arrayReadCache != null) {
+      arrayReadCache.invalidateAll();
+    }
+    if (arrayWriteCache != null) {
+      arrayWriteCache.invalidateAll();
     }
   }
 

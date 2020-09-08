@@ -65,8 +65,9 @@ public class ZarrTest {
    * Run the Converter main method and check for success or failure.
    *
    * @param additionalArgs CLI arguments as needed beyond "-o output input"
+   * @throws Exception
    */
-  void assertTool(String...additionalArgs) throws IOException {
+  void assertTool(String...additionalArgs) throws Exception {
     List<String> args = new ArrayList<String>();
     for (String arg : additionalArgs) {
       args.add(arg);
@@ -90,6 +91,9 @@ public class ZarrTest {
     }
     catch (Throwable t) {
       throw new RuntimeException(t);
+    }
+    finally {
+      converter.close();
     }
   }
 
