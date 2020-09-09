@@ -468,7 +468,7 @@ public class Converter implements Callable<Void>, AutoCloseable {
       switch (fileType) {
         case n5:
         case zarr:
-          compressionType = CompressionTypes.raw;
+          compressionType = CompressionTypes.blosc;
           break;
         case tiledb:
           compressionType = CompressionTypes.zstd;
