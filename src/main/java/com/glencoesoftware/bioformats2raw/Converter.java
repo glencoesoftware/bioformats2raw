@@ -16,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -390,7 +391,10 @@ public class Converter implements Callable<Void> {
           "Output path " + outputPath + " already exists");
       }
       LOGGER.warn("Overwriting output path {}", outputPath);
-      deleteDirectory(outputPath);
+      Files.walk(outputPath)
+          .sorted(Comparator.reverseOrder())
+          .map(Path::toFile)
+          .forEach(File::delete);
     }
 
     readers = new ArrayBlockingQueue<IFormatReader>(maxWorkers);
@@ -1112,23 +1116,6 @@ public class Converter implements Callable<Void> {
     catch (ServiceException se) {
       throw new FormatException(se);
     }
-  }
-
-  private void deleteDirectory(Path dir) throws IOException {
-    if (!Files.exists(dir)) {
-      return;
-    }
-    if (Files.isDirectory(dir)) {
-      Files.list(dir).forEach(p -> {
-        try {
-          deleteDirectory(p);
-        }
-        catch (IOException e) {
-          LOGGER.debug("Could not delete " + p, e);
-        }
-      });
-    }
-    Files.delete(dir);
   }
 
   private Slf4JStopWatch stopWatch() {
