@@ -549,7 +549,7 @@ public class ZarrTest {
    * Test that execution succeeds if the output directory already exists and
    * the <code>--overwrite</code> option has been supplied.
    */
-  @Test(expected = ExecutionException.class)
+  @Test
   public void testOverwrite() throws IOException {
     input = fake();
     Files.createDirectory(output);
