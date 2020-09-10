@@ -326,6 +326,12 @@ public class Converter implements Callable<Void> {
   )
   private volatile File memoDirectory;
 
+  @Option(
+          names = "--overwrite",
+          description = "Overwrite the output directory if it exists"
+  )
+  private volatile boolean overwrite = false;
+
   /** Scaling implementation that will be used during downsampling. */
   private volatile IImageScaler scaler = new SimpleImageScaler();
 
@@ -377,6 +383,16 @@ public class Converter implements Callable<Void> {
     else {
       root.setLevel(Level.INFO);
     }
+
+    if (Files.exists(outputPath)) {
+      if (!overwrite) {
+        throw new IllegalArgumentException(
+          "Output path " + outputPath + " already exists");
+      }
+      LOGGER.warn("Overwriting output path {}", outputPath);
+      deleteDirectory(outputPath);
+    }
+
     readers = new ArrayBlockingQueue<IFormatReader>(maxWorkers);
     queue = new LimitedQueue<Runnable>(maxWorkers);
     executor = new ThreadPoolExecutor(
@@ -1096,6 +1112,23 @@ public class Converter implements Callable<Void> {
     catch (ServiceException se) {
       throw new FormatException(se);
     }
+  }
+
+  private void deleteDirectory(Path dir) throws IOException {
+    if (!Files.exists(dir)) {
+      return;
+    }
+    if (Files.isDirectory(dir)) {
+      Files.list(dir).forEach(p -> {
+        try {
+          deleteDirectory(p);
+        }
+        catch (IOException e) {
+          LOGGER.debug("Could not delete " + p, e);
+        }
+      });
+    }
+    Files.delete(dir);
   }
 
   private Slf4JStopWatch stopWatch() {

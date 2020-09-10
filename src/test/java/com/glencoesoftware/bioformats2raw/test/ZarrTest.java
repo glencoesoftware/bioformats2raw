@@ -28,6 +28,7 @@ import loci.formats.in.FakeReader;
 import loci.formats.ome.OMEXMLMetadata;
 import loci.formats.services.OMEXMLService;
 import picocli.CommandLine;
+import picocli.CommandLine.ExecutionException;
 
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
@@ -54,6 +55,7 @@ public class ZarrTest {
    */
   @Before
   public void setup() throws Exception {
+    output = tmp.newFolder().toPath().resolve("test");
     LogbackTools.setRootLevel("warn");
   }
 
@@ -69,7 +71,6 @@ public class ZarrTest {
     }
     args.add("--file_type=zarr");
     args.add(input.toString());
-    output = tmp.newFolder().toPath().resolve("test");
     args.add(output.toString());
     try {
       converter = new Converter();
@@ -531,6 +532,20 @@ public class ZarrTest {
       Assert.assertEquals(
         originalMetadata.get(key), convertedMetadata.get(key));
     }
+  }
+
+  @Test(expected = ExecutionException.class)
+  public void testFailIfNoOverwrite() throws IOException {
+    input = fake();
+    Files.createDirectory(output);
+    assertTool();
+  }
+
+  @Test(expected = ExecutionException.class)
+  public void testOverwrite() throws IOException {
+    input = fake();
+    Files.createDirectory(output);
+    assertTool("--overwrite");
   }
 
 }
