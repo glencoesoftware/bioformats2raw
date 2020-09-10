@@ -16,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -339,6 +340,12 @@ public class Converter implements Callable<Void> {
   )
   private volatile Downsampling downsampling = Downsampling.SIMPLE;
 
+  @Option(
+          names = "--overwrite",
+          description = "Overwrite the output directory if it exists"
+  )
+  private volatile boolean overwrite = false;
+
   /** Scaling implementation that will be used during downsampling. */
   private volatile IImageScaler scaler = new SimpleImageScaler();
 
@@ -393,6 +400,19 @@ public class Converter implements Callable<Void> {
     else {
       root.setLevel(Level.INFO);
     }
+
+    if (Files.exists(outputPath)) {
+      if (!overwrite) {
+        throw new IllegalArgumentException(
+          "Output path " + outputPath + " already exists");
+      }
+      LOGGER.warn("Overwriting output path {}", outputPath);
+      Files.walk(outputPath)
+          .sorted(Comparator.reverseOrder())
+          .map(Path::toFile)
+          .forEach(File::delete);
+    }
+
     readers = new ArrayBlockingQueue<IFormatReader>(maxWorkers);
     queue = new LimitedQueue<Runnable>(maxWorkers);
     executor = new ThreadPoolExecutor(
