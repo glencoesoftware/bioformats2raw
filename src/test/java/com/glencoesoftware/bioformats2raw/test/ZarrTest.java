@@ -22,8 +22,10 @@ import java.util.List;
 import java.util.Map;
 
 import com.glencoesoftware.bioformats2raw.Converter;
+import com.glencoesoftware.bioformats2raw.Downsampling;
 import loci.common.LogbackTools;
 import loci.common.services.ServiceFactory;
+import loci.formats.FormatTools;
 import loci.formats.in.FakeReader;
 import loci.formats.ome.OMEXMLMetadata;
 import loci.formats.services.OMEXMLService;
@@ -37,7 +39,10 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.rules.TemporaryFolder;
+import org.opencv.core.Core;
 
 public class ZarrTest {
 
@@ -554,6 +559,46 @@ public class ZarrTest {
     input = fake();
     Files.createDirectory(output);
     assertTool("--overwrite");
+  }
+
+  /**
+   * Test that appropriate metadata is written for each downsampling type.
+
+   * @param type downsampling type
+   */
+  @ParameterizedTest
+  @EnumSource(Downsampling.class)
+  public void testDownsampleTypes(Downsampling type) throws IOException {
+    input = fake();
+    assertTool("--downsample_type", type.getName());
+
+    N5ZarrReader z =
+          new N5ZarrReader(output.resolve("data.zarr").toString());
+    List<Map<String, Object>> multiscales =
+          z.getAttribute("/0", "multiscales", List.class);
+    Assert.assertEquals(1, multiscales.size());
+    Map<String, Object> multiscale = multiscales.get(0);
+    Assert.assertEquals("0.1", multiscale.get("version"));
+
+    Map<String, String> metadata =
+      (Map<String, String>) multiscale.get("metadata");
+    Assert.assertNotNull(metadata);
+
+    String version = metadata.get("version");
+    String method = metadata.get("method");
+    Assert.assertNotNull(version);
+    Assert.assertNotNull(method);
+
+    if (type != Downsampling.SIMPLE) {
+      Assert.assertEquals(type.getName(), multiscale.get("type"));
+      Assert.assertEquals(Core.VERSION, version);
+      Assert.assertEquals("loci.common.image.SimpleImageScaler", method);
+    }
+    else {
+      Assert.assertEquals("Bio-Formats " + FormatTools.VERSION, version);
+      Assert.assertEquals("org.opencv.imgproc.Imgproc." +
+        (type == Downsampling.GAUSSIAN ? "pyrDown" : "resize"), method);
+    }
   }
 
 }
