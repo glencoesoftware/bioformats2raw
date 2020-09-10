@@ -534,6 +534,10 @@ public class ZarrTest {
     }
   }
 
+  /**
+   * Test that execution fails if the output directory already exists and the
+   * <code>--overwrite</code> option has not been supplied.
+   */
   @Test(expected = ExecutionException.class)
   public void testFailIfNoOverwrite() throws IOException {
     input = fake();
@@ -541,6 +545,10 @@ public class ZarrTest {
     assertTool();
   }
 
+  /**
+   * Test that execution succeeds if the output directory already exists and
+   * the <code>--overwrite</code> option has been supplied.
+   */
   @Test(expected = ExecutionException.class)
   public void testOverwrite() throws IOException {
     input = fake();
