@@ -32,6 +32,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import loci.common.Constants;
+import loci.common.DataTools;
 import loci.common.image.IImageScaler;
 import loci.common.image.SimpleImageScaler;
 import loci.common.services.DependencyException;
@@ -76,6 +77,12 @@ import org.janelia.saalfeldlab.n5.blosc.BloscCompression;
 import org.perf4j.slf4j.Slf4JStopWatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import org.opencv.core.Core;
+import org.opencv.core.CvType;
+import org.opencv.core.Mat;
+import org.opencv.core.Size;
+import org.opencv.imgproc.Imgproc;
 
 import com.glencoesoftware.bioformats2raw.MiraxReader.TilePointer;
 import com.google.common.cache.Cache;
@@ -328,6 +335,12 @@ public class Converter implements Callable<Void> {
   private volatile File memoDirectory;
 
   @Option(
+          names = "--downsample-type",
+          description = "Tile downsampling algorithm (${COMPLETION-CANDIDATES})"
+  )
+  private volatile Downsampling downsampling = Downsampling.SIMPLE;
+
+  @Option(
           names = "--overwrite",
           description = "Overwrite the output directory if it exists"
   )
@@ -375,6 +388,9 @@ public class Converter implements Callable<Void> {
       System.out.println("Bio-Formats version = " + FormatTools.VERSION);
       return null;
     }
+
+    nu.pattern.OpenCV.loadShared();
+    System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
 
     ch.qos.logback.classic.Logger root = (ch.qos.logback.classic.Logger)
         LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
@@ -669,10 +685,68 @@ public class Converter implements Callable<Void> {
         }
       }
     }
-    return scaler.downsample(tile, width, height,
+
+    if (downsampling == Downsampling.SIMPLE) {
+      return scaler.downsample(tile, width, height,
         PYRAMID_SCALE, bytesPerPixel, false,
         FormatTools.isFloatingPoint(pixelType),
         1, false);
+    }
+
+    boolean floatingPoint = FormatTools.isFloatingPoint(pixelType);
+    Object pixels =
+      DataTools.makeDataArray(tile, bytesPerPixel, floatingPoint, false);
+    int scaleWidth = width / PYRAMID_SCALE;
+    int scaleHeight = height / PYRAMID_SCALE;
+
+    int cvType = getCvType(pixelType);
+    Mat sourceMat = new Mat(height, width, cvType);
+    Mat destMat = new Mat(scaleHeight, scaleWidth, cvType);
+    Size destSize = new Size(scaleWidth, scaleHeight);
+
+    try {
+      if (pixels instanceof byte[]) {
+        sourceMat.put(0, 0, (byte[]) pixels);
+        opencvDownsample(sourceMat, destMat, destSize);
+        byte[] dest = new byte[scaleWidth * scaleHeight];
+        destMat.get(0, 0, dest);
+        return dest;
+      }
+      else if (pixels instanceof short[]) {
+        sourceMat.put(0, 0, (short[]) pixels);
+        opencvDownsample(sourceMat, destMat, destSize);
+        short[] dest = new short[scaleWidth * scaleHeight];
+        destMat.get(0, 0, dest);
+        return DataTools.shortsToBytes(dest, false);
+      }
+      else if (pixels instanceof int[]) {
+        sourceMat.put(0, 0, (int[]) pixels);
+        opencvDownsample(sourceMat, destMat, destSize);
+        int[] dest = new int[scaleWidth * scaleHeight];
+        destMat.get(0, 0, dest);
+        return DataTools.intsToBytes(dest, false);
+      }
+      else if (pixels instanceof float[]) {
+        sourceMat.put(0, 0, (float[]) pixels);
+        opencvDownsample(sourceMat, destMat, destSize);
+        float[] dest = new float[scaleWidth * scaleHeight];
+        destMat.get(0, 0, dest);
+        return DataTools.floatsToBytes(dest, false);
+      }
+      else if (pixels instanceof double[]) {
+        sourceMat.put(0, 0, (double[]) pixels);
+        opencvDownsample(sourceMat, destMat, destSize);
+        double[] dest = new double[scaleWidth * scaleHeight];
+        destMat.get(0, 0, dest);
+        return DataTools.doublesToBytes(dest, false);
+      }
+    }
+    finally {
+      sourceMat.release();
+      destMat.release();
+    }
+    throw new IllegalArgumentException(
+      "Unsupported array type: " + pixels.getClass());
   }
 
   private byte[] getTile(
@@ -1025,6 +1099,20 @@ public class Converter implements Callable<Void> {
     List<Map<String, Object>> multiscales =
             new ArrayList<Map<String, Object>>();
     Map<String, Object> multiscale = new HashMap<String, Object>();
+    Map<String, String> metadata = new HashMap<String, String>();
+
+    if (downsampling == Downsampling.SIMPLE) {
+      metadata.put("method", "loci.common.image.SimpleImageScaler");
+      metadata.put("version", "Bio-Formats " + FormatTools.VERSION);
+    }
+    else {
+      String method =
+        downsampling == Downsampling.GAUSSIAN ? "pyrDown" : "resize";
+      metadata.put("method", "org.opencv.imgproc.Imgproc." + method);
+      metadata.put("version", Core.VERSION);
+      multiscale.put("type", downsampling.getName());
+    }
+    multiscale.put("metadata", metadata);
     multiscale.put("version", "0.1");
     multiscales.add(multiscale);
     List<Map<String, String>> datasets = new ArrayList<Map<String, String>>();
@@ -1115,6 +1203,51 @@ public class Converter implements Callable<Void> {
     }
     catch (ServiceException se) {
       throw new FormatException(se);
+    }
+  }
+
+  /**
+   * Convert Bio-Formats pixel type to OpenCV pixel type.
+   *
+   * @param bfPixelType Bio-Formats pixels type
+   * @return corresponding OpenCV pixel type
+   */
+  private int getCvType(int bfPixelType) {
+    switch (bfPixelType) {
+      case FormatTools.UINT8:
+        return CvType.CV_8U;
+      case FormatTools.INT8:
+        return CvType.CV_8S;
+      case FormatTools.UINT16:
+        return CvType.CV_16U;
+      case FormatTools.INT16:
+        return CvType.CV_16S;
+      case FormatTools.INT32:
+        return CvType.CV_32S;
+      case FormatTools.FLOAT:
+        return CvType.CV_32F;
+      case FormatTools.DOUBLE:
+        return CvType.CV_64F;
+      default:
+        throw new IllegalArgumentException(
+          "Unsupported pixel type: " +
+           FormatTools.getPixelTypeString(bfPixelType));
+    }
+  }
+
+  /**
+   * Downsample the given source tile using OpenCV.
+   *
+   * @param source source matrix
+   * @param dest destination matrix
+   * @param destSize destination matrix size
+   */
+  private void opencvDownsample(Mat source, Mat dest, Size destSize) {
+    if (downsampling == Downsampling.GAUSSIAN) {
+      Imgproc.pyrDown(source, dest, destSize);
+    }
+    else {
+      Imgproc.resize(source, dest, destSize, 0, 0, downsampling.getCode());
     }
   }
 

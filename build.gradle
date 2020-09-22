@@ -32,6 +32,7 @@ dependencies {
     implementation 'org.janelia.saalfeldlab:n5:2.2.0'
     implementation 'org.janelia.saalfeldlab:n5-blosc:1.1.0'
     implementation 'org.janelia.saalfeldlab:n5-zarr:0.0.4'
+    implementation 'org.openpnp:opencv:3.4.2-1'
 
     // https://github.com/junit-team/junit5-samples/blob/master/junit5-migration-gradle/build.gradle
     def junit4Version        = '4.12'
