@@ -48,6 +48,7 @@ import loci.formats.ImageWriter;
 import loci.formats.Memoizer;
 import loci.formats.MetadataTools;
 import loci.formats.MissingLibraryException;
+import loci.formats.in.DynamicMetadataOptions;
 import loci.formats.meta.IMetadata;
 import loci.formats.services.OMEXMLService;
 import loci.formats.services.OMEXMLServiceImpl;
@@ -346,6 +347,15 @@ public class Converter implements Callable<Void> {
   )
   private volatile boolean overwrite = false;
 
+  @Option(
+          arity = "0..1",
+          names = "--options",
+          split = ",",
+          description =
+            "Reader-specific options, in format key=value[,key2=value2]"
+  )
+  private volatile List<String> readerOptions = new ArrayList<String>();
+
   /** Scaling implementation that will be used during downsampling. */
   private volatile IImageScaler scaler = new SimpleImageScaler();
 
@@ -498,6 +508,18 @@ public class Converter implements Callable<Void> {
         LOGGER.error("Failed to instantiate reader: {}", readerClass, e);
         return;
       }
+
+      if (readerOptions.size() > 0) {
+        DynamicMetadataOptions options = new DynamicMetadataOptions();
+        for (String option : readerOptions) {
+          String[] pair = option.split("=");
+          if (pair.length == 2) {
+            options.set(pair[0], pair[1]);
+          }
+        }
+        memoizer.setMetadataOptions(options);
+      }
+
       memoizer.setOriginalMetadataPopulated(true);
       memoizer.setFlattenedResolutions(false);
       memoizer.setMetadataFiltered(true);
