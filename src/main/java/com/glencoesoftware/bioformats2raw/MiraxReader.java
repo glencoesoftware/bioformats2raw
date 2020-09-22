@@ -44,7 +44,9 @@ import loci.formats.codec.JPEG2000CodecOptions;
 import loci.formats.codec.JPEGXRCodec;
 import loci.formats.codec.ZlibCodec;
 import loci.formats.in.APNGReader;
+import loci.formats.in.DynamicMetadataOptions;
 import loci.formats.in.MetadataLevel;
+import loci.formats.in.MetadataOptions;
 import loci.formats.meta.IMinMaxStore;
 import loci.formats.meta.MetadataStore;
 import ome.units.quantity.Length;
@@ -79,6 +81,9 @@ public class MiraxReader extends FormatReader {
    * for overlap calculations
    */
   private static final double SCALE_FACTOR = 2.0;
+
+  public static final String DIMENSIONS_KEY = "mirax.use_metadata_dimensions";
+  public static final boolean DIMENSIONS_DEFAULT = true;
 
   // -- Fields --
 
@@ -505,6 +510,8 @@ public class MiraxReader extends FormatReader {
 
     int nonHierCount = Integer.parseInt(hierarchy.get("NONHIER_COUNT"));
     int totalCount = 0;
+    int metadataWidth = 0;
+    int metadataHeight = 0;
     for (int i=0; i<nonHierCount; i++) {
       String name = hierarchy.get("NONHIER_" + i + "_NAME");
       int count = Integer.parseInt(hierarchy.get("NONHIER_" + i + "_COUNT"));
@@ -595,13 +602,24 @@ public class MiraxReader extends FormatReader {
                 minY = tilePositions[t][1];
               }
             }
-
             for (int t=0; t<nTiles; t++) {
               tilePositions[t][0] -= minX;
               tilePositions[t][1] -= minY;
             }
 
             stream.close();
+
+            String stitchingTable =
+              hierarchy.get("NONHIER_" + i + "_VAL_" + q + "_SECTION");
+            IniTable stitching = data.getTable(stitchingTable);
+            String prefix =
+              "COMPRESSED_STITCHING_ORIG_SLIDE_SCANNED_AREA_IN_PIXELS__";
+            int tableMinX = Integer.parseInt(stitching.get(prefix + "LEFT"));
+            int tableMinY = Integer.parseInt(stitching.get(prefix + "TOP"));
+            int tableMaxX = Integer.parseInt(stitching.get(prefix + "RIGHT"));
+            int tableMaxY = Integer.parseInt(stitching.get(prefix + "BOTTOM"));
+            metadataWidth = (tableMaxX - tableMinX) + 1;
+            metadataHeight = (tableMaxY - tableMinY) + 1;
           }
         }
 
@@ -752,8 +770,14 @@ public class MiraxReader extends FormatReader {
         double totalHeight = tileHeight[i] * tileRowCount[i];
         double divX = tileColCount[0] / div;
         double divY = tileRowCount[0] / div;
+
         m.sizeX = (int) (totalWidth - (overlapX[i] * (divX - 1)));
         m.sizeY = (int) (totalHeight - (overlapY[i] * (divY - 1)));
+
+        if (useMetadataDimensions()) {
+          m.sizeX = (int) Math.min(metadataWidth + tileWidth[i], m.sizeX);
+          m.sizeY = (int) Math.min(metadataHeight + tileHeight[i], m.sizeY);
+        }
       }
       else {
         m.sizeX = (int) (core.get(i - 1).sizeX / SCALE_FACTOR);
@@ -975,6 +999,18 @@ public class MiraxReader extends FormatReader {
    */
   public void setTileCache(Cache<TilePointer, byte[]> newTileCache) {
     tileCache = newTileCache;
+  }
+
+  /**
+   * @return true if XY dimensions calculated from Slidedat.ini should be used
+   */
+  public boolean useMetadataDimensions() {
+    MetadataOptions options = getMetadataOptions();
+    if (options instanceof DynamicMetadataOptions) {
+      return ((DynamicMetadataOptions) options).getBoolean(
+        DIMENSIONS_KEY, DIMENSIONS_DEFAULT);
+    }
+    return DIMENSIONS_DEFAULT;
   }
 
   /**
