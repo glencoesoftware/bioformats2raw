@@ -774,7 +774,9 @@ public class MiraxReader extends FormatReader {
         m.sizeX = (int) (totalWidth - (overlapX[i] * (divX - 1)));
         m.sizeY = (int) (totalHeight - (overlapY[i] * (divY - 1)));
 
-        if (useMetadataDimensions()) {
+        if (useMetadataDimensions() &&
+          metadataWidth > 0 && metadataHeight > 0)
+        {
           m.sizeX = (int) Math.min(metadataWidth + tileWidth[i], m.sizeX);
           m.sizeY = (int) Math.min(metadataHeight + tileHeight[i], m.sizeY);
         }
