@@ -63,6 +63,7 @@ import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.DoubleArrayDataBlock;
 import org.janelia.saalfeldlab.n5.FloatArrayDataBlock;
 import org.janelia.saalfeldlab.n5.GzipCompression;
+import org.janelia.saalfeldlab.n5.IntArrayDataBlock;
 import org.janelia.saalfeldlab.n5.Lz4Compression;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
@@ -877,6 +878,13 @@ public class Converter implements Callable<Void> {
           dataBlock = new ShortArrayDataBlock(size, gridPosition, asShort);
           break;
         }
+        case FormatTools.INT32:
+        case FormatTools.UINT32: {
+          int[] asInt = new int[tile.length / 4];
+          bb.asIntBuffer().get(asInt);
+          dataBlock = new IntArrayDataBlock(size, gridPosition, asInt);
+          break;
+        }
         case FormatTools.FLOAT: {
           float[] asFloat = new float[tile.length / 4];
           bb.asFloatBuffer().get(asFloat);
@@ -978,6 +986,12 @@ public class Converter implements Callable<Void> {
         break;
       case FormatTools.UINT16:
         dataType = DataType.UINT16;
+        break;
+      case FormatTools.INT32:
+        dataType = DataType.INT32;
+        break;
+      case FormatTools.UINT32:
+        dataType = DataType.UINT32;
         break;
       case FormatTools.FLOAT:
         dataType = DataType.FLOAT32;
