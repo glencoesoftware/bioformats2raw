@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import com.glencoesoftware.bioformats2raw.Converter;
 import com.glencoesoftware.bioformats2raw.Downsampling;
@@ -39,11 +40,16 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.migrationsupport.rules.EnableRuleMigrationSupport;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.rules.TemporaryFolder;
 import org.opencv.core.Core;
 
+@EnableRuleMigrationSupport
 public class ZarrTest {
 
   Path input;
@@ -59,6 +65,7 @@ public class ZarrTest {
    * Set logging to warn before all methods.
    */
   @Before
+  @BeforeEach
   public void setup() throws Exception {
     output = tmp.newFolder().toPath().resolve("test");
     LogbackTools.setRootLevel("warn");
@@ -418,18 +425,22 @@ public class ZarrTest {
   }
 
   /**
-   * Test float pixel type.
+   * Test pixel type preservation.
+   *
+   * @param type string representation of Bio-Formats pixel type
+   * @param n5Type expected corresponding N5 data type
    */
-  @Test
-  public void testFloatPixelType() throws Exception {
-    input = fake("pixelType", "float");
+  @ParameterizedTest
+  @MethodSource("getPixelTypes")
+  public void testPixelType(String type, DataType n5Type) throws Exception {
+    input = fake("pixelType", type);
     assertTool();
     N5ZarrReader z =
             new N5ZarrReader(output.resolve("data.zarr").toString());
 
     // Check series dimensions and special pixels
     DatasetAttributes da = z.getDatasetAttributes("/0/0");
-    Assert.assertEquals(DataType.FLOAT32, da.getDataType());
+    Assert.assertEquals(n5Type, da.getDataType());
     Assert.assertArrayEquals(
         new long[] {512, 512, 1, 1, 1}, da.getDimensions());
     Assert.assertArrayEquals(
@@ -441,26 +452,15 @@ public class ZarrTest {
   }
 
   /**
-   * Test double pixel type.
+   * @return pairs of pixel type strings and N5 data types
    */
-  @Test
-  public void testDoublePixelType() throws Exception {
-    input = fake("pixelType", "double");
-    assertTool();
-    N5ZarrReader z =
-            new N5ZarrReader(output.resolve("data.zarr").toString());
-
-    // Check series dimensions and special pixels
-    DatasetAttributes da = z.getDatasetAttributes("/0/0");
-    Assert.assertEquals(DataType.FLOAT64, da.getDataType());
-    Assert.assertArrayEquals(
-        new long[] {512, 512, 1, 1, 1}, da.getDimensions());
-    Assert.assertArrayEquals(
-        new int[] {512, 512, 1, 1, 1}, da.getBlockSize());
-    ByteBuffer tile = z.readBlock("/0/0", da, new long[] {0, 0, 0, 0, 0})
-        .toByteBuffer();
-    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
-    Assert.assertArrayEquals(new int[] {0, 0, 0, 0, 0}, seriesPlaneNumberZCT);
+  static Stream<Arguments> getPixelTypes() {
+    return Stream.of(
+      Arguments.of("float", DataType.FLOAT32),
+      Arguments.of("double", DataType.FLOAT64),
+      Arguments.of("uint32", DataType.UINT32),
+      Arguments.of("int32", DataType.INT32)
+    );
   }
 
   /**
@@ -563,14 +563,14 @@ public class ZarrTest {
 
   /**
    * Test that appropriate metadata is written for each downsampling type.
-
+   *
    * @param type downsampling type
    */
   @ParameterizedTest
   @EnumSource(Downsampling.class)
   public void testDownsampleTypes(Downsampling type) throws IOException {
     input = fake();
-    assertTool("--downsample_type", type.getName());
+    assertTool("--downsample-type", type.toString());
 
     N5ZarrReader z =
           new N5ZarrReader(output.resolve("data.zarr").toString());
@@ -592,12 +592,12 @@ public class ZarrTest {
     if (type != Downsampling.SIMPLE) {
       Assert.assertEquals(type.getName(), multiscale.get("type"));
       Assert.assertEquals(Core.VERSION, version);
-      Assert.assertEquals("loci.common.image.SimpleImageScaler", method);
+      Assert.assertEquals("org.opencv.imgproc.Imgproc." +
+        (type == Downsampling.GAUSSIAN ? "pyrDown" : "resize"), method);
     }
     else {
       Assert.assertEquals("Bio-Formats " + FormatTools.VERSION, version);
-      Assert.assertEquals("org.opencv.imgproc.Imgproc." +
-        (type == Downsampling.GAUSSIAN ? "pyrDown" : "resize"), method);
+      Assert.assertEquals("loci.common.image.SimpleImageScaler", method);
     }
   }
 

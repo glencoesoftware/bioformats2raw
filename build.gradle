@@ -41,6 +41,7 @@ dependencies {
     def junitPlatformVersion = '1.2.0'
     testImplementation "org.junit.jupiter:junit-jupiter-api:${junitJupiterVersion}"
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:${junitJupiterVersion}"
+    testImplementation "org.junit.jupiter:junit-jupiter-migrationsupport:${junitJupiterVersion}"
     testImplementation "junit:junit:${junit4Version}"
     testRuntimeOnly "org.junit.vintage:junit-vintage-engine:${junitVintageVersion}"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher:${junitPlatformVersion}"
@@ -56,6 +57,10 @@ jar {
             "Implementation-Version": version
         )
     }
+}
+
+test {
+    useJUnitPlatform()
 }
 
 distributions {
