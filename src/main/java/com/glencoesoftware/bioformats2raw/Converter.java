@@ -1275,7 +1275,7 @@ public class Converter implements Callable<Void> {
    */
   private void loadOpenCV() {
     try {
-      nu.pattern.OpenCV.loadShared();
+      nu.pattern.OpenCV.loadLocally();
     }
     catch (Throwable e) {
       LOGGER.warn("Could not load OpenCV libraries", e);
