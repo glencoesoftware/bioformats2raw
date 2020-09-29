@@ -390,8 +390,7 @@ public class Converter implements Callable<Void> {
       return null;
     }
 
-    nu.pattern.OpenCV.loadShared();
-    System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+    loadOpenCV();
 
     ch.qos.logback.classic.Logger root = (ch.qos.logback.classic.Logger)
         LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
@@ -1267,6 +1266,27 @@ public class Converter implements Callable<Void> {
 
   private Slf4JStopWatch stopWatch() {
     return new Slf4JStopWatch(LOGGER, Slf4JStopWatch.DEBUG_LEVEL);
+  }
+
+  /**
+   * Attempt to load native libraries associated with OpenCV.
+   * If library loading fails, any exceptions are caught and
+   * logged so that simple downsampling can still be used.
+   */
+  private void loadOpenCV() {
+    try {
+      nu.pattern.OpenCV.loadShared();
+    }
+    catch (Throwable e) {
+      LOGGER.warn("Could not load OpenCV libraries", e);
+    }
+    try {
+      System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+    }
+    catch (Throwable e) {
+      LOGGER.warn(
+        "Could not load native library " + Core.NATIVE_LIBRARY_NAME, e);
+    }
   }
 
   /**
