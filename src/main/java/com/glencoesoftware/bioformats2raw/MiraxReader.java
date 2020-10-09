@@ -259,10 +259,9 @@ public class MiraxReader extends FormatReader {
             offsetIndex < 0 || offsetIndex >= firstLevelOffsets.size() - 1 ?
             -1L : firstLevelOffsets.get(offsetIndex + 1);
 
-          int maxChannel = (int) Math.min(MAX_CHANNELS, getSizeC());
-          int channel = no % maxChannel;
-          if (fluorescence) {
-            channel = maxChannel - channel - 1;
+          int channel = no % MAX_CHANNELS;
+          if (fluorescence && getSizeC() != 2) {
+            channel = MAX_CHANNELS - channel - 1;
           }
 
           String file = files.get(thisOffset.fileIndex + 1);
