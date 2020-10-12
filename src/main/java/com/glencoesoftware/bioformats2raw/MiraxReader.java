@@ -229,9 +229,6 @@ public class MiraxReader extends FormatReader {
     int endX = x + w;
     int endY = y + h;
 
-    double xOverlap = inPyramid ? overlapX[index] : 0;
-    double yOverlap = inPyramid ? overlapY[index] : 0;
-
     double scale = divPerSide / div;
     for (int row=0; row<rowCount; row++) {
       for (int col=0; col<colCount; col++) {
@@ -589,6 +586,7 @@ public class MiraxReader extends FormatReader {
             tilePositions = new int[nTiles][2];
             int minX = Integer.MAX_VALUE;
             int minY = Integer.MAX_VALUE;
+
             for (int t=0; t<nTiles; t++) {
               tilePositions[t][0] =
                 DataTools.bytesToInt(positionData, t * 9 + 1, 4, true);
@@ -602,6 +600,10 @@ public class MiraxReader extends FormatReader {
                 minY = tilePositions[t][1];
               }
             }
+
+            minX -= (minX % 256);
+            minY -= (minY % 256);
+
             for (int t=0; t<nTiles; t++) {
               tilePositions[t][0] -= minX;
               tilePositions[t][1] -= minY;
@@ -661,6 +663,8 @@ public class MiraxReader extends FormatReader {
               minY = tilePositions[t][1];
             }
           }
+          minX -= (minX % 256);
+          minY -= (minY % 256);
           for (int t=0; t<nTiles; t++) {
             tilePositions[t][0] -= minX;
             tilePositions[t][1] -= minY;
@@ -768,11 +772,9 @@ public class MiraxReader extends FormatReader {
       if (i == 0) {
         double totalWidth = tileWidth[i] * tileColCount[i];
         double totalHeight = tileHeight[i] * tileRowCount[i];
-        double divX = tileColCount[0] / div;
-        double divY = tileRowCount[0] / div;
 
-        m.sizeX = (int) (totalWidth - (overlapX[i] * (divX - 1)));
-        m.sizeY = (int) (totalHeight - (overlapY[i] * (divY - 1)));
+        m.sizeX = (int) totalWidth;
+        m.sizeY = (int) totalHeight;
 
         if (useMetadataDimensions() &&
           metadataWidth > 0 && metadataHeight > 0)
