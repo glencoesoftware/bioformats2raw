@@ -123,6 +123,8 @@ public class MiraxReader extends FormatReader {
   private JPEG2000CodecOptions jp2kOptions =
     JPEG2000CodecOptions.getDefaultOptions();
 
+  private boolean fluorescence = false;
+
   private transient JPEGXRCodec jpegxrCodec = new JPEGXRCodec();
 
   private transient Cache<TilePointer, byte[]> tileCache;
@@ -257,10 +259,9 @@ public class MiraxReader extends FormatReader {
             offsetIndex < 0 || offsetIndex >= firstLevelOffsets.size() - 1 ?
             -1L : firstLevelOffsets.get(offsetIndex + 1);
 
-          int maxChannel = (int) Math.min(MAX_CHANNELS, getSizeC());
-          int channel = no % maxChannel;
-          if (getSizeC() > maxChannel) {
-            channel = maxChannel - channel - 1;
+          int channel = no % MAX_CHANNELS;
+          if (fluorescence && getSizeC() != 2) {
+            channel = MAX_CHANNELS - channel - 1;
           }
 
           String file = files.get(thisOffset.fileIndex + 1);
@@ -330,6 +331,7 @@ public class MiraxReader extends FormatReader {
       tilePositions = null;
       pngReader.close();
       firstLevelOffsets.clear();
+      fluorescence = false;
     }
   }
 
@@ -381,6 +383,8 @@ public class MiraxReader extends FormatReader {
 
     IniTable general = data.getTable("GENERAL");
     IniTable hierarchy = data.getTable("HIERARCHICAL");
+
+    fluorescence = "SLIDE_TYPE_FLUORESCENCE".equals(general.get("SLIDE_TYPE"));
 
     xTiles = Integer.parseInt(general.get("IMAGENUMBER_X"));
     yTiles = Integer.parseInt(general.get("IMAGENUMBER_Y"));
