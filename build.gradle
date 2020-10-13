@@ -14,10 +14,9 @@ targetCompatibility = 1.8
 
 repositories {
     jcenter()
-    // Temporarily disabled
-    //maven {
-    //    url 'https://artifacts.openmicroscopy.org/artifactory/repo/'
-    //}
+    maven {
+        url 'https://artifacts.glencoesoftware.com/artifactory/ome.releases'
+    }
     maven {
         url 'https://repo.glencoesoftware.com/repository/n5-zarr-snapshots/'
     }
