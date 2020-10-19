@@ -347,6 +347,13 @@ public class Converter implements Callable<Void> {
   )
   private volatile boolean overwrite = false;
 
+  @Option(
+          names = "--fill-value",
+          description = "Default value to fill in for missing tiles" +
+                        " (currently .mrxs only)"
+  )
+  private volatile Byte fillValue = null;
+
   /** Scaling implementation that will be used during downsampling. */
   private volatile IImageScaler scaler = new SimpleImageScaler();
 
@@ -487,6 +494,9 @@ public class Converter implements Callable<Void> {
       Memoizer memoizer;
       try {
         reader = (IFormatReader) readerClass.getConstructor().newInstance();
+        if (reader instanceof MiraxReader) {
+          ((MiraxReader) reader).setFillValue(fillValue);
+        }
         if (memoDirectory == null) {
           memoizer = new Memoizer(reader);
         }
