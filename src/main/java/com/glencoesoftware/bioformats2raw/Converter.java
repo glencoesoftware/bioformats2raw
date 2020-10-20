@@ -487,6 +487,12 @@ public class Converter implements Callable<Void> {
     finally {
       imageReader.close();
     }
+
+    if (!readerClass.equals(MiraxReader.class) && fillValue != null) {
+      throw new IllegalArgumentException(
+        "--fill-value not yet supported for " + readerClass);
+    }
+
     // Now with our found type instantiate our queue of readers for use
     // during conversion
     for (int i=0; i < maxWorkers; i++) {
