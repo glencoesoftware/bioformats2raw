@@ -616,12 +616,22 @@ public class MiraxReader extends FormatReader {
             IniTable stitching = data.getTable(stitchingTable);
             String prefix =
               "COMPRESSED_STITCHING_ORIG_SLIDE_SCANNED_AREA_IN_PIXELS__";
-            int tableMinX = Integer.parseInt(stitching.get(prefix + "LEFT"));
-            int tableMinY = Integer.parseInt(stitching.get(prefix + "TOP"));
-            int tableMaxX = Integer.parseInt(stitching.get(prefix + "RIGHT"));
-            int tableMaxY = Integer.parseInt(stitching.get(prefix + "BOTTOM"));
-            metadataWidth = (tableMaxX - tableMinX) + 1;
-            metadataHeight = (tableMaxY - tableMinY) + 1;
+
+            String left = stitching.get(prefix + "LEFT");
+            String top = stitching.get(prefix + "TOP");
+            String right = stitching.get(prefix + "RIGHT");
+            String bottom = stitching.get(prefix + "BOTTOM");
+
+            if (left != null && top != null &&
+              right != null && bottom != null)
+            {
+              int tableMinX = Integer.parseInt(left);
+              int tableMinY = Integer.parseInt(top);
+              int tableMaxX = Integer.parseInt(right);
+              int tableMaxY = Integer.parseInt(bottom);
+              metadataWidth = (tableMaxX - tableMinX) + 1;
+              metadataHeight = (tableMaxY - tableMinY) + 1;
+            }
           }
         }
 
