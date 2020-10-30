@@ -350,10 +350,10 @@ public class Converter implements Callable<Void> {
 
   @Option(
           names = "--fill-value",
-          description = "Default value to fill in for missing tiles" +
+          description = "Default value to fill in for missing tiles (0-255)" +
                         " (currently .mrxs only)"
   )
-  private volatile Byte fillValue = null;
+  private volatile Short fillValue = null;
 
   @Option(
           arity = "0..1",
@@ -405,6 +405,10 @@ public class Converter implements Callable<Void> {
       System.out.println("Version = " + version);
       System.out.println("Bio-Formats version = " + FormatTools.VERSION);
       return null;
+    }
+
+    if (fillValue != null && (fillValue < 0 || fillValue > 255)) {
+      throw new IllegalArgumentException("Invalid fill value: " + fillValue);
     }
 
     loadOpenCV();
@@ -509,8 +513,8 @@ public class Converter implements Callable<Void> {
       Memoizer memoizer;
       try {
         reader = (IFormatReader) readerClass.getConstructor().newInstance();
-        if (reader instanceof MiraxReader) {
-          ((MiraxReader) reader).setFillValue(fillValue);
+        if (fillValue != null && reader instanceof MiraxReader) {
+          ((MiraxReader) reader).setFillValue(fillValue.byteValue());
         }
         if (memoDirectory == null) {
           memoizer = new Memoizer(reader);
