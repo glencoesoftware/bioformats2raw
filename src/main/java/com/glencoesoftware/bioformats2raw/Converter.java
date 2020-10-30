@@ -48,6 +48,7 @@ import loci.formats.ImageWriter;
 import loci.formats.Memoizer;
 import loci.formats.MetadataTools;
 import loci.formats.MissingLibraryException;
+import loci.formats.in.DynamicMetadataOptions;
 import loci.formats.meta.IMetadata;
 import loci.formats.services.OMEXMLService;
 import loci.formats.services.OMEXMLServiceImpl;
@@ -354,6 +355,15 @@ public class Converter implements Callable<Void> {
   )
   private volatile Byte fillValue = null;
 
+  @Option(
+          arity = "0..1",
+          names = "--options",
+          split = ",",
+          description =
+            "Reader-specific options, in format key=value[,key2=value2]"
+  )
+  private volatile List<String> readerOptions = new ArrayList<String>();
+
   /** Scaling implementation that will be used during downsampling. */
   private volatile IImageScaler scaler = new SimpleImageScaler();
 
@@ -397,8 +407,7 @@ public class Converter implements Callable<Void> {
       return null;
     }
 
-    nu.pattern.OpenCV.loadShared();
-    System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+    loadOpenCV();
 
     ch.qos.logback.classic.Logger root = (ch.qos.logback.classic.Logger)
         LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
@@ -515,6 +524,18 @@ public class Converter implements Callable<Void> {
         LOGGER.error("Failed to instantiate reader: {}", readerClass, e);
         return;
       }
+
+      if (readerOptions.size() > 0) {
+        DynamicMetadataOptions options = new DynamicMetadataOptions();
+        for (String option : readerOptions) {
+          String[] pair = option.split("=");
+          if (pair.length == 2) {
+            options.set(pair[0], pair[1]);
+          }
+        }
+        memoizer.setMetadataOptions(options);
+      }
+
       memoizer.setOriginalMetadataPopulated(true);
       memoizer.setFlattenedResolutions(false);
       memoizer.setMetadataFiltered(true);
@@ -1283,6 +1304,27 @@ public class Converter implements Callable<Void> {
 
   private Slf4JStopWatch stopWatch() {
     return new Slf4JStopWatch(LOGGER, Slf4JStopWatch.DEBUG_LEVEL);
+  }
+
+  /**
+   * Attempt to load native libraries associated with OpenCV.
+   * If library loading fails, any exceptions are caught and
+   * logged so that simple downsampling can still be used.
+   */
+  private void loadOpenCV() {
+    try {
+      nu.pattern.OpenCV.loadLocally();
+    }
+    catch (Throwable e) {
+      LOGGER.warn("Could not load OpenCV libraries", e);
+    }
+    try {
+      System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+    }
+    catch (Throwable e) {
+      LOGGER.warn(
+        "Could not load native library " + Core.NATIVE_LIBRARY_NAME, e);
+    }
   }
 
   /**
