@@ -6,7 +6,7 @@ plugins {
 }
 
 group = 'com.glencoesoftware'
-version = '0.2.6-SNAPSHOT'
+version = '0.2.7-SNAPSHOT'
 
 mainClassName = 'com.glencoesoftware.bioformats2raw.Converter'
 sourceCompatibility = 1.8
@@ -15,7 +15,7 @@ targetCompatibility = 1.8
 repositories {
     jcenter()
     maven {
-        url 'https://artifacts.openmicroscopy.org/artifactory/repo/'
+        url 'https://artifacts.glencoesoftware.com/artifactory/ome.releases'
     }
     maven {
         url 'https://repo.glencoesoftware.com/repository/n5-zarr-snapshots/'
@@ -26,22 +26,26 @@ repositories {
 }
 
 dependencies {
-    implementation 'ome:formats-gpl:6.4.0'
+    implementation 'ome:formats-gpl:6.5.1'
     implementation 'info.picocli:picocli:4.2.0'
     implementation 'com.univocity:univocity-parsers:2.8.4'
     implementation 'org.janelia.saalfeldlab:n5:2.2.0'
-    implementation 'org.janelia.saalfeldlab:n5-blosc:1.1.0'
-    implementation 'org.janelia.saalfeldlab:n5-zarr:0.0.4'
+
+    // exclude JUnit 4 to make sure our tests all use JUnit 5
+    implementation('org.janelia.saalfeldlab:n5-blosc:1.1.0') {
+        exclude group: 'junit', module: 'junit'
+    }
+    implementation('org.janelia.saalfeldlab:n5-zarr:0.0.4') {
+        exclude group: 'junit', module: 'junit'
+    }
+    implementation 'org.openpnp:opencv:3.4.2-1'
 
     // https://github.com/junit-team/junit5-samples/blob/master/junit5-migration-gradle/build.gradle
-    def junit4Version        = '4.12'
-    def junitVintageVersion  = '5.2.0'
-    def junitJupiterVersion  = '5.2.0'
-    def junitPlatformVersion = '1.2.0'
+    def junitVintageVersion  = '5.7.0'
+    def junitJupiterVersion  = '5.7.0'
+    def junitPlatformVersion = '1.7.0'
     testImplementation "org.junit.jupiter:junit-jupiter-api:${junitJupiterVersion}"
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:${junitJupiterVersion}"
-    testImplementation "junit:junit:${junit4Version}"
-    testRuntimeOnly "org.junit.vintage:junit-vintage-engine:${junitVintageVersion}"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher:${junitPlatformVersion}"
 
     // https://stackoverflow.com/questions/45462987/junit5-with-intellij-and-gradle
@@ -55,6 +59,10 @@ jar {
             "Implementation-Version": version
         )
     }
+}
+
+test {
+    useJUnitPlatform()
 }
 
 distributions {

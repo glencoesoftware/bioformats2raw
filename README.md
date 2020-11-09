@@ -61,6 +61,13 @@ Either or both of these readers can be excluded with the `--extra-readers` optio
     # don't add any additional readers, just use the ones provided by Bio-Formats
     bioformats2raw /path/to/file.mrxs /path/to/n5-pyramid --extra-readers
 
+Reader-specific options can be specified using `--options`:
+
+    bioformats2raw /path/to/file.mrxs /path/to/n5-pyramid --options mirax.use_metadata_dimensions=false
+
+Be aware when experimenting with different values for `--options` that the corresponding memo (cache) file may need to be
+removed in order for new options to take effect.  This file will be e.g. `/path/to/.file.mrxs.bfmemo`.
+
 The output in `/path/to/n5-pyramid` can be passed to `raw2ometiff` to produce
 an OME-TIFF that can be opened in ImageJ, imported into OMERO, etc. See
 https://github.com/glencoesoftware/raw2ometiff for more information.
