@@ -260,6 +260,13 @@ public class Converter implements Callable<Void> {
   private volatile boolean overwrite = false;
 
   @Option(
+          names = "--fill-value",
+          description = "Default value to fill in for missing tiles (0-255)" +
+                        " (currently .mrxs only)"
+  )
+  private volatile Short fillValue = null;
+
+  @Option(
           arity = "0..1",
           names = "--options",
           split = ",",
@@ -309,6 +316,10 @@ public class Converter implements Callable<Void> {
       System.out.println("Version = " + version);
       System.out.println("Bio-Formats version = " + FormatTools.VERSION);
       return null;
+    }
+
+    if (fillValue != null && (fillValue < 0 || fillValue > 255)) {
+      throw new IllegalArgumentException("Invalid fill value: " + fillValue);
     }
 
     OpenCVTools.loadOpenCV();
@@ -364,6 +375,11 @@ public class Converter implements Callable<Void> {
     // First find which reader class we need
     Class<?> readerClass = getBaseReaderClass();
 
+    if (!readerClass.equals(MiraxReader.class) && fillValue != null) {
+      throw new IllegalArgumentException(
+        "--fill-value not yet supported for " + readerClass);
+    }
+
     // Now with our found type instantiate our queue of readers for use
     // during conversion
     for (int i=0; i < maxWorkers; i++) {
@@ -371,6 +387,9 @@ public class Converter implements Callable<Void> {
       Memoizer memoizer;
       try {
         reader = (IFormatReader) readerClass.getConstructor().newInstance();
+        if (fillValue != null && reader instanceof MiraxReader) {
+          ((MiraxReader) reader).setFillValue(fillValue.byteValue());
+        }
         if (memoDirectory == null) {
           memoizer = new Memoizer(reader);
         }
