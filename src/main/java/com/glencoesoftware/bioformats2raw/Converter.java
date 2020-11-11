@@ -275,6 +275,12 @@ public class Converter implements Callable<Void> {
   )
   private volatile List<String> readerOptions = new ArrayList<String>();
 
+  @Option(
+          names = "--no-hcs",
+          description = "Turn off HCS writing"
+  )
+  private volatile boolean noHCS = false;
+
   /** Scaling implementation that will be used during downsampling. */
   private volatile IImageScaler scaler = new SimpleImageScaler();
 
@@ -306,6 +312,8 @@ public class Converter implements Callable<Void> {
 
   /** Current number of tiles processed at the current resolution. */
   private volatile AtomicInteger nTile;
+
+  private List<HCSIndex> hcsIndexes = new ArrayList<HCSIndex>();
 
   @Override
   public Void call() throws Exception {
@@ -434,8 +442,17 @@ public class Converter implements Callable<Void> {
         seriesCount = v.getSeriesCount();
         IMetadata meta = (IMetadata) v.getMetadataStore();
 
+        if (!noHCS) {
+          noHCS = meta.getPlateCount() == 0;
+        }
+
         for (int s=0; s<meta.getImageCount(); s++) {
           meta.setPixelsBigEndian(true, s);
+
+          if (!noHCS) {
+            HCSIndex index = new HCSIndex(meta, s);
+            hcsIndexes.add(index);
+          }
         }
 
         String xml = getService().getOMEXML(meta);
@@ -453,6 +470,10 @@ public class Converter implements Callable<Void> {
       }
       finally {
         readers.put(v);
+      }
+
+      if (!noHCS) {
+        scaleFormatString = "%d/%d/%d/%d/%d/%d";
       }
 
       for (int i=0; i<seriesCount; i++) {
@@ -515,12 +536,23 @@ public class Converter implements Callable<Void> {
       Integer series, Integer resolution)
   {
     List<Object> args = new ArrayList<Object>();
-    args.add(series);
-    args.add(resolution);
-    if (additionalScaleFormatStringArgs != null) {
-      String[] row = additionalScaleFormatStringArgs.get(series);
-      for (String arg : row) {
-        args.add(arg);
+    if (!noHCS) {
+      HCSIndex index = hcsIndexes.get(series);
+      args.add(index.getPlateIndex());
+      args.add(index.getPlateAcquisitionIndex());
+      args.add(index.getWellRowIndex());
+      args.add(index.getWellColumnIndex());
+      args.add(index.getFieldIndex());
+      args.add(resolution);
+    }
+    else {
+      args.add(series);
+      args.add(resolution);
+      if (additionalScaleFormatStringArgs != null) {
+        String[] row = additionalScaleFormatStringArgs.get(series);
+        for (String arg : row) {
+          args.add(arg);
+        }
       }
     }
     return args.toArray();
