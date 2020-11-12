@@ -134,4 +134,14 @@ public class HCSIndex {
     this.field = fieldIndex;
   }
 
+  /**
+   * @return well path relative to the plate group
+   */
+  public String getWellPath() {
+    return String.format("%d/%d/%d",
+      getPlateAcquisitionIndex(),
+      getWellRowIndex(),
+      getWellColumnIndex());
+  }
+
 }

@@ -438,9 +438,10 @@ public class Converter implements Callable<Void> {
     try {
       int seriesCount;
       IFormatReader v = readers.take();
+      IMetadata meta = null;
       try {
         seriesCount = v.getSeriesCount();
-        IMetadata meta = (IMetadata) v.getMetadataStore();
+        meta = (IMetadata) v.getMetadataStore();
 
         if (!noHCS) {
           noHCS = meta.getPlateCount() == 0;
@@ -485,6 +486,10 @@ public class Converter implements Callable<Void> {
           unwrapException(t);
           return;
         }
+      }
+
+      if (meta != null) {
+        saveHCSMetadata(getWriter(), meta);
       }
     }
     finally {
@@ -729,8 +734,7 @@ public class Converter implements Callable<Void> {
     String pathName =
         "/" + String.format(scaleFormatString,
             getScaleFormatStringArgs(series, resolution));
-    final String pyramidPath = outputPath.resolve(pyramidName).toString();
-    final N5Writer n5 = fileType.writer(pyramidPath);
+    final N5Writer n5 = getWriter();
     DatasetAttributes datasetAttributes = n5.getDatasetAttributes(pathName);
     int[] blockSizes = datasetAttributes.getBlockSize();
     int activeTileWidth = blockSizes[0];
@@ -834,8 +838,7 @@ public class Converter implements Callable<Void> {
             compressionParameter);
 
     // fileset level metadata
-    final String pyramidPath = outputPath.resolve(pyramidName).toString();
-    final N5Writer n5 = fileType.writer(pyramidPath);
+    final N5Writer n5 = getWriter();
     n5.setAttribute("/", "bioformats2raw.layout", LAYOUT);
 
     // series level metadata
@@ -916,6 +919,78 @@ public class Converter implements Callable<Void> {
 
     }
 
+  }
+
+  private void saveHCSMetadata(N5Writer n5, IMetadata meta) throws IOException {
+    if (noHCS) {
+      return;
+    }
+
+    for (int plate=0; plate<meta.getPlateCount(); plate++) {
+      Map<String, Object> plateMap = new HashMap<String, Object>();
+
+      plateMap.put("name", meta.getPlateName(plate));
+
+      List<Map<String, Object>> columns = new ArrayList<Map<String, Object>>();
+      for (int c=0; c<meta.getPlateColumns(plate).getValue(); c++) {
+        Map<String, Object> column = new HashMap<String, Object>();
+        column.put("name", c);
+        columns.add(column);
+      }
+      plateMap.put("columns", columns);
+
+      List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+      for (int r=0; r<meta.getPlateRows(plate).getValue(); r++) {
+        Map<String, Object> row = new HashMap<String, Object>();
+        row.put("name", r);
+        rows.add(row);
+      }
+      plateMap.put("rows", rows);
+
+      List<Map<String, Object>> acquisitions =
+        new ArrayList<Map<String, Object>>();
+      for (int pa=0; pa<meta.getPlateAcquisitionCount(plate); pa++) {
+        Map<String, Object> acquisition = new HashMap<String, Object>();
+        acquisition.put("path", pa);
+        acquisitions.add(acquisition);
+      }
+      plateMap.put("acquisitions", acquisitions);
+
+      String platePath = "/" + plate;
+      List<Map<String, Object>> wells = new ArrayList<Map<String, Object>>();
+      int maxField = Integer.MIN_VALUE;
+      for (HCSIndex index : hcsIndexes) {
+        if (index.getPlateIndex() == plate) {
+          String wellPath = index.getWellPath();
+
+          Map<String, Object> well = new HashMap<String, Object>();
+          well.put("path", wellPath);
+          wells.add(well);
+
+          List<Map<String, Object>> imageList =
+            new ArrayList<Map<String, Object>>();
+          String fullPath = String.format("%s/%d/%s",
+            platePath, index.getPlateAcquisitionIndex(), wellPath);
+          for (String field : n5.list(fullPath)) {
+            Map<String, Object> image = new HashMap<String, Object>();
+            image.put("path", field);
+            imageList.add(image);
+          }
+
+          Map<String, Object> wellMap = new HashMap<String, Object>();
+          wellMap.put("images", imageList);
+          n5.setAttribute(fullPath, "well", wellMap);
+
+          maxField = (int) Math.max(maxField, index.getFieldIndex());
+        }
+      }
+      plateMap.put("wells", wells);
+
+
+      plateMap.put("field_count", maxField);
+
+      n5.setAttribute(platePath, "plate", plateMap);
+    }
   }
 
   /**
@@ -1158,6 +1233,12 @@ public class Converter implements Callable<Void> {
     finally {
       imageReader.close();
     }
+  }
+
+  private N5Writer getWriter() throws IOException {
+    final String pyramidPath = outputPath.resolve(pyramidName).toString();
+    final N5Writer n5 = fileType.writer(pyramidPath);
+    return n5;
   }
 
   private Slf4JStopWatch stopWatch() {
