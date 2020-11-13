@@ -936,7 +936,7 @@ public class Converter implements Callable<Void> {
       List<Map<String, Object>> columns = new ArrayList<Map<String, Object>>();
       for (int c=0; c<meta.getPlateColumns(plate).getValue(); c++) {
         Map<String, Object> column = new HashMap<String, Object>();
-        column.put("name", c);
+        column.put("name", String.valueOf(c));
         columns.add(column);
       }
       plateMap.put("columns", columns);
@@ -944,7 +944,7 @@ public class Converter implements Callable<Void> {
       List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
       for (int r=0; r<meta.getPlateRows(plate).getValue(); r++) {
         Map<String, Object> row = new HashMap<String, Object>();
-        row.put("name", r);
+        row.put("name", String.valueOf(r));
         rows.add(row);
       }
       plateMap.put("rows", rows);
@@ -953,7 +953,7 @@ public class Converter implements Callable<Void> {
         new ArrayList<Map<String, Object>>();
       for (int pa=0; pa<meta.getPlateAcquisitionCount(plate); pa++) {
         Map<String, Object> acquisition = new HashMap<String, Object>();
-        acquisition.put("path", pa);
+        acquisition.put("path", String.valueOf(pa));
         acquisitions.add(acquisition);
       }
       plateMap.put("acquisitions", acquisitions);
@@ -963,24 +963,26 @@ public class Converter implements Callable<Void> {
       int maxField = Integer.MIN_VALUE;
       for (HCSIndex index : hcsIndexes) {
         if (index.getPlateIndex() == plate) {
-          String wellPath = index.getWellPath();
+          if (index.getFieldIndex() == 0) {
+            String wellPath = index.getWellPath();
 
-          Map<String, Object> well = new HashMap<String, Object>();
-          well.put("path", wellPath);
-          wells.add(well);
+            Map<String, Object> well = new HashMap<String, Object>();
+            well.put("path", wellPath);
+            wells.add(well);
 
-          List<Map<String, Object>> imageList =
-            new ArrayList<Map<String, Object>>();
-          String fullPath = platePath + "/" + wellPath;
-          for (String field : n5.list(fullPath)) {
-            Map<String, Object> image = new HashMap<String, Object>();
-            image.put("path", field);
-            imageList.add(image);
+            List<Map<String, Object>> imageList =
+              new ArrayList<Map<String, Object>>();
+            String fullPath = platePath + "/" + wellPath;
+            for (String field : n5.list(fullPath)) {
+              Map<String, Object> image = new HashMap<String, Object>();
+              image.put("path", field);
+              imageList.add(image);
+            }
+
+            Map<String, Object> wellMap = new HashMap<String, Object>();
+            wellMap.put("images", imageList);
+            n5.setAttribute(fullPath, "well", wellMap);
           }
-
-          Map<String, Object> wellMap = new HashMap<String, Object>();
-          wellMap.put("images", imageList);
-          n5.setAttribute(fullPath, "well", wellMap);
 
           maxField = (int) Math.max(maxField, index.getFieldIndex());
         }
@@ -988,7 +990,7 @@ public class Converter implements Callable<Void> {
       plateMap.put("wells", wells);
 
 
-      plateMap.put("field_count", maxField);
+      plateMap.put("field_count", maxField + 1);
 
       n5.setAttribute(platePath, "plate", plateMap);
     }

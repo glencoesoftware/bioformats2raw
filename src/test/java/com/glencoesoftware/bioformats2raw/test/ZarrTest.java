@@ -611,6 +611,8 @@ public class ZarrTest {
 
     N5ZarrReader z =
           new N5ZarrReader(output.resolve("data.zarr").toString());
+
+    // check valid group layout
     assertEquals(1, z.list("/").length);
     assertEquals(1, z.list("/0").length);
     assertEquals(2, z.list("/0/0").length);
@@ -626,6 +628,41 @@ public class ZarrTest {
           DatasetAttributes da = z.getDatasetAttributes(fieldPath);
           assertArrayEquals(new long[] {512, 512, 1, 1, 1}, da.getDimensions());
         }
+      }
+    }
+
+    // check plate/well level metadata
+
+    Map<String, Object> plate = z.getAttribute("/0", "plate", Map.class);
+    assertEquals(2, ((Number) plate.get("field_count")).intValue());
+
+    List<Map<String, Object>> acquisitions =
+      (List<Map<String, Object>>) plate.get("acquisitions");
+    List<Map<String, Object>> rows =
+      (List<Map<String, Object>>) plate.get("rows");
+    List<Map<String, Object>> columns =
+      (List<Map<String, Object>>) plate.get("columns");
+    List<Map<String, Object>> wells =
+      (List<Map<String, Object>>) plate.get("wells");
+
+    assertEquals(1, acquisitions.size());
+    assertEquals("0", acquisitions.get(0).get("path"));
+
+    assertEquals(2, rows.size());
+    for (int row=0; row<rows.size(); row++) {
+      assertEquals(String.valueOf(row), rows.get(row).get("name"));
+    }
+
+    assertEquals(3, columns.size());
+    for (int col=0; col<columns.size(); col++) {
+      assertEquals(String.valueOf(col), columns.get(col).get("name"));
+    }
+
+    assertEquals(rows.size() * columns.size(), wells.size());
+    for (int row=0; row<rows.size(); row++) {
+      for (int col=0; col<columns.size(); col++) {
+        int well = row * columns.size() + col;
+        assertEquals("0/" + row + "/" + col, wells.get(well).get("path"));
       }
     }
   }
