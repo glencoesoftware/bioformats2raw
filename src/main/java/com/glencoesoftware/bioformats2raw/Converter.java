@@ -49,6 +49,7 @@ import loci.formats.MetadataTools;
 import loci.formats.MissingLibraryException;
 import loci.formats.in.DynamicMetadataOptions;
 import loci.formats.meta.IMetadata;
+import loci.formats.ome.OMEXMLMetadata;
 import loci.formats.services.OMEXMLService;
 import loci.formats.services.OMEXMLServiceImpl;
 import ome.xml.model.enums.DimensionOrder;
@@ -442,6 +443,7 @@ public class Converter implements Callable<Void> {
       try {
         seriesCount = v.getSeriesCount();
         meta = (IMetadata) v.getMetadataStore();
+        ((OMEXMLMetadata) meta).resolveReferences();
 
         if (!noHCS) {
           noHCS = meta.getPlateCount() == 0;
@@ -969,8 +971,7 @@ public class Converter implements Callable<Void> {
 
           List<Map<String, Object>> imageList =
             new ArrayList<Map<String, Object>>();
-          String fullPath = String.format("%s/%d/%s",
-            platePath, index.getPlateAcquisitionIndex(), wellPath);
+          String fullPath = platePath + "/" + wellPath;
           for (String field : n5.list(fullPath)) {
             Map<String, Object> image = new HashMap<String, Object>();
             image.put("path", field);

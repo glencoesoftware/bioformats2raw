@@ -578,4 +578,56 @@ public class ZarrTest {
     }
   }
 
+  /**
+   * Convert a plate with the --no-hcs option.
+   * The output should not be compliant with OME Zarr HCS.
+   */
+  @Test
+  public void testNoHCSOption() throws IOException {
+    input = fake(
+      "plates", "1", "plateAcqs", "1",
+      "plateRows", "2", "plateCols", "3", "fields", "2");
+    assertTool("--no-hcs");
+
+    N5ZarrReader z =
+          new N5ZarrReader(output.resolve("data.zarr").toString());
+
+    // Check dimensions and block size
+    DatasetAttributes da = z.getDatasetAttributes("/0/0");
+    assertArrayEquals(new long[] {512, 512, 1, 1, 1}, da.getDimensions());
+    assertEquals(12, z.list("/").length);
+  }
+
+  /**
+   * Convert a plate with default options.
+   * The output should be compliant with OME Zarr HCS.
+   */
+  @Test
+  public void testHCSMetadata() throws IOException {
+    input = fake(
+      "plates", "1", "plateAcqs", "1",
+      "plateRows", "2", "plateCols", "3", "fields", "2");
+    assertTool();
+
+    N5ZarrReader z =
+          new N5ZarrReader(output.resolve("data.zarr").toString());
+    assertEquals(1, z.list("/").length);
+    assertEquals(1, z.list("/0").length);
+    assertEquals(2, z.list("/0/0").length);
+    for (int row=0; row<2; row++) {
+      String rowPath = "/0/0/" + row;
+      assertEquals(3, z.list(rowPath).length);
+      for (int col=0; col<3; col++) {
+        String colPath = rowPath + "/" + col;
+        assertEquals(2, z.list(colPath).length);
+        for (int field=0; field<2; field++) {
+          // append resolution index
+          String fieldPath = colPath + "/" + field + "/0";
+          DatasetAttributes da = z.getDatasetAttributes(fieldPath);
+          assertArrayEquals(new long[] {512, 512, 1, 1, 1}, da.getDimensions());
+        }
+      }
+    }
+  }
+
 }

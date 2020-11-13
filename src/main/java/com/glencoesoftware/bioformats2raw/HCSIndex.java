@@ -144,4 +144,14 @@ public class HCSIndex {
       getWellColumnIndex());
   }
 
+  @Override
+  public String toString() {
+    return String.format("plate=%d, plateAcq=%d, row=%d, col=%d, field=%d",
+      getPlateIndex(),
+      getPlateAcquisitionIndex(),
+      getWellRowIndex(),
+      getWellColumnIndex(),
+      getFieldIndex());
+  }
+
 }
