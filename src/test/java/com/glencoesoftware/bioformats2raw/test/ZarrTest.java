@@ -326,6 +326,26 @@ public class ZarrTest {
   }
 
   /**
+   * Test single-series conversion.
+   */
+  @Test
+  public void testSingleSeries() throws Exception {
+    input = fake("series", "2");
+    assertTool("-s", "1");
+    N5ZarrReader z =
+            new N5ZarrReader(output.resolve("data.zarr").toString());
+
+    // Check series 1 dimensions and special pixels
+    DatasetAttributes da = z.getDatasetAttributes("/0/0");
+    assertArrayEquals(new long[] {512, 512, 1, 1, 1}, da.getDimensions());
+    assertArrayEquals(new int[] {512, 512, 1, 1, 1}, da.getBlockSize());
+    ByteBuffer tile = z.readBlock("/0/0", da, new long[] {0, 0, 0, 0, 0})
+            .toByteBuffer();
+    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
+    assertArrayEquals(new int[] {1, 0, 0, 0, 0}, seriesPlaneNumberZCT);
+  }
+
+  /**
    * Test more than one Z-section.
    */
   @Test
