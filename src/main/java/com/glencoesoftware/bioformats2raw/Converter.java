@@ -49,8 +49,10 @@ import loci.formats.MetadataTools;
 import loci.formats.MissingLibraryException;
 import loci.formats.in.DynamicMetadataOptions;
 import loci.formats.meta.IMetadata;
+import loci.formats.ome.OMEXMLMetadata;
 import loci.formats.services.OMEXMLService;
 import loci.formats.services.OMEXMLServiceImpl;
+import ome.xml.meta.OMEXMLMetadataRoot;
 import ome.xml.model.enums.DimensionOrder;
 import ome.xml.model.enums.EnumerationException;
 
@@ -123,6 +125,12 @@ public class Converter implements Callable<Void> {
     description = "Number of pyramid resolutions to generate"
   )
   private volatile Integer pyramidResolutions;
+
+  @Option(
+    names = {"-s", "--series"},
+    description = "Series index, if a single series should be converted"
+  )
+  private volatile int singleSeries = -1;
 
   @Option(
     names = {"-w", "--tile_width"},
@@ -434,6 +442,17 @@ public class Converter implements Callable<Void> {
         seriesCount = v.getSeriesCount();
         IMetadata meta = (IMetadata) v.getMetadataStore();
 
+        if (singleSeries >= 0 && singleSeries < meta.getImageCount()) {
+          ((OMEXMLMetadata) meta).resolveReferences();
+          OMEXMLMetadataRoot root = (OMEXMLMetadataRoot) meta.getRoot();
+          int toRemove = meta.getImageCount();
+          root.addImage(root.getImage(singleSeries));
+          for (int i=0; i<toRemove; i++) {
+            root.removeImage(root.getImage(0));
+          }
+          meta.setRoot(root);
+        }
+
         for (int s=0; s<meta.getImageCount(); s++) {
           meta.setPixelsBigEndian(true, s);
         }
@@ -455,7 +474,9 @@ public class Converter implements Callable<Void> {
         readers.put(v);
       }
 
-      for (int i=0; i<seriesCount; i++) {
+      int start = singleSeries >= 0 ? singleSeries : 0;
+      int end = singleSeries >= 0 ? singleSeries + 1 : seriesCount;
+      for (int i=start; i<end; i++) {
         try {
           write(i);
         }
@@ -515,7 +536,8 @@ public class Converter implements Callable<Void> {
       Integer series, Integer resolution)
   {
     List<Object> args = new ArrayList<Object>();
-    args.add(series);
+    // if a single series is written, the output series index should always be 0
+    args.add(singleSeries >= 0 ? 0 : series);
     args.add(resolution);
     if (additionalScaleFormatStringArgs != null) {
       String[] row = additionalScaleFormatStringArgs.get(series);
