@@ -614,10 +614,9 @@ public class ZarrTest {
 
     // check valid group layout
     assertEquals(1, z.list("/").length);
-    assertEquals(1, z.list("/0").length);
-    assertEquals(2, z.list("/0/0").length);
+    assertEquals(2, z.list("/0").length);
     for (int row=0; row<2; row++) {
-      String rowPath = "/0/0/" + row;
+      String rowPath = "/0/" + row;
       assertEquals(3, z.list(rowPath).length);
       for (int col=0; col<3; col++) {
         String colPath = rowPath + "/" + col;
@@ -633,7 +632,7 @@ public class ZarrTest {
 
     // check plate/well level metadata
 
-    Map<String, Object> plate = z.getAttribute("/0", "plate", Map.class);
+    Map<String, Object> plate = z.getAttribute("/", "plate", Map.class);
     assertEquals(2, ((Number) plate.get("field_count")).intValue());
 
     List<Map<String, Object>> acquisitions =

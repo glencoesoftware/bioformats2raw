@@ -15,6 +15,7 @@ import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -476,7 +477,7 @@ public class Converter implements Callable<Void> {
       }
 
       if (!noHCS) {
-        scaleFormatString = "%d/%d/%d/%d/%d/%d";
+        scaleFormatString = "%d/%d/%d/%d/%d";
       }
 
       for (int i=0; i<seriesCount; i++) {
@@ -545,7 +546,6 @@ public class Converter implements Callable<Void> {
     List<Object> args = new ArrayList<Object>();
     if (!noHCS) {
       HCSIndex index = hcsIndexes.get(series);
-      args.add(index.getPlateIndex());
       args.add(index.getPlateAcquisitionIndex());
       args.add(index.getWellRowIndex());
       args.add(index.getWellColumnIndex());
@@ -928,72 +928,73 @@ public class Converter implements Callable<Void> {
       return;
     }
 
-    for (int plate=0; plate<meta.getPlateCount(); plate++) {
-      Map<String, Object> plateMap = new HashMap<String, Object>();
+    // assumes only one plate defined
+    int plate = 0;
+    Map<String, Object> plateMap = new HashMap<String, Object>();
 
-      plateMap.put("name", meta.getPlateName(plate));
+    plateMap.put("name", meta.getPlateName(plate));
 
-      List<Map<String, Object>> columns = new ArrayList<Map<String, Object>>();
-      for (int c=0; c<meta.getPlateColumns(plate).getValue(); c++) {
-        Map<String, Object> column = new HashMap<String, Object>();
-        column.put("name", String.valueOf(c));
-        columns.add(column);
-      }
-      plateMap.put("columns", columns);
+    List<Map<String, Object>> columns = new ArrayList<Map<String, Object>>();
+    for (int c=0; c<meta.getPlateColumns(plate).getValue(); c++) {
+      Map<String, Object> column = new HashMap<String, Object>();
+      column.put("name", String.valueOf(c));
+      columns.add(column);
+    }
+    plateMap.put("columns", columns);
 
-      List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
-      for (int r=0; r<meta.getPlateRows(plate).getValue(); r++) {
-        Map<String, Object> row = new HashMap<String, Object>();
-        row.put("name", String.valueOf(r));
-        rows.add(row);
-      }
-      plateMap.put("rows", rows);
+    List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+    for (int r=0; r<meta.getPlateRows(plate).getValue(); r++) {
+      Map<String, Object> row = new HashMap<String, Object>();
+      row.put("name", String.valueOf(r));
+      rows.add(row);
+    }
+    plateMap.put("rows", rows);
 
-      List<Map<String, Object>> acquisitions =
-        new ArrayList<Map<String, Object>>();
-      for (int pa=0; pa<meta.getPlateAcquisitionCount(plate); pa++) {
-        Map<String, Object> acquisition = new HashMap<String, Object>();
-        acquisition.put("path", String.valueOf(pa));
-        acquisitions.add(acquisition);
-      }
-      plateMap.put("acquisitions", acquisitions);
+    List<Map<String, Object>> acquisitions =
+      new ArrayList<Map<String, Object>>();
+    for (int pa=0; pa<meta.getPlateAcquisitionCount(plate); pa++) {
+      Map<String, Object> acquisition = new HashMap<String, Object>();
+      acquisition.put("path", String.valueOf(pa));
+      acquisitions.add(acquisition);
+    }
+    plateMap.put("acquisitions", acquisitions);
 
-      String platePath = "/" + plate;
-      List<Map<String, Object>> wells = new ArrayList<Map<String, Object>>();
-      int maxField = Integer.MIN_VALUE;
-      for (HCSIndex index : hcsIndexes) {
-        if (index.getPlateIndex() == plate) {
-          if (index.getFieldIndex() == 0) {
-            String wellPath = index.getWellPath();
+    String platePath = "";
+    List<Map<String, Object>> wells = new ArrayList<Map<String, Object>>();
+    int maxField = Integer.MIN_VALUE;
+    for (HCSIndex index : hcsIndexes) {
+      if (index.getPlateIndex() == plate) {
+        if (index.getFieldIndex() == 0) {
+          String wellPath = index.getWellPath();
 
-            Map<String, Object> well = new HashMap<String, Object>();
-            well.put("path", wellPath);
-            wells.add(well);
+          Map<String, Object> well = new HashMap<String, Object>();
+          well.put("path", wellPath);
+          wells.add(well);
 
-            List<Map<String, Object>> imageList =
-              new ArrayList<Map<String, Object>>();
-            String fullPath = platePath + "/" + wellPath;
-            for (String field : n5.list(fullPath)) {
-              Map<String, Object> image = new HashMap<String, Object>();
-              image.put("path", field);
-              imageList.add(image);
-            }
-
-            Map<String, Object> wellMap = new HashMap<String, Object>();
-            wellMap.put("images", imageList);
-            n5.setAttribute(fullPath, "well", wellMap);
+          List<Map<String, Object>> imageList =
+            new ArrayList<Map<String, Object>>();
+          String fullPath = platePath + "/" + wellPath;
+          String[] fields = n5.list(fullPath);
+          Arrays.sort(fields);
+          for (String field : fields) {
+            Map<String, Object> image = new HashMap<String, Object>();
+            image.put("path", field);
+            imageList.add(image);
           }
 
-          maxField = (int) Math.max(maxField, index.getFieldIndex());
+          Map<String, Object> wellMap = new HashMap<String, Object>();
+          wellMap.put("images", imageList);
+          n5.setAttribute(fullPath, "well", wellMap);
         }
+
+        maxField = (int) Math.max(maxField, index.getFieldIndex());
       }
-      plateMap.put("wells", wells);
-
-
-      plateMap.put("field_count", maxField + 1);
-
-      n5.setAttribute(platePath, "plate", plateMap);
     }
+    plateMap.put("wells", wells);
+
+    plateMap.put("field_count", maxField + 1);
+
+    n5.setAttribute(platePath, "plate", plateMap);
   }
 
   /**
