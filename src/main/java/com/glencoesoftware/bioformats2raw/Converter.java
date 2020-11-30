@@ -935,20 +935,30 @@ public class Converter implements Callable<Void> {
     plateMap.put("name", meta.getPlateName(plate));
 
     List<Map<String, Object>> columns = new ArrayList<Map<String, Object>>();
-    for (int c=0; c<meta.getPlateColumns(plate).getValue(); c++) {
-      Map<String, Object> column = new HashMap<String, Object>();
-      column.put("name", String.valueOf(c));
-      columns.add(column);
-    }
-    plateMap.put("columns", columns);
-
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
-    for (int r=0; r<meta.getPlateRows(plate).getValue(); r++) {
-      Map<String, Object> row = new HashMap<String, Object>();
-      row.put("name", String.valueOf(r));
-      rows.add(row);
+
+    // try to set plate dimensions based upon Plate.Rows/Plate.Columns
+    // if not possible, use well data later on
+    try {
+      for (int c=0; c<meta.getPlateColumns(plate).getValue(); c++) {
+        Map<String, Object> column = new HashMap<String, Object>();
+        column.put("name", String.valueOf(c));
+        columns.add(column);
+      }
     }
-    plateMap.put("rows", rows);
+    catch (NullPointerException e) {
+      // expected when Plate.Columns not set
+    }
+    try {
+      for (int r=0; r<meta.getPlateRows(plate).getValue(); r++) {
+        Map<String, Object> row = new HashMap<String, Object>();
+        row.put("name", String.valueOf(r));
+        rows.add(row);
+      }
+    }
+    catch (NullPointerException e) {
+      // expected when Plate.Rows not set
+    }
 
     List<Map<String, Object>> acquisitions =
       new ArrayList<Map<String, Object>>();
@@ -985,12 +995,45 @@ public class Converter implements Callable<Void> {
           Map<String, Object> wellMap = new HashMap<String, Object>();
           wellMap.put("images", imageList);
           n5.setAttribute(fullPath, "well", wellMap);
+
+          // make sure the row/column indexes are added to the plate attributes
+          // this is necessary when Plate.Rows or Plate.Columns is not set
+          int column = index.getWellColumnIndex();
+          int row = index.getWellRowIndex();
+
+          boolean foundColumn = false;
+          for (Map<String, Object> colMap : columns) {
+            if (colMap.get("name").equals(String.valueOf(column))) {
+              foundColumn = true;
+              break;
+            }
+          }
+          if (!foundColumn) {
+            Map<String, Object> colMap = new HashMap<String, Object>();
+            colMap.put("name", String.valueOf(column));
+            columns.add(colMap);
+          }
+
+          boolean foundRow = false;
+          for (Map<String, Object> rowMap : rows) {
+            if (rowMap.get("name").equals(String.valueOf(row))) {
+              foundRow = true;
+              break;
+            }
+          }
+          if (!foundRow) {
+            Map<String, Object> rowMap = new HashMap<String, Object>();
+            rowMap.put("name", String.valueOf(row));
+            rows.add(rowMap);
+          }
         }
 
         maxField = (int) Math.max(maxField, index.getFieldIndex());
       }
     }
     plateMap.put("wells", wells);
+    plateMap.put("columns", columns);
+    plateMap.put("rows", rows);
 
     plateMap.put("field_count", maxField + 1);
 
