@@ -15,7 +15,6 @@ import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -477,7 +476,7 @@ public class Converter implements Callable<Void> {
       }
 
       if (!noHCS) {
-        scaleFormatString = "%d/%d/%d/%d/%d";
+        scaleFormatString = "%d/%d/%d/%d";
       }
 
       for (int i=0; i<seriesCount; i++) {
@@ -546,7 +545,6 @@ public class Converter implements Callable<Void> {
     List<Object> args = new ArrayList<Object>();
     if (!noHCS) {
       HCSIndex index = hcsIndexes.get(series);
-      args.add(index.getPlateAcquisitionIndex());
       args.add(index.getWellRowIndex());
       args.add(index.getWellColumnIndex());
       args.add(index.getFieldIndex());
@@ -964,7 +962,7 @@ public class Converter implements Callable<Void> {
       new ArrayList<Map<String, Object>>();
     for (int pa=0; pa<meta.getPlateAcquisitionCount(plate); pa++) {
       Map<String, Object> acquisition = new HashMap<String, Object>();
-      acquisition.put("path", String.valueOf(pa));
+      acquisition.put("id", String.valueOf(pa));
       acquisitions.add(acquisition);
     }
     plateMap.put("acquisitions", acquisitions);
@@ -984,12 +982,18 @@ public class Converter implements Callable<Void> {
           List<Map<String, Object>> imageList =
             new ArrayList<Map<String, Object>>();
           String fullPath = platePath + "/" + wellPath;
-          String[] fields = n5.list(fullPath);
-          Arrays.sort(fields);
-          for (String field : fields) {
-            Map<String, Object> image = new HashMap<String, Object>();
-            image.put("path", field);
-            imageList.add(image);
+
+          for (HCSIndex field : hcsIndexes) {
+            if (field.getPlateIndex() == index.getPlateIndex() &&
+              field.getWellRowIndex() == index.getWellRowIndex() &&
+              field.getWellColumnIndex() == index.getWellColumnIndex())
+            {
+              Map<String, Object> image = new HashMap<String, Object>();
+              int plateAcq = field.getPlateAcquisitionIndex();
+              image.put("acquisition", String.valueOf(plateAcq));
+              image.put("path", plateAcq);
+              imageList.add(image);
+            }
           }
 
           Map<String, Object> wellMap = new HashMap<String, Object>();

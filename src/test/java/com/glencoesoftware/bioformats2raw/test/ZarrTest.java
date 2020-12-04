@@ -613,10 +613,9 @@ public class ZarrTest {
           new N5ZarrReader(output.resolve("data.zarr").toString());
 
     // check valid group layout
-    assertEquals(1, z.list("/").length);
-    assertEquals(2, z.list("/0").length);
+    assertEquals(2, z.list("/").length);
     for (int row=0; row<2; row++) {
-      String rowPath = "/0/" + row;
+      String rowPath = "/" + row;
       assertEquals(3, z.list(rowPath).length);
       for (int col=0; col<3; col++) {
         String colPath = rowPath + "/" + col;
@@ -645,7 +644,7 @@ public class ZarrTest {
       (List<Map<String, Object>>) plate.get("wells");
 
     assertEquals(1, acquisitions.size());
-    assertEquals("0", acquisitions.get(0).get("path"));
+    assertEquals("0", acquisitions.get(0).get("id"));
 
     assertEquals(2, rows.size());
     for (int row=0; row<rows.size(); row++) {
@@ -661,7 +660,7 @@ public class ZarrTest {
     for (int row=0; row<rows.size(); row++) {
       for (int col=0; col<columns.size(); col++) {
         int well = row * columns.size() + col;
-        assertEquals("0/" + row + "/" + col, wells.get(well).get("path"));
+        assertEquals(row + "/" + col, wells.get(well).get("path"));
       }
     }
   }
