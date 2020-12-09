@@ -991,7 +991,7 @@ public class Converter implements Callable<Void> {
               Map<String, Object> image = new HashMap<String, Object>();
               int plateAcq = field.getPlateAcquisitionIndex();
               image.put("acquisition", String.valueOf(plateAcq));
-              image.put("path", plateAcq);
+              image.put("path", String.valueOf(field.getFieldIndex()));
               imageList.add(image);
             }
           }
