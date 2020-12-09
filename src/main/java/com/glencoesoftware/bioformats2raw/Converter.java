@@ -1090,7 +1090,7 @@ public class Converter implements Callable<Void> {
       pyramidName = "data.zarr";
     }
 
-    if (!pyramidName.equals("data.n5") ||
+    if ((!pyramidName.equals("data.n5") && !pyramidName.equals("data.zarr")) ||
               !scaleFormatString.equals("%d/%d"))
     {
       LOGGER.info("Output will be incompatible with raw2ometiff " +
