@@ -88,6 +88,13 @@ worker counts.  There are significant performance gains to be had utilizing
 larger tile sizes but be mindful of the consequences on the downstream
 workflow.
 
+The worker count defaults to the number of detected CPUs.  This may or may not be appropriate for the chosen input data.
+If reading a single tile from the input data requires a lot of memory, decreasing the worker count will be necessary
+to prevent memory exhaustion.  JPEG, PNG, and certain TIFFs are especially susceptible to this problem.
+
+The worker count should be set to 1 if the input data requires a Bio-Formats reader that is not thread-safe.
+This is not a common case, but is a known issue with Imaris HDF data in particular.
+
 In general, expect to need to tune the above settings and measure
 relative performance.
 
