@@ -137,10 +137,14 @@ public class Converter implements Callable<Void> {
   private volatile int tileHeight = 1024;
 
   @Option(
-    names = "--debug",
-    description = "Turn on debug logging"
+    names = {"--log-level", "--debug"},
+    arity = "0..1",
+    description = "Change logging level; valid values are " +
+      "OFF, ERROR, WARN, INFO, DEBUG, TRACE and ALL. " +
+      "(default: ${DEFAULT-VALUE})",
+    fallbackValue = "DEBUG"
   )
-  private volatile boolean debug = false;
+  private volatile String logLevel = "INFO";
 
   @Option(
     names = "--version",
@@ -326,12 +330,7 @@ public class Converter implements Callable<Void> {
 
     ch.qos.logback.classic.Logger root = (ch.qos.logback.classic.Logger)
         LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
-    if (debug) {
-      root.setLevel(Level.DEBUG);
-    }
-    else {
-      root.setLevel(Level.INFO);
-    }
+    root.setLevel(Level.toLevel(logLevel));
 
     if (Files.exists(outputPath)) {
       if (!overwrite) {
