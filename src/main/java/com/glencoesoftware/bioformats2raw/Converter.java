@@ -128,9 +128,11 @@ public class Converter implements Callable<Void> {
 
   @Option(
     names = {"-s", "--series"},
-    description = "Series index, if a single series should be converted"
+    arity = "0..1",
+    split = ",",
+    description = "Comma-separated list of series indexes to convert"
   )
-  private volatile int singleSeries = -1;
+  private volatile List<Integer> seriesList = new ArrayList<Integer>();
 
   @Option(
     names = {"-w", "--tile_width"},
@@ -442,15 +444,26 @@ public class Converter implements Callable<Void> {
         seriesCount = v.getSeriesCount();
         IMetadata meta = (IMetadata) v.getMetadataStore();
 
-        if (singleSeries >= 0 && singleSeries < meta.getImageCount()) {
+        if (seriesList.size() > 0) {
           ((OMEXMLMetadata) meta).resolveReferences();
           OMEXMLMetadataRoot root = (OMEXMLMetadataRoot) meta.getRoot();
           int toRemove = meta.getImageCount();
-          root.addImage(root.getImage(singleSeries));
+
+          for (Integer index : seriesList) {
+            if (index >= 0 && index < toRemove) {
+              root.addImage(root.getImage(index));
+            }
+          }
+
           for (int i=0; i<toRemove; i++) {
             root.removeImage(root.getImage(0));
           }
           meta.setRoot(root);
+        }
+        else {
+          for (int i=0; i<meta.getImageCount(); i++) {
+            seriesList.add(i);
+          }
         }
 
         for (int s=0; s<meta.getImageCount(); s++) {
@@ -474,14 +487,12 @@ public class Converter implements Callable<Void> {
         readers.put(v);
       }
 
-      int start = singleSeries >= 0 ? singleSeries : 0;
-      int end = singleSeries >= 0 ? singleSeries + 1 : seriesCount;
-      for (int i=start; i<end; i++) {
+      for (Integer index : seriesList) {
         try {
-          write(i);
+          write(index);
         }
         catch (Throwable t) {
-          LOGGER.error("Error while writing series {}", i, t);
+          LOGGER.error("Error while writing series {}", index, t);
           unwrapException(t);
           return;
         }
@@ -537,7 +548,7 @@ public class Converter implements Callable<Void> {
   {
     List<Object> args = new ArrayList<Object>();
     // if a single series is written, the output series index should always be 0
-    args.add(singleSeries >= 0 ? 0 : series);
+    args.add(seriesList.indexOf(series));
     args.add(resolution);
     if (additionalScaleFormatStringArgs != null) {
       String[] row = additionalScaleFormatStringArgs.get(series);
