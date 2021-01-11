@@ -23,21 +23,22 @@ repositories {
     maven {
         url 'https://maven.scijava.org/content/groups/public'
     }
+    maven {
+        url 'http://nexus.senbox.net/nexus/content/groups/public'
+    }
+}
+
+configurations.all {
+    resolutionStrategy.cacheChangingModulesFor 0, 'minutes'
+    exclude group: 'edu.ucar', 'module': 'cdm'
 }
 
 dependencies {
     implementation 'ome:formats-gpl:6.5.1'
     implementation 'info.picocli:picocli:4.2.0'
     implementation 'com.univocity:univocity-parsers:2.8.4'
-    implementation 'org.janelia.saalfeldlab:n5:2.2.0'
+    implementation 'com.bc.zarr:jzarr:0.3.2'
 
-    // exclude JUnit 4 to make sure our tests all use JUnit 5
-    implementation('org.janelia.saalfeldlab:n5-blosc:1.1.0') {
-        exclude group: 'junit', module: 'junit'
-    }
-    implementation('org.janelia.saalfeldlab:n5-zarr:0.0.4') {
-        exclude group: 'junit', module: 'junit'
-    }
     implementation 'org.openpnp:opencv:3.4.2-1'
 
     // https://github.com/junit-team/junit5-samples/blob/master/junit5-migration-gradle/build.gradle

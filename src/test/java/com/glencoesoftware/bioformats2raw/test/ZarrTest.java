@@ -10,7 +10,6 @@ package com.glencoesoftware.bioformats2raw.test;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.ShortBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -22,6 +21,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
+import com.bc.zarr.DataType;
+import com.bc.zarr.ZarrArray;
+import com.bc.zarr.ZarrGroup;
 import com.glencoesoftware.bioformats2raw.Converter;
 import com.glencoesoftware.bioformats2raw.Downsampling;
 import loci.common.LogbackTools;
@@ -33,9 +35,6 @@ import loci.formats.services.OMEXMLService;
 import picocli.CommandLine;
 import picocli.CommandLine.ExecutionException;
 
-import org.janelia.saalfeldlab.n5.DataType;
-import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.zarr.N5ZarrReader;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -79,7 +78,6 @@ public class ZarrTest {
     for (String arg : additionalArgs) {
       args.add(arg);
     }
-    args.add("--file_type=zarr");
     args.add(input.toString());
     args.add(output.toString());
     try {
@@ -200,10 +198,11 @@ public class ZarrTest {
         "--scale-format-string", "%3$s/%4$s/%1$s/%2$s",
         "--additional-scale-format-string-args", csv.toString()
     );
-    N5ZarrReader z =
-            new N5ZarrReader(output.resolve("data.zarr").toString());
-    assertTrue(z.exists("/abc/888/0/0"));
-    assertTrue(z.exists("/ghi/999/1/0"));
+    Path root = output.resolve("data.zarr");
+    ZarrGroup series0 = ZarrGroup.open(root.resolve("abc/888/0").toString());
+    series0.openArray("0");
+    series0 = ZarrGroup.open(root.resolve("ghi/999/1").toString());
+    series0.openArray("0");
   }
 
   /**
@@ -213,10 +212,10 @@ public class ZarrTest {
   public void testDefaultLayoutIsSet() throws Exception {
     input = fake();
     assertTool();
-    N5ZarrReader z =
-        new N5ZarrReader(output.resolve("data.zarr").toString());
-    Integer layout =
-        z.getAttribute("/", "bioformats2raw.layout", Integer.class);
+    ZarrGroup z =
+        ZarrGroup.open(output.resolve("data.zarr").toString());
+    Integer layout = (Integer)
+        z.getAttributes().get("bioformats2raw.layout");
     assertEquals(Converter.LAYOUT, layout);
   }
 
@@ -227,11 +226,11 @@ public class ZarrTest {
   public void testMultiscalesMetadata() throws Exception {
     input = fake();
     assertTool();
-    N5ZarrReader z =
-            new N5ZarrReader(output.resolve("data.zarr").toString());
+    ZarrGroup z =
+        ZarrGroup.open(output.resolve("data.zarr").resolve("0").toString());
     //
-    List<Map<String, Object>> multiscales =
-            z.getAttribute("/0", "multiscales", List.class);
+    List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
+            z.getAttributes().get("multiscales");
     assertEquals(1, multiscales.size());
     Map<String, Object> multiscale = multiscales.get(0);
     assertEquals("0.1", multiscale.get("version"));
@@ -248,10 +247,10 @@ public class ZarrTest {
   public void testXYCZTDimensionOrder() throws Exception {
     input = fake("sizeC", "2", "dimOrder", "XYCZT");
     assertTool();
-    N5ZarrReader z =
-      new N5ZarrReader(output.resolve("data.zarr").toString());
-    DatasetAttributes da = z.getDatasetAttributes("/0/0");
-    assertArrayEquals(new long[] {512, 512, 2, 1, 1}, da.getDimensions());
+    ZarrGroup z =
+        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrArray array = z.openArray("0/0");
+    assertArrayEquals(new int[] {1, 1, 2, 512, 512}, array.getShape());
   }
 
   /**
@@ -261,10 +260,10 @@ public class ZarrTest {
   public void testSetXYCZTDimensionOrder() throws Exception {
     input = fake("sizeC", "2");
     assertTool("--dimension-order", "XYCZT");
-    N5ZarrReader z =
-      new N5ZarrReader(output.resolve("data.zarr").toString());
-    DatasetAttributes da = z.getDatasetAttributes("/0/0");
-    assertArrayEquals(new long[] {512, 512, 2, 1, 1}, da.getDimensions());
+    ZarrGroup z =
+        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrArray array = z.openArray("0/0");
+    assertArrayEquals(new int[] {1, 1, 2, 512, 512}, array.getShape());
   }
 
   /**
@@ -274,11 +273,11 @@ public class ZarrTest {
   public void testSetSmallerDefault() throws Exception {
     input = fake();
     assertTool("-h", "128", "-w", "128");
-    N5ZarrReader z =
-      new N5ZarrReader(output.resolve("data.zarr").toString());
-    DatasetAttributes da = z.getDatasetAttributes("/0/0");
-    assertArrayEquals(new long[] {512, 512, 1, 1, 1}, da.getDimensions());
-    assertArrayEquals(new int[] {128, 128, 1, 1, 1}, da.getBlockSize());
+    ZarrGroup z =
+        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrArray array = z.openArray("0/0");
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, array.getShape());
+    assertArrayEquals(new int[] {1, 1, 1, 128, 128}, array.getChunks());
   }
 
   /**
@@ -289,11 +288,11 @@ public class ZarrTest {
   public void testSetSmallerDefaultWithRemainder() throws Exception {
     input = fake();
     assertTool("-h", "384", "-w", "384");
-    N5ZarrReader z =
-      new N5ZarrReader(output.resolve("data.zarr").toString());
-    DatasetAttributes da = z.getDatasetAttributes("/0/0");
-    assertArrayEquals(new long[] {512, 512, 1, 1, 1}, da.getDimensions());
-    assertArrayEquals(new int[] {384, 384, 1, 1, 1}, da.getBlockSize());
+    ZarrGroup z =
+        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrArray array = z.openArray("0/0");
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, array.getShape());
+    assertArrayEquals(new int[] {1, 1, 1, 384, 384}, array.getChunks());
   }
 
   /**
@@ -303,25 +302,25 @@ public class ZarrTest {
   public void testMultiSeries() throws Exception {
     input = fake("series", "2");
     assertTool();
-    N5ZarrReader z =
-      new N5ZarrReader(output.resolve("data.zarr").toString());
+    ZarrGroup z =
+        ZarrGroup.open(output.resolve("data.zarr").toString());
 
     // Check series 0 dimensions and special pixels
-    DatasetAttributes da = z.getDatasetAttributes("/0/0");
-    assertArrayEquals(new long[] {512, 512, 1, 1, 1}, da.getDimensions());
-    assertArrayEquals(new int[] {512, 512, 1, 1, 1}, da.getBlockSize());
-    ByteBuffer tile = z.readBlock("/0/0", da, new long[] {0, 0, 0, 0, 0})
-        .toByteBuffer();
-    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
+    ZarrArray series0 = z.openArray("0/0");
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getShape());
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getChunks());
+    int[] shape = new int[] {1, 1, 1, 512, 512};
+    byte[] tile = new byte[512 * 512];
+    series0.read(tile, shape);
+    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
     assertArrayEquals(new int[] {0, 0, 0, 0, 0}, seriesPlaneNumberZCT);
 
     // Check series 1 dimensions and special pixels
-    da = z.getDatasetAttributes("/1/0");
-    assertArrayEquals(new long[] {512, 512, 1, 1, 1}, da.getDimensions());
-    assertArrayEquals(new int[] {512, 512, 1, 1, 1}, da.getBlockSize());
-    tile = z.readBlock("/1/0", da, new long[] {0, 0, 0, 0, 0})
-            .toByteBuffer();
-    seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
+    ZarrArray series1 = z.openArray("1/0");
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series1.getShape());
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series1.getChunks());
+    series1.read(tile, shape);
+    seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
     assertArrayEquals(new int[] {1, 0, 0, 0, 0}, seriesPlaneNumberZCT);
   }
 
@@ -332,23 +331,24 @@ public class ZarrTest {
   public void testMultiZ() throws Exception {
     input = fake("sizeZ", "2");
     assertTool();
-    N5ZarrReader z =
-      new N5ZarrReader(output.resolve("data.zarr").toString());
+    ZarrGroup z =
+        ZarrGroup.open(output.resolve("data.zarr").toString());
 
     // Check dimensions and block size
-    DatasetAttributes da = z.getDatasetAttributes("/0/0");
-    assertArrayEquals(new long[] {512, 512, 2, 1, 1}, da.getDimensions());
-    assertArrayEquals(new int[] {512, 512, 1, 1, 1}, da.getBlockSize());
+    ZarrArray series0 = z.openArray("0/0");
+    assertArrayEquals(new int[] {1, 1, 2, 512, 512}, series0.getShape());
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getChunks());
 
     // Check Z 0 special pixels
-    ByteBuffer tile = z.readBlock("/0/0", da, new long[] {0, 0, 0, 0, 0})
-        .toByteBuffer();
-    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
+    int[] shape = new int[] {1, 1, 1, 512, 512};
+    byte[] tile = new byte[512 * 512];
+    series0.read(tile, shape);
+    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
     assertArrayEquals(new int[] {0, 0, 0, 0, 0}, seriesPlaneNumberZCT);
     // Check Z 1 special pixels
-    tile = z.readBlock("/0/0", da, new long[] {0, 0, 1, 0, 0})
-            .toByteBuffer();
-    seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
+    int[] offset = new int[] {0, 0, 1, 0, 0};
+    series0.read(tile, shape, offset);
+    seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
     assertArrayEquals(new int[] {0, 1, 1, 0, 0}, seriesPlaneNumberZCT);
   }
 
@@ -359,23 +359,24 @@ public class ZarrTest {
   public void testMultiC() throws Exception {
     input = fake("sizeC", "2");
     assertTool();
-    N5ZarrReader z =
-      new N5ZarrReader(output.resolve("data.zarr").toString());
+    ZarrGroup z =
+        ZarrGroup.open(output.resolve("data.zarr").toString());
 
     // Check dimensions and block size
-    DatasetAttributes da = z.getDatasetAttributes("/0/0");
-    assertArrayEquals(new long[] {512, 512, 1, 2, 1}, da.getDimensions());
-    assertArrayEquals(new int[] {512, 512, 1, 1, 1}, da.getBlockSize());
+    ZarrArray series0 = z.openArray("0/0");
+    assertArrayEquals(new int[] {1, 2, 1, 512, 512}, series0.getShape());
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getChunks());
 
     // Check C 0 special pixels
-    ByteBuffer tile = z.readBlock("/0/0", da, new long[] {0, 0, 0, 0, 0})
-        .toByteBuffer();
-    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
+    int[] shape = new int[] {1, 1, 1, 512, 512};
+    byte[] tile = new byte[512 * 512];
+    series0.read(tile, shape);
+    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
     assertArrayEquals(new int[] {0, 0, 0, 0, 0}, seriesPlaneNumberZCT);
     // Check C 1 special pixels
-    tile = z.readBlock("/0/0", da, new long[] {0, 0, 0, 1, 0})
-            .toByteBuffer();
-    seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
+    int[] offset = new int[] {0, 1, 0, 0, 0};
+    series0.read(tile, shape, offset);
+    seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
     assertArrayEquals(new int[] {0, 1, 0, 1, 0}, seriesPlaneNumberZCT);
   }
 
@@ -386,48 +387,110 @@ public class ZarrTest {
   public void testMultiT() throws Exception {
     input = fake("sizeT", "2");
     assertTool();
-    N5ZarrReader z =
-      new N5ZarrReader(output.resolve("data.zarr").toString());
+    ZarrGroup z =
+        ZarrGroup.open(output.resolve("data.zarr").toString());
 
     // Check dimensions and block size
-    DatasetAttributes da = z.getDatasetAttributes("/0/0");
-    assertArrayEquals(new long[] {512, 512, 1, 1, 2}, da.getDimensions());
-    assertArrayEquals(new int[] {512, 512, 1, 1, 1}, da.getBlockSize());
+    ZarrArray series0 = z.openArray("0/0");
+    assertArrayEquals(new int[] {2, 1, 1, 512, 512}, series0.getShape());
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getChunks());
 
     // Check T 0 special pixels
-    ByteBuffer tile = z.readBlock("/0/0", da, new long[] {0, 0, 0, 0, 0})
-        .toByteBuffer();
-    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
+    int[] shape = new int[] {1, 1, 1, 512, 512};
+    byte[] tile = new byte[512 * 512];
+    series0.read(tile, shape);
+    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
     assertArrayEquals(new int[] {0, 0, 0, 0, 0}, seriesPlaneNumberZCT);
     // Check T 1 special pixels
-    tile = z.readBlock("/0/0", da, new long[] {0, 0, 0, 0, 1})
-            .toByteBuffer();
-    seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
+    int[] offset = new int[] {1, 0, 0, 0, 0};
+    series0.read(tile, shape, offset);
+    seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
     assertArrayEquals(new int[] {0, 1, 0, 0, 1}, seriesPlaneNumberZCT);
+  }
+
+  private int bytesPerPixel(DataType dataType) {
+    switch (dataType) {
+      case i1:
+      case u1:
+        return 1;
+      case i2:
+      case u2:
+        return 2;
+      case i4:
+      case u4:
+      case f4:
+        return 4;
+      case f8:
+        return 8;
+      default:
+        throw new IllegalArgumentException("Unsupported data type: "
+            + dataType.toString());
+    }
   }
 
   /**
    * Test pixel type preservation.
    *
    * @param type string representation of Bio-Formats pixel type
-   * @param n5Type expected corresponding N5 data type
+   * @param dataType expected corresponding Zarr data type
    */
   @ParameterizedTest
   @MethodSource("getPixelTypes")
-  public void testPixelType(String type, DataType n5Type) throws Exception {
+  public void testPixelType(String type, DataType dataType) throws Exception {
     input = fake("pixelType", type);
     assertTool();
-    N5ZarrReader z =
-            new N5ZarrReader(output.resolve("data.zarr").toString());
+    ZarrGroup z =
+        ZarrGroup.open(output.resolve("data.zarr").toString());
 
     // Check series dimensions and special pixels
-    DatasetAttributes da = z.getDatasetAttributes("/0/0");
-    assertEquals(n5Type, da.getDataType());
-    assertArrayEquals(new long[] {512, 512, 1, 1, 1}, da.getDimensions());
-    assertArrayEquals(new int[] {512, 512, 1, 1, 1}, da.getBlockSize());
-    ByteBuffer tile = z.readBlock("/0/0", da, new long[] {0, 0, 0, 0, 0})
-        .toByteBuffer();
-    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
+    ZarrArray series0 = z.openArray("0/0");
+    assertEquals(dataType, series0.getDataType());
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getShape());
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getChunks());
+    int bytesPerPixel = bytesPerPixel(dataType);
+    int[] shape = new int[] {1, 1, 1, 512, 512};
+
+    int pixelType = FormatTools.pixelTypeFromString(type);
+    byte[] tileAsBytes = new byte[512 * 512 * bytesPerPixel];
+    ByteBuffer tileAsByteBuffer = ByteBuffer.wrap(tileAsBytes);
+    switch (pixelType) {
+      case FormatTools.INT8:
+      case FormatTools.UINT8: {
+        series0.read(tileAsBytes, shape);
+        break;
+      }
+      case FormatTools.INT16:
+      case FormatTools.UINT16: {
+        short[] tileAsShorts = new short[512 * 512];
+        series0.read(tileAsShorts, shape);
+        tileAsByteBuffer.asShortBuffer().put(tileAsShorts);
+        break;
+      }
+      case FormatTools.INT32:
+      case FormatTools.UINT32: {
+        int[] tileAsInts = new int[512 * 512];
+        series0.read(tileAsInts, shape);
+        tileAsByteBuffer.asIntBuffer().put(tileAsInts);
+        break;
+      }
+      case FormatTools.FLOAT: {
+        float[] tileAsFloats = new float[512 * 512];
+        series0.read(tileAsFloats, shape);
+        tileAsByteBuffer.asFloatBuffer().put(tileAsFloats);
+        break;
+      }
+      case FormatTools.DOUBLE: {
+        double[] tileAsDoubles = new double[512 * 512];
+        series0.read(tileAsDoubles, shape);
+        tileAsByteBuffer.asDoubleBuffer().put(tileAsDoubles);
+        break;
+      }
+      default:
+        throw new IllegalArgumentException("Unsupported pixel type: "
+            + FormatTools.getPixelTypeString(pixelType));
+    }
+    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(
+        tileAsBytes, pixelType, false);
     assertArrayEquals(new int[] {0, 0, 0, 0, 0}, seriesPlaneNumberZCT);
   }
 
@@ -436,10 +499,10 @@ public class ZarrTest {
    */
   static Stream<Arguments> getPixelTypes() {
     return Stream.of(
-      Arguments.of("float", DataType.FLOAT32),
-      Arguments.of("double", DataType.FLOAT64),
-      Arguments.of("uint32", DataType.UINT32),
-      Arguments.of("int32", DataType.INT32)
+      Arguments.of("float", DataType.f4),
+      Arguments.of("double", DataType.f8),
+      Arguments.of("uint32", DataType.u4),
+      Arguments.of("int32", DataType.i4)
     );
   }
 
@@ -451,18 +514,20 @@ public class ZarrTest {
   public void testDownsampleEdgeEffectsUInt8() throws Exception {
     input = fake("sizeX", "60", "sizeY", "300");
     assertTool("-w", "25", "-h", "75");
-    N5ZarrReader z =
-        new N5ZarrReader(output.resolve("data.zarr").toString());
+    ZarrGroup z =
+        ZarrGroup.open(output.resolve("data.zarr").toString());
 
     // Check series dimensions
-    DatasetAttributes da = z.getDatasetAttributes("/0/1");
-    assertArrayEquals(new long[] {30, 150, 1, 1, 1}, da.getDimensions());
-    assertArrayEquals(new int[] {25, 75, 1, 1, 1}, da.getBlockSize());
-    ByteBuffer tile = z.readBlock("/0/1", da, new long[] {1, 0, 0, 0, 0})
-        .toByteBuffer();
+    ZarrArray series1 = z.openArray("0/1");
+    assertArrayEquals(new int[] {1, 1, 1, 150, 30}, series1.getShape());
+    assertArrayEquals(new int[] {1, 1, 1, 75, 25}, series1.getChunks());
+    int[] shape = new int[] {1, 1, 1, 75, 5};
+    int[] offset = new int[] {0, 0, 0, 75, 25};
+    byte[] tile = new byte[75 * 5];
+    series1.read(tile, shape, offset);
     // Last row first pixel should be the 2x2 downsampled value;
     // test will break if the downsampling algorithm changes
-    assertEquals(50, tile.get(75 * 24));
+    assertEquals(50, tile[75 * 4]);
   }
 
   /**
@@ -473,19 +538,21 @@ public class ZarrTest {
   public void testDownsampleEdgeEffectsUInt16() throws Exception {
     input = fake("sizeX", "60", "sizeY", "300", "pixelType", "uint16");
     assertTool("-w", "25", "-h", "75");
-    N5ZarrReader z =
-        new N5ZarrReader(output.resolve("data.zarr").toString());
+    ZarrGroup z =
+        ZarrGroup.open(output.resolve("data.zarr").toString());
 
     // Check series dimensions
-    DatasetAttributes da = z.getDatasetAttributes("/0/1");
-    assertEquals(DataType.UINT16, da.getDataType());
-    assertArrayEquals(new long[] {30, 150, 1, 1, 1}, da.getDimensions());
-    assertArrayEquals(new int[] {25, 75, 1, 1, 1}, da.getBlockSize());
-    ShortBuffer tile = z.readBlock("/0/1", da, new long[] {1, 0, 0, 0, 0})
-        .toByteBuffer().asShortBuffer();
+    ZarrArray series1 = z.openArray("0/1");
+    assertEquals(DataType.u2, series1.getDataType());
+    assertArrayEquals(new int[] {1, 1, 1, 150, 30}, series1.getShape());
+    assertArrayEquals(new int[] {1, 1, 1, 75, 25}, series1.getChunks());
+    int[] shape = new int[] {1, 1, 1, 75, 5};
+    int[] offset = new int[] {0, 0, 0, 75, 25};
+    short[] tile = new short[75 * 5];
+    series1.read(tile, shape, offset);
     // Last row first pixel should be the 2x2 downsampled value;
     // test will break if the downsampling algorithm changes
-    assertEquals(50, tile.get(75 * 24));
+    assertEquals(12800, tile[75 * 4]);
   }
 
   /**
@@ -549,10 +616,10 @@ public class ZarrTest {
     input = fake();
     assertTool("--downsample-type", type.toString());
 
-    N5ZarrReader z =
-          new N5ZarrReader(output.resolve("data.zarr").toString());
+    ZarrGroup z =
+        ZarrGroup.open(output.resolve("data.zarr").resolve("0").toString());
     List<Map<String, Object>> multiscales =
-          z.getAttribute("/0", "multiscales", List.class);
+          (List<Map<String, Object>>) z.getAttributes().get("multiscales");
     assertEquals(1, multiscales.size());
     Map<String, Object> multiscale = multiscales.get(0);
     assertEquals("0.1", multiscale.get("version"));
