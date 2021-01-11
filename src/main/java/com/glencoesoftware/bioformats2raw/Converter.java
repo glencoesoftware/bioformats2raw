@@ -163,23 +163,22 @@ public class Converter implements Callable<Void> {
   )
   private volatile int maxCachedTiles = 64;
 
-  /*
   @Option(
           names = {"-c", "--compression"},
-          description = "Compression type for n5 " +
+          description = "Compression type for Zarr " +
                   "(${COMPLETION-CANDIDATES}; default: ${DEFAULT-VALUE})"
   )
-  private volatile N5Compression.CompressionTypes compressionType =
-          N5Compression.CompressionTypes.blosc;
-          */
+  private volatile ZarrCompression compressionType =
+          ZarrCompression.blosc;
 
   @Option(
-          names = {"--compression-parameter"},
-          description = "Integer parameter for chosen compression (see " +
-                  "https://github.com/saalfeldlab/n5/blob/master/README.md" +
-                  " )"
+          names = {"--compression-properties"},
+          description = "Properties for the chosen compression (see " +
+            "https://jzarr.readthedocs.io/en/latest/tutorial.html#compressors" +
+            " )"
   )
-  private volatile Integer compressionParameter = null;
+  private volatile Map<String, Object> compressionProperties =
+    new HashMap<String, Object>();;
 
   @Option(
           names = "--extra-readers",
@@ -810,12 +809,6 @@ public class Converter implements Callable<Void> {
         sizeX, tileWidth, sizeY, tileHeight, imageCount
     );
 
-    // Prepare N5 dataset
-    DataType dataType = getZarrType(pixelType);
-    // FIXME: Need to map to JZarr compression types
-    //Compression compression = N5Compression.getCompressor(compressionType,
-    //        compressionParameter);
-
     // fileset level metadata
     final String pyramidPath = outputPath.resolve(pyramidName).toString();
     final ZarrGroup root = ZarrGroup.create(pyramidPath);
@@ -844,6 +837,7 @@ public class Converter implements Callable<Void> {
         activeTileHeight = scaledHeight;
       }
 
+      DataType dataType = getZarrType(pixelType);
       String resolutionString = "/" +  String.format(
               scaleFormatString, getScaleFormatStringArgs(series, resolution));
       ArrayParams arrayParams = new ArrayParams()
@@ -851,7 +845,8 @@ public class Converter implements Callable<Void> {
               workingReader, scaledWidth, scaledHeight))
           .chunks(new int[] {1, 1, 1, activeTileHeight, activeTileWidth})
           .dataType(dataType)
-          .compressor(CompressorFactory.create("null"));
+          .compressor(CompressorFactory.create(
+              compressionType.toString(), compressionProperties));
       root.createArray(resolutionString, arrayParams);
 
       nTile = new AtomicInteger(0);

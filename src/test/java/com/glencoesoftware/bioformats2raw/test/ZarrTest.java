@@ -228,7 +228,6 @@ public class ZarrTest {
     assertTool();
     ZarrGroup z =
         ZarrGroup.open(output.resolve("data.zarr").resolve("0").toString());
-    //
     List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
             z.getAttributes().get("multiscales");
     assertEquals(1, multiscales.size());
