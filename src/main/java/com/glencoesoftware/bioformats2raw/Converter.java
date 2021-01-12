@@ -28,6 +28,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 
 import loci.common.Constants;
 import loci.common.image.IImageScaler;
@@ -282,9 +283,6 @@ public class Converter implements Callable<Void> {
 
   private volatile ExecutorService executor;
 
-  /** Whether or not the source file is little endian. */
-  private boolean isLittleEndian;
-
   /**
    * The source file's pixel type.  Retrieved from
    * {@link IFormatReader#getPixelType()}.
@@ -511,6 +509,153 @@ public class Converter implements Callable<Void> {
     return args.toArray();
   }
 
+  /**
+   * Return the number of bytes per pixel for a JZarr data type.
+   * @param dataType type to return number of bytes per pixel for
+   * @return See above.
+   */
+  public static int bytesPerPixel(DataType dataType) {
+    switch (dataType) {
+      case i1:
+      case u1:
+        return 1;
+      case i2:
+      case u2:
+        return 2;
+      case i4:
+      case u4:
+      case f4:
+        return 4;
+      case f8:
+        return 8;
+      default:
+        throw new IllegalArgumentException(
+            "Unsupported data type: " + dataType);
+    }
+  }
+
+  /**
+   * Read tile as bytes from typed Zarr array.
+   * @param zArray Zarr array to read from
+   * @param shape array describing the number of elements in each dimension to
+   * be read
+   * @param offset array describing the offset in each dimension at which to
+   * begin reading
+   * @return tile data as bytes of size <code>shape * bytesPerPixel</code>
+   * read from <code>offset</code>.
+   * @throws IOException
+   * @throws InvalidRangeException
+   */
+  public static byte[] readAsBytes(ZarrArray zArray, int[] shape, int[] offset)
+      throws IOException, InvalidRangeException
+  {
+    DataType dataType = zArray.getDataType();
+    int bytesPerPixel = bytesPerPixel(dataType);
+    int size = IntStream.of(shape).reduce((a, b) -> a * b).orElse(0);
+    byte[] tileAsBytes = new byte[size * bytesPerPixel];
+    ByteBuffer tileAsByteBuffer = ByteBuffer.wrap(tileAsBytes);
+    switch (dataType) {
+      case i1:
+      case u1: {
+        zArray.read(tileAsBytes, shape, offset);
+        break;
+      }
+      case i2:
+      case u2: {
+        short[] tileAsShorts = new short[size];
+        zArray.read(tileAsShorts, shape, offset);
+        tileAsByteBuffer.asShortBuffer().put(tileAsShorts);
+        break;
+      }
+      case i4:
+      case u4: {
+        int[] tileAsInts = new int[size];
+        zArray.read(tileAsInts, shape, offset);
+        tileAsByteBuffer.asIntBuffer().put(tileAsInts);
+        break;
+      }
+      case f4: {
+        float[] tileAsFloats = new float[size];
+        zArray.read(tileAsFloats, shape, offset);
+        tileAsByteBuffer.asFloatBuffer().put(tileAsFloats);
+        break;
+      }
+      case f8: {
+        double[] tileAsDoubles = new double[size];
+        zArray.read(tileAsDoubles, shape, offset);
+        tileAsByteBuffer.asDoubleBuffer().put(tileAsDoubles);
+        break;
+      }
+      default:
+        throw new IllegalArgumentException(
+            "Unsupported data type: " + dataType);
+    }
+    return tileAsBytes;
+  }
+
+  /**
+   * Write tile as bytes to typed Zarr array.
+   * @param zArray Zarr array to write to
+   * @param shape array describing the number of elements in each dimension to
+   * be written
+   * @param offset array describing the offset in each dimension at which to
+   * begin writing
+   * @param tile data as bytes of size <code>shape * bytesPerPixel</code> to be
+   * written at <code>offset</code>
+   * @throws IOException
+   * @throws InvalidRangeException
+   */
+  private static void writeBytes(
+      ZarrArray zArray, int[] shape, int[] offset, byte[] tile)
+          throws IOException, InvalidRangeException
+  {
+    int size = IntStream.of(shape).reduce((a, b) -> a * b).orElse(0);
+    ByteBuffer tileAsByteBuffer = ByteBuffer.wrap(tile);
+    DataType dataType = zArray.getDataType();
+    Slf4JStopWatch t1 = stopWatch();
+    try {
+      switch (dataType) {
+        case i1:
+        case u1: {
+          zArray.write(tile, shape, offset);
+          break;
+        }
+        case i2:
+        case u2: {
+          short[] tileAsShorts = new short[size];
+          tileAsByteBuffer.asShortBuffer().get(tileAsShorts);
+          zArray.write(tileAsShorts, shape, offset);
+          break;
+        }
+        case i4:
+        case u4: {
+          int[] tileAsInts = new int[size];
+          tileAsByteBuffer.asIntBuffer().get(tileAsInts);
+          zArray.write(tileAsInts, shape, offset);
+          break;
+        }
+        case f4: {
+          float[] tileAsFloats = new float[size];
+          tileAsByteBuffer.asFloatBuffer().get(tileAsFloats);
+          zArray.write(tileAsFloats, shape, offset);
+          break;
+        }
+        case f8: {
+          double[] tileAsDoubles = new double[size];
+          tileAsByteBuffer.asDoubleBuffer().put(tileAsDoubles);
+          zArray.write(tileAsDoubles, shape, offset);
+          break;
+        }
+        default:
+          throw new IllegalArgumentException(
+              "Unsupported data type: " + dataType);
+      }
+    }
+    finally {
+      t1.stop("writeBytes");
+    }
+  }
+
   private byte[] getTileDownsampled(
       int series, int resolution, int plane, int xx, int yy,
       int width, int height)
@@ -549,44 +694,8 @@ public class Converter implements Callable<Void> {
     }
 
     int bytesPerPixel = FormatTools.getBytesPerPixel(pixelType);
-    byte[] tileAsBytes = new byte[width * height * bytesPerPixel];
-    ByteBuffer tileAsByteBuffer = ByteBuffer.wrap(tileAsBytes);
-    switch (pixelType) {
-      case FormatTools.INT8:
-      case FormatTools.UINT8: {
-        zarr.read(tileAsBytes, new int[] {1, 1, 1, height, width}, offset);
-        break;
-      }
-      case FormatTools.INT16:
-      case FormatTools.UINT16: {
-        short[] tileAsShorts = new short[width * height];
-        zarr.read(tileAsShorts, new int[] {1, 1, 1, height, width}, offset);
-        tileAsByteBuffer.asShortBuffer().put(tileAsShorts);
-        break;
-      }
-      case FormatTools.INT32:
-      case FormatTools.UINT32: {
-        int[] tileAsInts = new int[width * height];
-        zarr.read(tileAsInts, new int[] {1, 1, 1, height, width}, offset);
-        tileAsByteBuffer.asIntBuffer().put(tileAsInts);
-        break;
-      }
-      case FormatTools.FLOAT: {
-        float[] tileAsFloats = new float[width * height];
-        zarr.read(tileAsFloats, new int[] {1, 1, 1, height, width}, offset);
-        tileAsByteBuffer.asFloatBuffer().put(tileAsFloats);
-        break;
-      }
-      case FormatTools.DOUBLE: {
-        double[] tileAsDoubles = new double[width * height];
-        zarr.read(tileAsDoubles, new int[] {1, 1, 1, height, width}, offset);
-        tileAsByteBuffer.asDoubleBuffer().put(tileAsDoubles);
-        break;
-      }
-      default:
-        throw new IllegalArgumentException("Unsupported pixel type: "
-            + FormatTools.getPixelTypeString(pixelType));
-    }
+    int[] shape = new int[] {1, 1, 1, height, width};
+    byte[] tileAsBytes = readAsBytes(zarr, shape, offset);
 
     if (downsampling == Downsampling.SIMPLE) {
       return scaler.downsample(tileAsBytes, width, height,
@@ -713,50 +822,7 @@ public class Converter implements Callable<Void> {
       t0.stop();
     }
 
-    Slf4JStopWatch t1 = stopWatch();
-    ByteBuffer tileAsByteBuffer = ByteBuffer.wrap(tileAsBytes);
-    try {
-      switch (pixelType) {
-        case FormatTools.INT8:
-        case FormatTools.UINT8: {
-          zarr.write(tileAsBytes, shape, offset);
-          break;
-        }
-        case FormatTools.INT16:
-        case FormatTools.UINT16: {
-          short[] tileAsShorts = new short[width * height];
-          tileAsByteBuffer.asShortBuffer().get(tileAsShorts);
-          zarr.write(tileAsShorts, shape, offset);
-          break;
-        }
-        case FormatTools.INT32:
-        case FormatTools.UINT32: {
-          int[] tileAsInts = new int[width * height];
-          tileAsByteBuffer.asIntBuffer().get(tileAsInts);
-          zarr.write(tileAsInts, shape, offset);
-          break;
-        }
-        case FormatTools.FLOAT: {
-          float[] tileAsFloats = new float[width * height];
-          tileAsByteBuffer.asFloatBuffer().get(tileAsFloats);
-          zarr.write(tileAsFloats, shape, offset);
-          break;
-        }
-        case FormatTools.DOUBLE: {
-          double[] tileAsDoubles = new double[width * height];
-          tileAsByteBuffer.asDoubleBuffer().put(tileAsDoubles);
-          zarr.write(tileAsDoubles, shape, offset);
-          break;
-        }
-        default:
-          throw new IllegalArgumentException("Unsupported pixel type: "
-              + FormatTools.getPixelTypeString(pixelType));
-      }
-      LOGGER.info("successfully wrote at {} to {}", offset, pathName);
-    }
-    finally {
-      t1.stop("saveBytes");
-    }
+    writeBytes(zarr, shape, offset, tileAsBytes);
   }
 
   /**
@@ -779,7 +845,6 @@ public class Converter implements Callable<Void> {
     int sizeY;
     int imageCount;
     try {
-      isLittleEndian = workingReader.isLittleEndian();
       // calculate a reasonable pyramid depth if not specified as an argument
       if (pyramidResolutions == null) {
         int width = workingReader.getSizeX();
@@ -1036,7 +1101,7 @@ public class Converter implements Callable<Void> {
    * @param type Bio-Formats pixel type
    * @return corresponding Zarr data type
    */
-  private DataType getZarrType(int type) {
+  public static DataType getZarrType(int type) {
     switch (type) {
       case FormatTools.INT8:
         return DataType.i1;
@@ -1099,7 +1164,7 @@ public class Converter implements Callable<Void> {
     }
   }
 
-  private Slf4JStopWatch stopWatch() {
+  private static Slf4JStopWatch stopWatch() {
     return new Slf4JStopWatch(LOGGER, Slf4JStopWatch.DEBUG_LEVEL);
   }
 
