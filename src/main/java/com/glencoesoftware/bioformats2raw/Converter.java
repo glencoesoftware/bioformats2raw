@@ -53,6 +53,7 @@ import loci.formats.meta.IMetadata;
 import loci.formats.ome.OMEXMLMetadata;
 import loci.formats.services.OMEXMLService;
 import loci.formats.services.OMEXMLServiceImpl;
+import ome.xml.meta.OMEXMLMetadataRoot;
 import ome.xml.model.enums.DimensionOrder;
 import ome.xml.model.enums.EnumerationException;
 import ome.xml.model.enums.PixelType;
@@ -127,6 +128,14 @@ public class Converter implements Callable<Void> {
     description = "Number of pyramid resolutions to generate"
   )
   private volatile Integer pyramidResolutions;
+
+  @Option(
+    names = {"-s", "--series"},
+    arity = "0..1",
+    split = ",",
+    description = "Comma-separated list of series indexes to convert"
+  )
+  private volatile List<Integer> seriesList = new ArrayList<Integer>();
 
   @Option(
     names = {"-w", "--tile_width"},
@@ -458,6 +467,28 @@ public class Converter implements Callable<Void> {
           noHCS = meta.getPlateCount() == 0;
         }
 
+        if (seriesList.size() > 0) {
+          ((OMEXMLMetadata) meta).resolveReferences();
+          OMEXMLMetadataRoot root = (OMEXMLMetadataRoot) meta.getRoot();
+          int toRemove = meta.getImageCount();
+
+          for (Integer index : seriesList) {
+            if (index >= 0 && index < toRemove) {
+              root.addImage(root.getImage(index));
+            }
+          }
+
+          for (int i=0; i<toRemove; i++) {
+            root.removeImage(root.getImage(0));
+          }
+          meta.setRoot(root);
+        }
+        else {
+          for (int i=0; i<meta.getImageCount(); i++) {
+            seriesList.add(i);
+          }
+        }
+
         for (int s=0; s<meta.getImageCount(); s++) {
           meta.setPixelsBigEndian(true, s);
 
@@ -498,12 +529,12 @@ public class Converter implements Callable<Void> {
         scaleFormatString = "%d/%d/%d/%d";
       }
 
-      for (int i=0; i<seriesCount; i++) {
+      for (Integer index : seriesList) {
         try {
-          write(i);
+          write(index);
         }
         catch (Throwable t) {
-          LOGGER.error("Error while writing series {}", i, t);
+          LOGGER.error("Error while writing series {}", index, t);
           unwrapException(t);
           return;
         }
@@ -570,7 +601,9 @@ public class Converter implements Callable<Void> {
       args.add(resolution);
     }
     else {
-      args.add(series);
+      // if a single series is written,
+      // the output series index should always be 0
+      args.add(seriesList.indexOf(series));
       args.add(resolution);
       if (additionalScaleFormatStringArgs != null) {
         String[] row = additionalScaleFormatStringArgs.get(series);
