@@ -643,4 +643,91 @@ public class ZarrTest {
     }
   }
 
+  /**
+   * Convert a plate with the --no-hcs option.
+   * The output should not be compliant with OME Zarr HCS.
+   */
+  @Test
+  public void testNoHCSOption() throws IOException {
+    input = fake(
+      "plates", "1", "plateAcqs", "1",
+      "plateRows", "2", "plateCols", "3", "fields", "2");
+    assertTool("--no-hcs");
+
+    N5ZarrReader z =
+          new N5ZarrReader(output.resolve("data.zarr").toString());
+
+    // Check dimensions and block size
+    DatasetAttributes da = z.getDatasetAttributes("/0/0");
+    assertArrayEquals(new long[] {512, 512, 1, 1, 1}, da.getDimensions());
+    assertEquals(12, z.list("/").length);
+  }
+
+  /**
+   * Convert a plate with default options.
+   * The output should be compliant with OME Zarr HCS.
+   */
+  @Test
+  public void testHCSMetadata() throws IOException {
+    input = fake(
+      "plates", "1", "plateAcqs", "1",
+      "plateRows", "2", "plateCols", "3", "fields", "2");
+    assertTool();
+
+    N5ZarrReader z =
+          new N5ZarrReader(output.resolve("data.zarr").toString());
+
+    // check valid group layout
+    assertEquals(2, z.list("/").length);
+    for (int row=0; row<2; row++) {
+      String rowPath = "/" + row;
+      assertEquals(3, z.list(rowPath).length);
+      for (int col=0; col<3; col++) {
+        String colPath = rowPath + "/" + col;
+        assertEquals(2, z.list(colPath).length);
+        for (int field=0; field<2; field++) {
+          // append resolution index
+          String fieldPath = colPath + "/" + field + "/0";
+          DatasetAttributes da = z.getDatasetAttributes(fieldPath);
+          assertArrayEquals(new long[] {512, 512, 1, 1, 1}, da.getDimensions());
+        }
+      }
+    }
+
+    // check plate/well level metadata
+
+    Map<String, Object> plate = z.getAttribute("/", "plate", Map.class);
+    assertEquals(2, ((Number) plate.get("field_count")).intValue());
+
+    List<Map<String, Object>> acquisitions =
+      (List<Map<String, Object>>) plate.get("acquisitions");
+    List<Map<String, Object>> rows =
+      (List<Map<String, Object>>) plate.get("rows");
+    List<Map<String, Object>> columns =
+      (List<Map<String, Object>>) plate.get("columns");
+    List<Map<String, Object>> wells =
+      (List<Map<String, Object>>) plate.get("wells");
+
+    assertEquals(1, acquisitions.size());
+    assertEquals("0", acquisitions.get(0).get("id"));
+
+    assertEquals(2, rows.size());
+    for (int row=0; row<rows.size(); row++) {
+      assertEquals(String.valueOf(row), rows.get(row).get("name"));
+    }
+
+    assertEquals(3, columns.size());
+    for (int col=0; col<columns.size(); col++) {
+      assertEquals(String.valueOf(col), columns.get(col).get("name"));
+    }
+
+    assertEquals(rows.size() * columns.size(), wells.size());
+    for (int row=0; row<rows.size(); row++) {
+      for (int col=0; col<columns.size(); col++) {
+        int well = row * columns.size() + col;
+        assertEquals(row + "/" + col, wells.get(well).get("path"));
+      }
+    }
+  }
+
 }
