@@ -38,6 +38,7 @@ import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.zarr.N5ZarrReader;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -326,10 +327,31 @@ public class ZarrTest {
   }
 
   /**
-   * Test single-series conversion.
+   * Test single beginning -series conversion.
    */
   @Test
-  public void testSingleSeries() throws Exception {
+  public void testSingleBeginningSeries() throws Exception {
+    input = fake("series", "2");
+    assertTool("-s", "0");
+    N5ZarrReader z =
+            new N5ZarrReader(output.resolve("data.zarr").toString());
+
+    // Check series 0 dimensions and special pixels
+    DatasetAttributes da = z.getDatasetAttributes("/0/0");
+    assertArrayEquals(new long[] {512, 512, 1, 1, 1}, da.getDimensions());
+    assertArrayEquals(new int[] {512, 512, 1, 1, 1}, da.getBlockSize());
+    ByteBuffer tile = z.readBlock("/0/0", da, new long[] {0, 0, 0, 0, 0})
+            .toByteBuffer();
+    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
+    assertArrayEquals(new int[] {0, 0, 0, 0, 0}, seriesPlaneNumberZCT);
+    assertFalse(z.exists("/1/0"));
+  }
+
+  /**
+   * Test single end series conversion.
+   */
+  @Test
+  public void testSingleEndSeries() throws Exception {
     input = fake("series", "2");
     assertTool("-s", "1");
     N5ZarrReader z =
@@ -343,6 +365,29 @@ public class ZarrTest {
             .toByteBuffer();
     int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
     assertArrayEquals(new int[] {1, 0, 0, 0, 0}, seriesPlaneNumberZCT);
+    assertFalse(z.exists("/1/0"));
+  }
+
+  /**
+   * Test single middle series conversion.
+   */
+  @Test
+  public void testSingleMiddleSeries() throws Exception {
+    input = fake("series", "3");
+    assertTool("-s", "1");
+    N5ZarrReader z =
+            new N5ZarrReader(output.resolve("data.zarr").toString());
+
+    // Check series 1 dimensions and special pixels
+    DatasetAttributes da = z.getDatasetAttributes("/0/0");
+    assertArrayEquals(new long[] {512, 512, 1, 1, 1}, da.getDimensions());
+    assertArrayEquals(new int[] {512, 512, 1, 1, 1}, da.getBlockSize());
+    ByteBuffer tile = z.readBlock("/0/0", da, new long[] {0, 0, 0, 0, 0})
+            .toByteBuffer();
+    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile.array());
+    assertArrayEquals(new int[] {1, 0, 0, 0, 0}, seriesPlaneNumberZCT);
+    assertFalse(z.exists("/1/0"));
+    assertFalse(z.exists("/2/0"));
   }
 
   /**
