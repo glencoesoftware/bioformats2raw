@@ -193,6 +193,13 @@ public class Converter implements Callable<Void> {
   };
 
   @Option(
+          names = "--nested", negatable=true,
+          description = "Whether to use '/' as the chunk path seprator " +
+                  "(false by default)"
+  )
+  private volatile boolean nested = false;
+
+  @Option(
           names = "--pyramid-name",
           description = "Name of pyramid (default: ${DEFAULT-VALUE}) " +
                   "[Can break compatibility with raw2ometiff]"
@@ -910,6 +917,7 @@ public class Converter implements Callable<Void> {
               workingReader, scaledWidth, scaledHeight))
           .chunks(new int[] {1, 1, 1, activeTileHeight, activeTileWidth})
           .dataType(dataType)
+          .nested(nested)
           .compressor(CompressorFactory.create(
               compressionType.toString(), compressionProperties));
       root.createArray(resolutionString, arrayParams);

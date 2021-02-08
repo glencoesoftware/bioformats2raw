@@ -32,6 +32,7 @@ import loci.formats.FormatTools;
 import loci.formats.in.FakeReader;
 import loci.formats.ome.OMEXMLMetadata;
 import loci.formats.services.OMEXMLService;
+import org.junit.jupiter.params.provider.ValueSource;
 import picocli.CommandLine;
 import picocli.CommandLine.ExecutionException;
 
@@ -642,6 +643,18 @@ public class ZarrTest {
       assertEquals("Bio-Formats " + FormatTools.VERSION, version);
       assertEquals("loci.common.image.SimpleImageScaler", method);
     }
+  }
+
+  /**
+   * Test that nested storage works equivalently.
+   *
+   * @param nested whether to use "/" or "." as the chunk separator.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testNestedStorage(boolean nested) throws IOException {
+    input = fake();
+    assertTool(nested ? "--nested" : "--no-nested");
   }
 
 }
