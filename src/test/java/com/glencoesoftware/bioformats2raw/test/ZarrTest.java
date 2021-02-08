@@ -540,18 +540,31 @@ public class ZarrTest {
     ZarrGroup z =
         ZarrGroup.open(output.resolve("data.zarr").toString());
 
+    ZarrArray series0 = z.openArray("0/0");
+    assertEquals(DataType.u2, series0.getDataType());
+    assertArrayEquals(new int[] {1, 1, 1, 300, 60}, series0.getShape());
+    int[] shape = new int[] {1, 1, 1, 10, 10};
+    int[] offset = new int[] {0, 0, 0, 290, 0};
+    short[] tile = new short[10 * 10];
+    series0.read(tile, shape, offset);
+    for (int y=0; y<10; y++) {
+      for (int x=0; x<10; x++) {
+        assertEquals(x, tile[y * 10 + x]);
+      }
+    }
+
     // Check series dimensions
     ZarrArray series1 = z.openArray("0/1");
     assertEquals(DataType.u2, series1.getDataType());
     assertArrayEquals(new int[] {1, 1, 1, 150, 30}, series1.getShape());
     assertArrayEquals(new int[] {1, 1, 1, 75, 25}, series1.getChunks());
-    int[] shape = new int[] {1, 1, 1, 75, 5};
-    int[] offset = new int[] {0, 0, 0, 75, 25};
-    short[] tile = new short[75 * 5];
+    shape = new int[] {1, 1, 1, 75, 5};
+    offset = new int[] {0, 0, 0, 75, 25};
+    tile = new short[75 * 5];
     series1.read(tile, shape, offset);
     // Last row first pixel should be the 2x2 downsampled value;
     // test will break if the downsampling algorithm changes
-    assertEquals(12800, tile[75 * 4]);
+    assertEquals(50, tile[75 * 4]);
   }
 
   /**
