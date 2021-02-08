@@ -10,6 +10,7 @@ package com.glencoesoftware.bioformats2raw;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -606,43 +607,42 @@ public class Converter implements Callable<Void> {
    * @throws InvalidRangeException
    */
   private static void writeBytes(
-      ZarrArray zArray, int[] shape, int[] offset, byte[] tile)
+      ZarrArray zArray, int[] shape, int[] offset, ByteBuffer tile)
           throws IOException, InvalidRangeException
   {
     int size = IntStream.of(shape).reduce((a, b) -> a * b).orElse(0);
-    ByteBuffer tileAsByteBuffer = ByteBuffer.wrap(tile);
     DataType dataType = zArray.getDataType();
     Slf4JStopWatch t1 = stopWatch();
     try {
       switch (dataType) {
         case i1:
         case u1: {
-          zArray.write(tile, shape, offset);
+          zArray.write(tile.array(), shape, offset);
           break;
         }
         case i2:
         case u2: {
           short[] tileAsShorts = new short[size];
-          tileAsByteBuffer.asShortBuffer().get(tileAsShorts);
+          tile.asShortBuffer().get(tileAsShorts);
           zArray.write(tileAsShorts, shape, offset);
           break;
         }
         case i4:
         case u4: {
           int[] tileAsInts = new int[size];
-          tileAsByteBuffer.asIntBuffer().get(tileAsInts);
+          tile.asIntBuffer().get(tileAsInts);
           zArray.write(tileAsInts, shape, offset);
           break;
         }
         case f4: {
           float[] tileAsFloats = new float[size];
-          tileAsByteBuffer.asFloatBuffer().get(tileAsFloats);
+          tile.asFloatBuffer().get(tileAsFloats);
           zArray.write(tileAsFloats, shape, offset);
           break;
         }
         case f8: {
           double[] tileAsDoubles = new double[size];
-          tileAsByteBuffer.asDoubleBuffer().put(tileAsDoubles);
+          tile.asDoubleBuffer().put(tileAsDoubles);
           zArray.write(tileAsDoubles, shape, offset);
           break;
         }
@@ -797,6 +797,8 @@ public class Converter implements Callable<Void> {
     final ZarrGroup root = ZarrGroup.open(outputPath.resolve(pyramidName));
     final ZarrArray zarr = root.openArray(pathName);
     IFormatReader reader = readers.take();
+    boolean littleEndian = reader.isLittleEndian();
+    int bpp = FormatTools.getBytesPerPixel(reader.getPixelType());
     int[] offset;
     try {
       offset = getOffset(
@@ -822,7 +824,12 @@ public class Converter implements Callable<Void> {
       t0.stop();
     }
 
-    writeBytes(zarr, shape, offset, tileAsBytes);
+    ByteBuffer tileBuffer = ByteBuffer.wrap(tileAsBytes);
+    if (resolution == 0 && bpp > 1) {
+      tileBuffer.order(
+        littleEndian ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN);
+    }
+    writeBytes(zarr, shape, offset, tileBuffer);
   }
 
   /**
