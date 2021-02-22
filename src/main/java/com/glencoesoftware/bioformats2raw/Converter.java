@@ -9,7 +9,6 @@ package com.glencoesoftware.bioformats2raw;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.Files;
@@ -30,6 +29,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 
 import loci.common.Constants;
 import loci.common.DataTools;
@@ -59,21 +59,15 @@ import ome.xml.model.enums.EnumerationException;
 import ome.xml.model.enums.PixelType;
 import ome.xml.model.primitives.PositiveInteger;
 
-import org.janelia.saalfeldlab.n5.ByteArrayDataBlock;
-import org.janelia.saalfeldlab.n5.Compression;
-import org.janelia.saalfeldlab.n5.DataBlock;
-import org.janelia.saalfeldlab.n5.DataType;
-import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.DoubleArrayDataBlock;
-import org.janelia.saalfeldlab.n5.FloatArrayDataBlock;
-import org.janelia.saalfeldlab.n5.IntArrayDataBlock;
-import org.janelia.saalfeldlab.n5.N5Reader;
-import org.janelia.saalfeldlab.n5.N5Writer;
-import org.janelia.saalfeldlab.n5.ShortArrayDataBlock;
 import org.perf4j.slf4j.Slf4JStopWatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.bc.zarr.ArrayParams;
+import com.bc.zarr.CompressorFactory;
+import com.bc.zarr.DataType;
+import com.bc.zarr.ZarrArray;
+import com.bc.zarr.ZarrGroup;
 import com.glencoesoftware.bioformats2raw.MiraxReader.TilePointer;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
@@ -84,6 +78,7 @@ import ch.qos.logback.classic.Level;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
+import ucar.ma2.InvalidRangeException;
 
 /**
  * Command line tool for converting whole slide imaging files to N5.
@@ -185,19 +180,20 @@ public class Converter implements Callable<Void> {
 
   @Option(
           names = {"-c", "--compression"},
-          description = "Compression type for n5 " +
+          description = "Compression type for Zarr " +
                   "(${COMPLETION-CANDIDATES}; default: ${DEFAULT-VALUE})"
   )
-  private volatile N5Compression.CompressionTypes compressionType =
-          N5Compression.CompressionTypes.blosc;
+  private volatile ZarrCompression compressionType =
+          ZarrCompression.blosc;
 
   @Option(
-          names = {"--compression-parameter"},
-          description = "Integer parameter for chosen compression (see " +
-                  "https://github.com/saalfeldlab/n5/blob/master/README.md" +
-                  " )"
+          names = {"--compression-properties"},
+          description = "Properties for the chosen compression (see " +
+            "https://jzarr.readthedocs.io/en/latest/tutorial.html#compressors" +
+            " )"
   )
-  private volatile Integer compressionParameter = null;
+  private volatile Map<String, Object> compressionProperties =
+    new HashMap<String, Object>();;
 
   @Option(
           names = "--extra-readers",
@@ -211,19 +207,11 @@ public class Converter implements Callable<Void> {
   };
 
   @Option(
-          names = "--file_type",
-          description = "Tile file extension: ${COMPLETION-CANDIDATES} " +
-                  "(default: ${DEFAULT-VALUE}) " +
-                  "[Can break compatibility with raw2ometiff]"
-  )
-  private volatile FileType fileType = FileType.n5;
-
-  @Option(
           names = "--pyramid-name",
           description = "Name of pyramid (default: ${DEFAULT-VALUE}) " +
                   "[Can break compatibility with raw2ometiff]"
   )
-  private volatile String pyramidName = "data.n5";
+  private volatile String pyramidName = "data.zarr";
 
   @Option(
           names = "--scale-format-string",
@@ -321,9 +309,6 @@ public class Converter implements Callable<Void> {
   private volatile BlockingQueue<Runnable> queue;
 
   private volatile ExecutorService executor;
-
-  /** Whether or not the source file is little endian. */
-  private boolean isLittleEndian;
 
   /**
    * The source file's pixel type.  Retrieved from
@@ -455,11 +440,9 @@ public class Converter implements Callable<Void> {
 
     // Finally, perform conversion on all series
     try {
-      int seriesCount;
       IFormatReader v = readers.take();
       IMetadata meta = null;
       try {
-        seriesCount = v.getSeriesCount();
         meta = (IMetadata) v.getMetadataStore();
         ((OMEXMLMetadata) meta).resolveReferences();
 
@@ -541,7 +524,7 @@ public class Converter implements Callable<Void> {
       }
 
       if (meta != null) {
-        saveHCSMetadata(getWriter(), meta);
+        saveHCSMetadata(meta);
       }
     }
     finally {
@@ -615,98 +598,209 @@ public class Converter implements Callable<Void> {
     return args.toArray();
   }
 
+  /**
+   * Return the number of bytes per pixel for a JZarr data type.
+   * @param dataType type to return number of bytes per pixel for
+   * @return See above.
+   */
+  public static int bytesPerPixel(DataType dataType) {
+    switch (dataType) {
+      case i1:
+      case u1:
+        return 1;
+      case i2:
+      case u2:
+        return 2;
+      case i4:
+      case u4:
+      case f4:
+        return 4;
+      case f8:
+        return 8;
+      default:
+        throw new IllegalArgumentException(
+            "Unsupported data type: " + dataType);
+    }
+  }
+
+  /**
+   * Read tile as bytes from typed Zarr array.
+   * @param zArray Zarr array to read from
+   * @param shape array describing the number of elements in each dimension to
+   * be read
+   * @param offset array describing the offset in each dimension at which to
+   * begin reading
+   * @return tile data as bytes of size <code>shape * bytesPerPixel</code>
+   * read from <code>offset</code>.
+   * @throws IOException
+   * @throws InvalidRangeException
+   */
+  public static byte[] readAsBytes(ZarrArray zArray, int[] shape, int[] offset)
+      throws IOException, InvalidRangeException
+  {
+    DataType dataType = zArray.getDataType();
+    int bytesPerPixel = bytesPerPixel(dataType);
+    int size = IntStream.of(shape).reduce((a, b) -> a * b).orElse(0);
+    byte[] tileAsBytes = new byte[size * bytesPerPixel];
+    ByteBuffer tileAsByteBuffer = ByteBuffer.wrap(tileAsBytes);
+    switch (dataType) {
+      case i1:
+      case u1: {
+        zArray.read(tileAsBytes, shape, offset);
+        break;
+      }
+      case i2:
+      case u2: {
+        short[] tileAsShorts = new short[size];
+        zArray.read(tileAsShorts, shape, offset);
+        tileAsByteBuffer.asShortBuffer().put(tileAsShorts);
+        break;
+      }
+      case i4:
+      case u4: {
+        int[] tileAsInts = new int[size];
+        zArray.read(tileAsInts, shape, offset);
+        tileAsByteBuffer.asIntBuffer().put(tileAsInts);
+        break;
+      }
+      case f4: {
+        float[] tileAsFloats = new float[size];
+        zArray.read(tileAsFloats, shape, offset);
+        tileAsByteBuffer.asFloatBuffer().put(tileAsFloats);
+        break;
+      }
+      case f8: {
+        double[] tileAsDoubles = new double[size];
+        zArray.read(tileAsDoubles, shape, offset);
+        tileAsByteBuffer.asDoubleBuffer().put(tileAsDoubles);
+        break;
+      }
+      default:
+        throw new IllegalArgumentException(
+            "Unsupported data type: " + dataType);
+    }
+    return tileAsBytes;
+  }
+
+  /**
+   * Write tile as bytes to typed Zarr array.
+   * @param zArray Zarr array to write to
+   * @param shape array describing the number of elements in each dimension to
+   * be written
+   * @param offset array describing the offset in each dimension at which to
+   * begin writing
+   * @param tile data as bytes of size <code>shape * bytesPerPixel</code> to be
+   * written at <code>offset</code>
+   * @throws IOException
+   * @throws InvalidRangeException
+   */
+  private static void writeBytes(
+      ZarrArray zArray, int[] shape, int[] offset, ByteBuffer tile)
+          throws IOException, InvalidRangeException
+  {
+    int size = IntStream.of(shape).reduce((a, b) -> a * b).orElse(0);
+    DataType dataType = zArray.getDataType();
+    Slf4JStopWatch t1 = stopWatch();
+    try {
+      switch (dataType) {
+        case i1:
+        case u1: {
+          zArray.write(tile.array(), shape, offset);
+          break;
+        }
+        case i2:
+        case u2: {
+          short[] tileAsShorts = new short[size];
+          tile.asShortBuffer().get(tileAsShorts);
+          zArray.write(tileAsShorts, shape, offset);
+          break;
+        }
+        case i4:
+        case u4: {
+          int[] tileAsInts = new int[size];
+          tile.asIntBuffer().get(tileAsInts);
+          zArray.write(tileAsInts, shape, offset);
+          break;
+        }
+        case f4: {
+          float[] tileAsFloats = new float[size];
+          tile.asFloatBuffer().get(tileAsFloats);
+          zArray.write(tileAsFloats, shape, offset);
+          break;
+        }
+        case f8: {
+          double[] tileAsDoubles = new double[size];
+          tile.asDoubleBuffer().put(tileAsDoubles);
+          zArray.write(tileAsDoubles, shape, offset);
+          break;
+        }
+        default:
+          throw new IllegalArgumentException(
+              "Unsupported data type: " + dataType);
+      }
+    }
+    finally {
+      t1.stop("writeBytes");
+    }
+  }
+
   private byte[] getTileDownsampled(
       int series, int resolution, int plane, int xx, int yy,
       int width, int height)
           throws FormatException, IOException, InterruptedException,
-                 EnumerationException
+                 EnumerationException, InvalidRangeException
   {
-    final String pathName = "/" +
+    final String pathName =
         String.format(scaleFormatString,
             getScaleFormatStringArgs(series, resolution - 1));
-    final String pyramidPath = outputPath.resolve(pyramidName).toString();
-    final N5Reader n5 = fileType.reader(pyramidPath);
+    final ZarrGroup root = ZarrGroup.open(outputPath.resolve(pyramidName));
+    final ZarrArray zarr = root.openArray(pathName);
 
-    DatasetAttributes datasetAttributes = n5.getDatasetAttributes(pathName);
-    long[] dimensions = datasetAttributes.getDimensions();
-    int[] blockSizes = datasetAttributes.getBlockSize();
-    int activeTileWidth = blockSizes[0];
-    int activeTileHeight = blockSizes[1];
+    int[] dimensions = zarr.getShape();
+    int[] blockSizes = zarr.getChunks();
+    int activeTileWidth = blockSizes[blockSizes.length - 1];
+    int activeTileHeight = blockSizes[blockSizes.length - 2];
 
     // Upscale our base X and Y offsets, and sizes to the previous resolution
     // based on the pyramid scaling factor
     xx *= PYRAMID_SCALE;
     yy *= PYRAMID_SCALE;
     width = (int) Math.min(
-        activeTileWidth * PYRAMID_SCALE, dimensions[0] - xx);
+        activeTileWidth * PYRAMID_SCALE,
+        dimensions[dimensions.length - 1] - xx);
     height = (int) Math.min(
-        activeTileHeight * PYRAMID_SCALE, dimensions[1] - yy);
+        activeTileHeight * PYRAMID_SCALE,
+        dimensions[dimensions.length - 2] - yy);
 
     IFormatReader reader = readers.take();
-    long[] startGridPosition;
+    int[] offset;
     try {
-      startGridPosition = getGridPosition(
-        reader, xx / activeTileWidth, yy / activeTileHeight, plane);
+      offset = getOffset(reader, xx, yy, plane);
     }
     finally {
       readers.put(reader);
     }
-    int xBlocks = (int) Math.ceil((double) width / activeTileWidth);
-    int yBlocks = (int) Math.ceil((double) height / activeTileHeight);
 
     int bytesPerPixel = FormatTools.getBytesPerPixel(pixelType);
-    byte[] tile = new byte[width * height * bytesPerPixel];
-    for (int xBlock=0; xBlock<xBlocks; xBlock++) {
-      for (int yBlock=0; yBlock<yBlocks; yBlock++) {
-        int blockWidth = Math.min(
-          width - (xBlock * activeTileWidth), activeTileWidth);
-        int blockHeight = Math.min(
-          height - (yBlock * activeTileHeight), activeTileHeight);
-        long[] gridPosition = new long[] {
-          startGridPosition[0] + xBlock, startGridPosition[1] + yBlock,
-          startGridPosition[2], startGridPosition[3], startGridPosition[4]
-        };
-        ByteBuffer subTile = n5.readBlock(
-          pathName, datasetAttributes, gridPosition
-        ).toByteBuffer();
-
-        int destLength = blockWidth * bytesPerPixel;
-        int srcLength = destLength;
-        if (fileType == FileType.zarr) {
-          // n5/n5-zarr does not de-pad on read
-          srcLength = activeTileWidth * bytesPerPixel;
-        }
-        for (int y=0; y<blockHeight; y++) {
-          int srcPos = y * srcLength;
-          int destPos = ((yBlock * width * activeTileHeight)
-            + (y * width) + (xBlock * activeTileWidth)) * bytesPerPixel;
-          // Cast to Buffer to avoid issues if compilation is performed
-          // on JDK9+ and execution is performed on JDK8.  This is due
-          // to the existence of covariant return types in the resultant
-          // byte code if compiled on JDK0+.  For reference:
-          //   https://issues.apache.org/jira/browse/MRESOLVER-85
-          ((Buffer) subTile).position(srcPos);
-          subTile.get(tile, destPos, destLength);
-        }
-      }
-    }
+    int[] shape = new int[] {1, 1, 1, height, width};
+    byte[] tileAsBytes = readAsBytes(zarr, shape, offset);
 
     if (downsampling == Downsampling.SIMPLE) {
-      return scaler.downsample(tile, width, height,
+      return scaler.downsample(tileAsBytes, width, height,
         PYRAMID_SCALE, bytesPerPixel, false,
         FormatTools.isFloatingPoint(pixelType),
         1, false);
     }
 
     return OpenCVTools.downsample(
-      tile, pixelType, width, height, PYRAMID_SCALE, downsampling);
+      tileAsBytes, pixelType, width, height, PYRAMID_SCALE, downsampling);
   }
 
   private byte[] getTile(
       int series, int resolution, int plane, int xx, int yy,
       int width, int height)
           throws FormatException, IOException, InterruptedException,
-                 EnumerationException
+                 EnumerationException, InvalidRangeException
   {
     if (resolution == 0) {
       IFormatReader reader = readers.take();
@@ -737,19 +831,20 @@ public class Converter implements Callable<Void> {
    * @param reader initialized reader for the input file
    * @param scaledWidth size of the X dimension at the current resolution
    * @param scaledHeight size of the Y dimension at the current resolution
-   * @return dimension array ready for use with N5
+   * @return dimension array ready for use with Zarr
    * @throws EnumerationException
    */
-  private long[] getDimensions(
+  private int[] getDimensions(
     IFormatReader reader, int scaledWidth, int scaledHeight)
       throws EnumerationException
   {
     int sizeZ = reader.getSizeZ();
     int sizeC = reader.getSizeC();
     int sizeT = reader.getSizeT();
-    String o = dimensionOrder != null? dimensionOrder.toString()
-        : reader.getDimensionOrder();
-    long[] dimensions = new long[] {scaledWidth, scaledHeight, 0, 0, 0};
+    String o = new StringBuilder(
+        dimensionOrder != null? dimensionOrder.toString()
+        : reader.getDimensionOrder()).reverse().toString();
+    int[] dimensions = new int[] {0, 0, 0, scaledHeight, scaledWidth};
     dimensions[o.indexOf("Z")] = sizeZ;
     dimensions[o.indexOf("C")] = sizeC;
     dimensions[o.indexOf("T")] = sizeT;
@@ -757,64 +852,61 @@ public class Converter implements Callable<Void> {
   }
 
   /**
-   * Retrieve the grid position based on either the configured or input file
+   * Retrieve the offset based on either the configured or input file
    * dimension order at the current resolution.
    * @param reader initialized reader for the input file
    * @param x X position at the current resolution
    * @param y Y position at the current resolution
    * @param plane current plane being operated upon
-   * @return grid position array ready for use with N5
+   * @return offsets array ready to use
    * @throws EnumerationException
    */
-  private long[] getGridPosition(
+  private int[] getOffset(
     IFormatReader reader, int x, int y, int plane) throws EnumerationException
   {
-    String o = dimensionOrder != null? dimensionOrder.toString()
-        : reader.getDimensionOrder();
+    String o = new StringBuilder(
+        dimensionOrder != null? dimensionOrder.toString()
+        : reader.getDimensionOrder()).reverse().toString();
     int[] zct = reader.getZCTCoords(plane);
-    long[] gridPosition = new long[] {x, y, 0, 0, 0};
-    gridPosition[o.indexOf("Z")] = zct[0];
-    gridPosition[o.indexOf("C")] = zct[1];
-    gridPosition[o.indexOf("T")] = zct[2];
-    return gridPosition;
+    int[] offset = new int[] {0, 0, 0, y, x};
+    offset[o.indexOf("Z")] = zct[0];
+    offset[o.indexOf("C")] = zct[1];
+    offset[o.indexOf("T")] = zct[2];
+    return offset;
   }
 
   private void processTile(
       int series, int resolution, int plane, int xx, int yy,
       int width, int height)
         throws EnumerationException, FormatException, IOException,
-          InterruptedException
+          InterruptedException, InvalidRangeException
   {
     String pathName =
-        "/" + String.format(scaleFormatString,
+        String.format(scaleFormatString,
             getScaleFormatStringArgs(series, resolution));
-    final N5Writer n5 = getWriter();
-    DatasetAttributes datasetAttributes = n5.getDatasetAttributes(pathName);
-    int[] blockSizes = datasetAttributes.getBlockSize();
-    int activeTileWidth = blockSizes[0];
-    int activeTileHeight = blockSizes[1];
+    final ZarrGroup root = ZarrGroup.open(outputPath.resolve(pyramidName));
+    final ZarrArray zarr = root.openArray(pathName);
     IFormatReader reader = readers.take();
-    long[] gridPosition;
+    boolean littleEndian = reader.isLittleEndian();
+    int bpp = FormatTools.getBytesPerPixel(reader.getPixelType());
+    int[] offset;
     try {
-      gridPosition = getGridPosition(
-          reader, xx / activeTileWidth, yy / activeTileHeight, plane);
+      offset = getOffset(
+          reader, xx, yy, plane);
     }
     finally {
       readers.put(reader);
     }
-    int[] size = new int[] {width, height, 1, 1, 1};
+    int[] shape = new int[] {1, 1, 1, height, width};
 
     Slf4JStopWatch t0 = new Slf4JStopWatch("getTile");
-    DataBlock<?> dataBlock;
+    byte[] tileAsBytes;
     try {
-      LOGGER.info("requesting tile to write at {} to {}",
-        gridPosition, pathName);
-      byte[] tile = getTile(series, resolution, plane, xx, yy, width, height);
-      if (tile == null) {
+      LOGGER.info("requesting tile to write at {} to {}", offset, pathName);
+      tileAsBytes = getTile(series, resolution, plane, xx, yy, width, height);
+      if (tileAsBytes == null) {
         return;
       }
-
-      dataBlock = makeDataBlock(resolution, size, gridPosition, tile);
     }
     finally {
       nTile.incrementAndGet();
@@ -822,18 +914,12 @@ public class Converter implements Callable<Void> {
       t0.stop();
     }
 
-    Slf4JStopWatch t1 = stopWatch();
-    try {
-      n5.writeBlock(
-        pathName,
-        n5.getDatasetAttributes(pathName),
-        dataBlock
-      );
-      LOGGER.info("successfully wrote at {} to {}", gridPosition, pathName);
+    ByteBuffer tileBuffer = ByteBuffer.wrap(tileAsBytes);
+    if (resolution == 0 && bpp > 1) {
+      tileBuffer.order(
+        littleEndian ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN);
     }
-    finally {
-      t1.stop("saveBytes");
-    }
+    writeBytes(zarr, shape, offset, tileBuffer);
   }
 
   /**
@@ -856,7 +942,6 @@ public class Converter implements Callable<Void> {
     int sizeY;
     int imageCount;
     try {
-      isLittleEndian = workingReader.isLittleEndian();
       // calculate a reasonable pyramid depth if not specified as an argument
       if (pyramidResolutions == null) {
         int width = workingReader.getSizeX();
@@ -886,17 +971,15 @@ public class Converter implements Callable<Void> {
         sizeX, tileWidth, sizeY, tileHeight, imageCount
     );
 
-    // Prepare N5 dataset
-    DataType dataType = getN5Type(pixelType);
-    Compression compression = N5Compression.getCompressor(compressionType,
-            compressionParameter);
-
     // fileset level metadata
-    final N5Writer n5 = getWriter();
-    n5.setAttribute("/", "bioformats2raw.layout", LAYOUT);
+    final String pyramidPath = outputPath.resolve(pyramidName).toString();
+    final ZarrGroup root = ZarrGroup.create(pyramidPath);
+    Map<String, Object> attributes = new HashMap<String, Object>();
+    attributes.put("bioformats2raw.layout", LAYOUT);
+    root.writeAttributes(attributes);
 
     // series level metadata
-    setSeriesLevelMetadata(n5, series, resolutions);
+    setSeriesLevelMetadata(root, series, resolutions);
 
     for (int resCounter=0; resCounter<resolutions; resCounter++) {
       final int resolution = resCounter;
@@ -916,14 +999,17 @@ public class Converter implements Callable<Void> {
         activeTileHeight = scaledHeight;
       }
 
+      DataType dataType = getZarrType(pixelType);
       String resolutionString = "/" +  String.format(
               scaleFormatString, getScaleFormatStringArgs(series, resolution));
-      n5.createDataset(
-          resolutionString,
-          getDimensions(workingReader, scaledWidth, scaledHeight),
-          new int[] {activeTileWidth, activeTileHeight, 1, 1, 1},
-          dataType, compression
-      );
+      ArrayParams arrayParams = new ArrayParams()
+          .shape(getDimensions(
+              workingReader, scaledWidth, scaledHeight))
+          .chunks(new int[] {1, 1, 1, activeTileHeight, activeTileWidth})
+          .dataType(dataType)
+          .compressor(CompressorFactory.create(
+              compressionType.toString(), compressionProperties));
+      root.createArray(resolutionString, arrayParams);
 
       nTile = new AtomicInteger(0);
       tileCount = (int) Math.ceil((double) scaledWidth / tileWidth)
@@ -975,12 +1061,14 @@ public class Converter implements Callable<Void> {
 
   }
 
-  private void saveHCSMetadata(N5Writer n5, IMetadata meta) throws IOException {
+  private void saveHCSMetadata(IMetadata meta) throws IOException {
     if (noHCS) {
       return;
     }
 
     // assumes only one plate defined
+    Path rootPath = outputPath.resolve(pyramidName);
+    ZarrGroup root = ZarrGroup.open(rootPath);
     int plate = 0;
     Map<String, Object> plateMap = new HashMap<String, Object>();
 
@@ -992,24 +1080,27 @@ public class Converter implements Callable<Void> {
     // try to set plate dimensions based upon Plate.Rows/Plate.Columns
     // if not possible, use well data later on
     try {
+      for (int r=0; r<meta.getPlateRows(plate).getValue(); r++) {
+        Map<String, Object> row = new HashMap<String, Object>();
+        String rowName = String.valueOf(r);
+        row.put("name", rowName);
+        rows.add(row);
+        root.createSubGroup(rowName);
+      }
+    }
+    catch (NullPointerException e) {
+      // expected when Plate.Rows not set
+    }
+    try {
       for (int c=0; c<meta.getPlateColumns(plate).getValue(); c++) {
         Map<String, Object> column = new HashMap<String, Object>();
-        column.put("name", String.valueOf(c));
+        String columnName = String.valueOf(c);
+        column.put("name", columnName);
         columns.add(column);
       }
     }
     catch (NullPointerException e) {
       // expected when Plate.Columns not set
-    }
-    try {
-      for (int r=0; r<meta.getPlateRows(plate).getValue(); r++) {
-        Map<String, Object> row = new HashMap<String, Object>();
-        row.put("name", String.valueOf(r));
-        rows.add(row);
-      }
-    }
-    catch (NullPointerException e) {
-      // expected when Plate.Rows not set
     }
 
     List<Map<String, Object>> acquisitions =
@@ -1021,7 +1112,6 @@ public class Converter implements Callable<Void> {
     }
     plateMap.put("acquisitions", acquisitions);
 
-    String platePath = "";
     List<Map<String, Object>> wells = new ArrayList<Map<String, Object>>();
     int maxField = Integer.MIN_VALUE;
     for (HCSIndex index : hcsIndexes) {
@@ -1035,8 +1125,7 @@ public class Converter implements Callable<Void> {
 
           List<Map<String, Object>> imageList =
             new ArrayList<Map<String, Object>>();
-          String fullPath = platePath + "/" + wellPath;
-
+          ZarrGroup wellGroup = root.createSubGroup(wellPath);
           for (HCSIndex field : hcsIndexes) {
             if (field.getPlateIndex() == index.getPlateIndex() &&
               field.getWellRowIndex() == index.getWellRowIndex() &&
@@ -1044,7 +1133,7 @@ public class Converter implements Callable<Void> {
             {
               Map<String, Object> image = new HashMap<String, Object>();
               int plateAcq = field.getPlateAcquisitionIndex();
-              image.put("acquisition", String.valueOf(plateAcq));
+              image.put("acquisition", plateAcq);
               image.put("path", String.valueOf(field.getFieldIndex()));
               imageList.add(image);
             }
@@ -1052,7 +1141,9 @@ public class Converter implements Callable<Void> {
 
           Map<String, Object> wellMap = new HashMap<String, Object>();
           wellMap.put("images", imageList);
-          n5.setAttribute(fullPath, "well", wellMap);
+          Map<String, Object> attributes = wellGroup.getAttributes();
+          attributes.put("well", wellMap);
+          wellGroup.writeAttributes(attributes);
 
           // make sure the row/column indexes are added to the plate attributes
           // this is necessary when Plate.Rows or Plate.Columns is not set
@@ -1095,21 +1186,24 @@ public class Converter implements Callable<Void> {
 
     plateMap.put("field_count", maxField + 1);
 
-    n5.setAttribute(platePath, "plate", plateMap);
+    Map<String, Object> attributes = root.getAttributes();
+    attributes.put("plate", plateMap);
+    root.writeAttributes(attributes);
   }
 
   /**
-   * Use {@link N5Writer#setAttribute(String, String, Object)}
+   * Use {@link ZarrArray#writeAttributes(Map)}
    * to attach the multiscales metadata to the group containing
    * the pyramids.
    *
-   * @param n5 Active {@link N5Writer}.
+   * @param root Root {@link ZarrGroup}.
    * @param series Series which is currently being written.
    * @param resolutions Total number of resolutions from which
    *                    names will be generated.
    * @throws IOException
    */
-  private void setSeriesLevelMetadata(N5Writer n5, int series, int resolutions)
+  private void setSeriesLevelMetadata(
+      ZarrGroup root, int series, int resolutions)
           throws IOException
   {
     String resolutionString = "/" +  String.format(
@@ -1144,8 +1238,10 @@ public class Converter implements Callable<Void> {
       datasets.add(Collections.singletonMap("path", lastPath));
     }
     multiscale.put("datasets", datasets);
-    n5.createGroup(seriesString);
-    n5.setAttribute(seriesString, "multiscales", multiscales);
+    ZarrGroup subGroup = root.createSubGroup(seriesString);
+    Map<String, Object> attributes = new HashMap<String, Object>();
+    attributes.put("multiscales", multiscales);
+    subGroup.writeAttributes(attributes);
   }
 
   /**
@@ -1342,83 +1438,38 @@ public class Converter implements Callable<Void> {
   }
 
   /**
-   * Convert Bio-Formats pixel type to N5 data type.
+   * Convert Bio-Formats pixel type to Zarr data type.
    *
    * @param type Bio-Formats pixel type
-   * @return corresponding N5 data type
+   * @return corresponding Zarr data type
    */
-  private DataType getN5Type(int type) {
+  public static DataType getZarrType(int type) {
     switch (type) {
       case FormatTools.INT8:
-        return DataType.INT8;
+        return DataType.i1;
       case FormatTools.UINT8:
-        return DataType.UINT8;
+        return DataType.u1;
       case FormatTools.INT16:
-        return DataType.INT16;
+        return DataType.i2;
       case FormatTools.UINT16:
-        return DataType.UINT16;
+        return DataType.u2;
       case FormatTools.INT32:
-        return DataType.INT32;
+        return DataType.i4;
       case FormatTools.UINT32:
-        return DataType.UINT32;
+        return DataType.u4;
       case FormatTools.FLOAT:
-        return DataType.FLOAT32;
+        return DataType.f4;
       case FormatTools.DOUBLE:
-        return DataType.FLOAT64;
+        return DataType.f8;
       default:
         throw new IllegalArgumentException("Unsupported pixel type: "
             + FormatTools.getPixelTypeString(type));
     }
   }
 
-  private DataBlock<?> makeDataBlock(
-    int resolution, int[] size, long[] gridPosition, byte[] tile)
-    throws FormatException
-  {
-    ByteBuffer bb = ByteBuffer.wrap(tile);
-    if (resolution == 0 && isLittleEndian) {
-      bb = bb.order(ByteOrder.LITTLE_ENDIAN);
-    }
-    switch (pixelType) {
-      case FormatTools.INT8:
-      case FormatTools.UINT8: {
-        return new ByteArrayDataBlock(size, gridPosition, tile);
-      }
-      case FormatTools.INT16:
-      case FormatTools.UINT16: {
-        short[] asShort = new short[tile.length / 2];
-        bb.asShortBuffer().get(asShort);
-        return new ShortArrayDataBlock(size, gridPosition, asShort);
-      }
-      case FormatTools.INT32:
-      case FormatTools.UINT32: {
-        int[] asInt = new int[tile.length / 4];
-        bb.asIntBuffer().get(asInt);
-        return new IntArrayDataBlock(size, gridPosition, asInt);
-      }
-      case FormatTools.FLOAT: {
-        float[] asFloat = new float[tile.length / 4];
-        bb.asFloatBuffer().get(asFloat);
-        return new FloatArrayDataBlock(size, gridPosition, asFloat);
-      }
-      case FormatTools.DOUBLE: {
-        double[] asDouble = new double[tile.length / 8];
-        bb.asDoubleBuffer().get(asDouble);
-        return new DoubleArrayDataBlock(size, gridPosition, asDouble);
-      }
-      default:
-        throw new FormatException("Unsupported pixel type: "
-            + FormatTools.getPixelTypeString(pixelType));
-    }
-  }
-
   private void checkOutputPaths() {
-    if (fileType.equals(FileType.zarr) && pyramidName.equals("data.n5")) {
-      pyramidName = "data.zarr";
-    }
-
-    if ((!pyramidName.equals("data.n5") && !pyramidName.equals("data.zarr")) ||
-              !scaleFormatString.equals("%d/%d"))
+    if ((!pyramidName.equals("data.zarr")) ||
+          !scaleFormatString.equals("%d/%d"))
     {
       LOGGER.info("Output will be incompatible with raw2ometiff " +
               "(pyramidName: {}, scaleFormatString: {})",
@@ -1455,13 +1506,7 @@ public class Converter implements Callable<Void> {
     }
   }
 
-  private N5Writer getWriter() throws IOException {
-    final String pyramidPath = outputPath.resolve(pyramidName).toString();
-    final N5Writer n5 = fileType.writer(pyramidPath);
-    return n5;
-  }
-
-  private Slf4JStopWatch stopWatch() {
+  private static Slf4JStopWatch stopWatch() {
     return new Slf4JStopWatch(LOGGER, Slf4JStopWatch.DEBUG_LEVEL);
   }
 
