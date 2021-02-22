@@ -32,6 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 import loci.common.Constants;
+import loci.common.DataTools;
 import loci.common.image.IImageScaler;
 import loci.common.image.SimpleImageScaler;
 import loci.common.services.DependencyException;
@@ -49,10 +50,14 @@ import loci.formats.MetadataTools;
 import loci.formats.MissingLibraryException;
 import loci.formats.in.DynamicMetadataOptions;
 import loci.formats.meta.IMetadata;
+import loci.formats.ome.OMEXMLMetadata;
 import loci.formats.services.OMEXMLService;
 import loci.formats.services.OMEXMLServiceImpl;
+import ome.xml.meta.OMEXMLMetadataRoot;
 import ome.xml.model.enums.DimensionOrder;
 import ome.xml.model.enums.EnumerationException;
+import ome.xml.model.enums.PixelType;
+import ome.xml.model.primitives.PositiveInteger;
 
 import org.perf4j.slf4j.Slf4JStopWatch;
 import org.slf4j.Logger;
@@ -118,6 +123,14 @@ public class Converter implements Callable<Void> {
     description = "Number of pyramid resolutions to generate"
   )
   private volatile Integer pyramidResolutions;
+
+  @Option(
+    names = {"-s", "--series"},
+    arity = "0..1",
+    split = ",",
+    description = "Comma-separated list of series indexes to convert"
+  )
+  private volatile List<Integer> seriesList = new ArrayList<Integer>();
 
   @Option(
     names = {"-w", "--tile_width"},
@@ -240,6 +253,13 @@ public class Converter implements Callable<Void> {
   private volatile File memoDirectory;
 
   @Option(
+          names = "--pixel-type",
+          description = "Pixel type to write if input data is " +
+                  " float or double (${COMPLETION-CANDIDATES})"
+  )
+  private PixelType outputPixelType;
+
+  @Option(
           names = "--downsample-type",
           description = "Tile downsampling algorithm (${COMPLETION-CANDIDATES})"
   )
@@ -266,6 +286,12 @@ public class Converter implements Callable<Void> {
             "Reader-specific options, in format key=value[,key2=value2]"
   )
   private volatile List<String> readerOptions = new ArrayList<String>();
+
+  @Option(
+          names = "--no-hcs",
+          description = "Turn off HCS writing"
+  )
+  private volatile boolean noHCS = false;
 
   /** Scaling implementation that will be used during downsampling. */
   private volatile IImageScaler scaler = new SimpleImageScaler();
@@ -295,6 +321,8 @@ public class Converter implements Callable<Void> {
 
   /** Current number of tiles processed at the current resolution. */
   private volatile AtomicInteger nTile;
+
+  private List<HCSIndex> hcsIndexes = new ArrayList<HCSIndex>();
 
   @Override
   public Void call() throws Exception {
@@ -414,12 +442,55 @@ public class Converter implements Callable<Void> {
     try {
       int seriesCount;
       IFormatReader v = readers.take();
+      IMetadata meta = null;
       try {
         seriesCount = v.getSeriesCount();
-        IMetadata meta = (IMetadata) v.getMetadataStore();
+        meta = (IMetadata) v.getMetadataStore();
+        ((OMEXMLMetadata) meta).resolveReferences();
+
+        if (!noHCS) {
+          noHCS = meta.getPlateCount() == 0;
+        }
+
+        if (seriesList.size() > 0) {
+          ((OMEXMLMetadata) meta).resolveReferences();
+          OMEXMLMetadataRoot root = (OMEXMLMetadataRoot) meta.getRoot();
+          int toRemove = meta.getImageCount();
+
+          for (Integer index : seriesList) {
+            if (index >= 0 && index < toRemove) {
+              root.addImage(root.getImage(index));
+            }
+          }
+
+          for (int i=0; i<toRemove; i++) {
+            root.removeImage(root.getImage(0));
+          }
+          meta.setRoot(root);
+        }
+        else {
+          for (int i=0; i<meta.getImageCount(); i++) {
+            seriesList.add(i);
+          }
+        }
 
         for (int s=0; s<meta.getImageCount(); s++) {
           meta.setPixelsBigEndian(true, s);
+
+          PixelType type = meta.getPixelsType(s);
+          int bfType =
+            getRealType(FormatTools.pixelTypeFromString(type.getValue()));
+          String realType = FormatTools.getPixelTypeString(bfType);
+          if (!type.getValue().equals(realType)) {
+            meta.setPixelsType(PixelType.fromString(realType), s);
+            meta.setPixelsSignificantBits(new PositiveInteger(
+              FormatTools.getBytesPerPixel(bfType) * 8), s);
+          }
+
+          if (!noHCS) {
+            HCSIndex index = new HCSIndex(meta, s);
+            hcsIndexes.add(index);
+          }
         }
 
         String xml = getService().getOMEXML(meta);
@@ -439,15 +510,23 @@ public class Converter implements Callable<Void> {
         readers.put(v);
       }
 
-      for (int i=0; i<seriesCount; i++) {
+      if (!noHCS) {
+        scaleFormatString = "%d/%d/%d/%d";
+      }
+
+      for (Integer index : seriesList) {
         try {
-          write(i);
+          write(index);
         }
         catch (Throwable t) {
-          LOGGER.error("Error while writing series {}", i, t);
+          LOGGER.error("Error while writing series {}", index, t);
           unwrapException(t);
           return;
         }
+      }
+
+      if (meta != null) {
+        saveHCSMetadata(getWriter(), meta);
       }
     }
     finally {
@@ -499,12 +578,23 @@ public class Converter implements Callable<Void> {
       Integer series, Integer resolution)
   {
     List<Object> args = new ArrayList<Object>();
-    args.add(series);
-    args.add(resolution);
-    if (additionalScaleFormatStringArgs != null) {
-      String[] row = additionalScaleFormatStringArgs.get(series);
-      for (String arg : row) {
-        args.add(arg);
+    if (!noHCS) {
+      HCSIndex index = hcsIndexes.get(series);
+      args.add(index.getWellRowIndex());
+      args.add(index.getWellColumnIndex());
+      args.add(index.getFieldIndex());
+      args.add(resolution);
+    }
+    else {
+      // if a single series is written,
+      // the output series index should always be 0
+      args.add(seriesList.indexOf(series));
+      args.add(resolution);
+      if (additionalScaleFormatStringArgs != null) {
+        String[] row = additionalScaleFormatStringArgs.get(series);
+        for (String arg : row) {
+          args.add(arg);
+        }
       }
     }
     return args.toArray();
@@ -717,7 +807,9 @@ public class Converter implements Callable<Void> {
     if (resolution == 0) {
       IFormatReader reader = readers.take();
       try {
-        return reader.openBytes(plane, xx, yy, width, height);
+        return changePixelType(
+          reader.openBytes(plane, xx, yy, width, height),
+          reader.getPixelType(), reader.isLittleEndian());
       }
       finally {
         readers.put(reader);
@@ -869,7 +961,7 @@ public class Converter implements Callable<Void> {
       sizeX = workingReader.getSizeX();
       sizeY = workingReader.getSizeY();
       imageCount = workingReader.getImageCount();
-      pixelType = workingReader.getPixelType();
+      pixelType = getRealType(workingReader.getPixelType());
     }
     finally {
       readers.put(workingReader);
@@ -969,6 +1061,129 @@ public class Converter implements Callable<Void> {
 
     }
 
+  }
+
+  private void saveHCSMetadata(N5Writer n5, IMetadata meta) throws IOException {
+    if (noHCS) {
+      return;
+    }
+
+    // assumes only one plate defined
+    int plate = 0;
+    Map<String, Object> plateMap = new HashMap<String, Object>();
+
+    plateMap.put("name", meta.getPlateName(plate));
+
+    List<Map<String, Object>> columns = new ArrayList<Map<String, Object>>();
+    List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+
+    // try to set plate dimensions based upon Plate.Rows/Plate.Columns
+    // if not possible, use well data later on
+    try {
+      for (int c=0; c<meta.getPlateColumns(plate).getValue(); c++) {
+        Map<String, Object> column = new HashMap<String, Object>();
+        column.put("name", String.valueOf(c));
+        columns.add(column);
+      }
+    }
+    catch (NullPointerException e) {
+      // expected when Plate.Columns not set
+    }
+    try {
+      for (int r=0; r<meta.getPlateRows(plate).getValue(); r++) {
+        Map<String, Object> row = new HashMap<String, Object>();
+        row.put("name", String.valueOf(r));
+        rows.add(row);
+      }
+    }
+    catch (NullPointerException e) {
+      // expected when Plate.Rows not set
+    }
+
+    List<Map<String, Object>> acquisitions =
+      new ArrayList<Map<String, Object>>();
+    for (int pa=0; pa<meta.getPlateAcquisitionCount(plate); pa++) {
+      Map<String, Object> acquisition = new HashMap<String, Object>();
+      acquisition.put("id", String.valueOf(pa));
+      acquisitions.add(acquisition);
+    }
+    plateMap.put("acquisitions", acquisitions);
+
+    String platePath = "";
+    List<Map<String, Object>> wells = new ArrayList<Map<String, Object>>();
+    int maxField = Integer.MIN_VALUE;
+    for (HCSIndex index : hcsIndexes) {
+      if (index.getPlateIndex() == plate) {
+        if (index.getFieldIndex() == 0) {
+          String wellPath = index.getWellPath();
+
+          Map<String, Object> well = new HashMap<String, Object>();
+          well.put("path", wellPath);
+          wells.add(well);
+
+          List<Map<String, Object>> imageList =
+            new ArrayList<Map<String, Object>>();
+          String fullPath = platePath + "/" + wellPath;
+
+          for (HCSIndex field : hcsIndexes) {
+            if (field.getPlateIndex() == index.getPlateIndex() &&
+              field.getWellRowIndex() == index.getWellRowIndex() &&
+              field.getWellColumnIndex() == index.getWellColumnIndex())
+            {
+              Map<String, Object> image = new HashMap<String, Object>();
+              int plateAcq = field.getPlateAcquisitionIndex();
+              image.put("acquisition", String.valueOf(plateAcq));
+              image.put("path", String.valueOf(field.getFieldIndex()));
+              imageList.add(image);
+            }
+          }
+
+          Map<String, Object> wellMap = new HashMap<String, Object>();
+          wellMap.put("images", imageList);
+          n5.setAttribute(fullPath, "well", wellMap);
+
+          // make sure the row/column indexes are added to the plate attributes
+          // this is necessary when Plate.Rows or Plate.Columns is not set
+          int column = index.getWellColumnIndex();
+          int row = index.getWellRowIndex();
+
+          boolean foundColumn = false;
+          for (Map<String, Object> colMap : columns) {
+            if (colMap.get("name").equals(String.valueOf(column))) {
+              foundColumn = true;
+              break;
+            }
+          }
+          if (!foundColumn) {
+            Map<String, Object> colMap = new HashMap<String, Object>();
+            colMap.put("name", String.valueOf(column));
+            columns.add(colMap);
+          }
+
+          boolean foundRow = false;
+          for (Map<String, Object> rowMap : rows) {
+            if (rowMap.get("name").equals(String.valueOf(row))) {
+              foundRow = true;
+              break;
+            }
+          }
+          if (!foundRow) {
+            Map<String, Object> rowMap = new HashMap<String, Object>();
+            rowMap.put("name", String.valueOf(row));
+            rows.add(rowMap);
+          }
+        }
+
+        maxField = (int) Math.max(maxField, index.getFieldIndex());
+      }
+    }
+    plateMap.put("wells", wells);
+    plateMap.put("columns", columns);
+    plateMap.put("rows", rows);
+
+    plateMap.put("field_count", maxField + 1);
+
+    n5.setAttribute(platePath, "plate", plateMap);
   }
 
   /**
@@ -1103,6 +1318,121 @@ public class Converter implements Callable<Void> {
   }
 
   /**
+   * Get the actual pixel type to write based upon the given input type
+   * and command line options.  Input and output pixel types are Bio-Formats
+   * types as defined in FormatTools.
+   *
+   * Changing the pixel type during export is only supported when the input
+   * type is float or double.
+   *
+   * @param srcPixelType pixel type of the input data
+   * @return pixel type of the output data
+   */
+  private int getRealType(int srcPixelType) {
+    if (outputPixelType == null) {
+      return srcPixelType;
+    }
+    int bfPixelType =
+      FormatTools.pixelTypeFromString(outputPixelType.getValue());
+    if (bfPixelType == srcPixelType ||
+      (srcPixelType != FormatTools.FLOAT && srcPixelType != FormatTools.DOUBLE))
+    {
+      return srcPixelType;
+    }
+    return bfPixelType;
+  }
+
+  /**
+   * Change the pixel type of the input tile as appropriate.
+   *
+   * @param tile input pixel data
+   * @param srcPixelType pixel type of the input data
+   * @param littleEndian true if tile bytes have little-endian ordering
+   * @return pixel data with the correct output pixel type
+   */
+  private byte[] changePixelType(byte[] tile, int srcPixelType,
+    boolean littleEndian)
+  {
+    if (outputPixelType == null) {
+      return tile;
+    }
+    int bfPixelType =
+      FormatTools.pixelTypeFromString(outputPixelType.getValue());
+
+    if (bfPixelType == srcPixelType ||
+      (srcPixelType != FormatTools.FLOAT && srcPixelType != FormatTools.DOUBLE))
+    {
+      return tile;
+    }
+
+    int bpp = FormatTools.getBytesPerPixel(bfPixelType);
+    int srcBpp = FormatTools.getBytesPerPixel(srcPixelType);
+    byte[] output = new byte[bpp * (tile.length / srcBpp)];
+
+    double[] range = getRange(bfPixelType);
+    if (range == null) {
+      throw new IllegalArgumentException(
+        "Cannot convert to " + outputPixelType);
+    }
+
+    if (srcPixelType == FormatTools.FLOAT) {
+      float[] pixels = DataTools.normalizeFloats(
+        (float[]) DataTools.makeDataArray(tile, 4, true, littleEndian));
+
+      for (int pixel=0; pixel<pixels.length; pixel++) {
+        long v = (long) ((pixels[pixel] * (range[1] - range[0])) + range[0]);
+        DataTools.unpackBytes(v, output, pixel * bpp, bpp, littleEndian);
+      }
+
+    }
+    else if (srcPixelType == FormatTools.DOUBLE) {
+      double[] pixels = DataTools.normalizeDoubles(
+        (double[]) DataTools.makeDataArray(tile, 8, true, littleEndian));
+
+      for (int pixel=0; pixel<pixels.length; pixel++) {
+        long v = (long) ((pixels[pixel] * (range[1] - range[0])) + range[0]);
+        DataTools.unpackBytes(v, output, pixel * bpp, bpp, littleEndian);
+      }
+    }
+
+    return output;
+  }
+
+  /**
+   * Get the minimum and maximum pixel values for the given pixel type.
+   *
+   * @param bfPixelType pixel type as defined in FormatTools
+   * @return array of length 2 representing the minimum and maximum
+   *         pixel values, or null if converting to the given type is
+   *         not supported
+   */
+  private double[] getRange(int bfPixelType) {
+    double[] range = new double[2];
+    switch (bfPixelType) {
+      case FormatTools.INT8:
+        range[0] = -128.0;
+        range[1] = 127.0;
+        break;
+      case FormatTools.UINT8:
+        range[0] = 0.0;
+        range[1] = 255.0;
+        break;
+      case FormatTools.INT16:
+        range[0] = -32768.0;
+        range[1] = 32767.0;
+        break;
+      case FormatTools.UINT16:
+        range[0] = 0.0;
+        range[1] = 65535.0;
+        break;
+      default:
+        return null;
+    }
+
+    return range;
+  }
+
+  /**
    * Convert Bio-Formats pixel type to Zarr data type.
    *
    * @param type Bio-Formats pixel type
@@ -1169,6 +1499,12 @@ public class Converter implements Callable<Void> {
     finally {
       imageReader.close();
     }
+  }
+
+  private N5Writer getWriter() throws IOException {
+    final String pyramidPath = outputPath.resolve(pyramidName).toString();
+    final N5Writer n5 = fileType.writer(pyramidPath);
+    return n5;
   }
 
   private static Slf4JStopWatch stopWatch() {
