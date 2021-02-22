@@ -138,9 +138,7 @@ public class HCSIndex {
    * @return well path relative to the plate group
    */
   public String getWellPath() {
-    return String.format("%d/%d",
-      getWellRowIndex(),
-      getWellColumnIndex());
+    return String.format("%d/%d", getWellRowIndex(), getWellColumnIndex());
   }
 
   @Override

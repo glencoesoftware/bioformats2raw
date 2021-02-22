@@ -440,11 +440,9 @@ public class Converter implements Callable<Void> {
 
     // Finally, perform conversion on all series
     try {
-      int seriesCount;
       IFormatReader v = readers.take();
       IMetadata meta = null;
       try {
-        seriesCount = v.getSeriesCount();
         meta = (IMetadata) v.getMetadataStore();
         ((OMEXMLMetadata) meta).resolveReferences();
 
@@ -526,7 +524,7 @@ public class Converter implements Callable<Void> {
       }
 
       if (meta != null) {
-        saveHCSMetadata(getWriter(), meta);
+        saveHCSMetadata(meta);
       }
     }
     finally {
@@ -1063,12 +1061,14 @@ public class Converter implements Callable<Void> {
 
   }
 
-  private void saveHCSMetadata(N5Writer n5, IMetadata meta) throws IOException {
+  private void saveHCSMetadata(IMetadata meta) throws IOException {
     if (noHCS) {
       return;
     }
 
     // assumes only one plate defined
+    Path rootPath = outputPath.resolve(pyramidName);
+    ZarrGroup root = ZarrGroup.open(rootPath);
     int plate = 0;
     Map<String, Object> plateMap = new HashMap<String, Object>();
 
@@ -1080,24 +1080,27 @@ public class Converter implements Callable<Void> {
     // try to set plate dimensions based upon Plate.Rows/Plate.Columns
     // if not possible, use well data later on
     try {
+      for (int r=0; r<meta.getPlateRows(plate).getValue(); r++) {
+        Map<String, Object> row = new HashMap<String, Object>();
+        String rowName = String.valueOf(r);
+        row.put("name", rowName);
+        rows.add(row);
+        root.createSubGroup(rowName);
+      }
+    }
+    catch (NullPointerException e) {
+      // expected when Plate.Rows not set
+    }
+    try {
       for (int c=0; c<meta.getPlateColumns(plate).getValue(); c++) {
         Map<String, Object> column = new HashMap<String, Object>();
-        column.put("name", String.valueOf(c));
+        String columnName = String.valueOf(c);
+        column.put("name", columnName);
         columns.add(column);
       }
     }
     catch (NullPointerException e) {
       // expected when Plate.Columns not set
-    }
-    try {
-      for (int r=0; r<meta.getPlateRows(plate).getValue(); r++) {
-        Map<String, Object> row = new HashMap<String, Object>();
-        row.put("name", String.valueOf(r));
-        rows.add(row);
-      }
-    }
-    catch (NullPointerException e) {
-      // expected when Plate.Rows not set
     }
 
     List<Map<String, Object>> acquisitions =
@@ -1109,7 +1112,6 @@ public class Converter implements Callable<Void> {
     }
     plateMap.put("acquisitions", acquisitions);
 
-    String platePath = "";
     List<Map<String, Object>> wells = new ArrayList<Map<String, Object>>();
     int maxField = Integer.MIN_VALUE;
     for (HCSIndex index : hcsIndexes) {
@@ -1123,8 +1125,7 @@ public class Converter implements Callable<Void> {
 
           List<Map<String, Object>> imageList =
             new ArrayList<Map<String, Object>>();
-          String fullPath = platePath + "/" + wellPath;
-
+          ZarrGroup wellGroup = root.createSubGroup(wellPath);
           for (HCSIndex field : hcsIndexes) {
             if (field.getPlateIndex() == index.getPlateIndex() &&
               field.getWellRowIndex() == index.getWellRowIndex() &&
@@ -1132,7 +1133,7 @@ public class Converter implements Callable<Void> {
             {
               Map<String, Object> image = new HashMap<String, Object>();
               int plateAcq = field.getPlateAcquisitionIndex();
-              image.put("acquisition", String.valueOf(plateAcq));
+              image.put("acquisition", plateAcq);
               image.put("path", String.valueOf(field.getFieldIndex()));
               imageList.add(image);
             }
@@ -1140,7 +1141,9 @@ public class Converter implements Callable<Void> {
 
           Map<String, Object> wellMap = new HashMap<String, Object>();
           wellMap.put("images", imageList);
-          n5.setAttribute(fullPath, "well", wellMap);
+          Map<String, Object> attributes = wellGroup.getAttributes();
+          attributes.put("well", wellMap);
+          wellGroup.writeAttributes(attributes);
 
           // make sure the row/column indexes are added to the plate attributes
           // this is necessary when Plate.Rows or Plate.Columns is not set
@@ -1183,7 +1186,9 @@ public class Converter implements Callable<Void> {
 
     plateMap.put("field_count", maxField + 1);
 
-    n5.setAttribute(platePath, "plate", plateMap);
+    Map<String, Object> attributes = root.getAttributes();
+    attributes.put("plate", plateMap);
+    root.writeAttributes(attributes);
   }
 
   /**
@@ -1499,12 +1504,6 @@ public class Converter implements Callable<Void> {
     finally {
       imageReader.close();
     }
-  }
-
-  private N5Writer getWriter() throws IOException {
-    final String pyramidPath = outputPath.resolve(pyramidName).toString();
-    final N5Writer n5 = fileType.writer(pyramidPath);
-    return n5;
   }
 
   private static Slf4JStopWatch stopWatch() {
