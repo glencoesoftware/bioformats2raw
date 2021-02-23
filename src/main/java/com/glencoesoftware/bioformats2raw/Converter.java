@@ -1037,12 +1037,12 @@ public class Converter implements Callable<Void> {
                     resolution, plane, xx, yy, width, height);
                 future.complete(null);
               }
-              catch (Exception e) {
-                future.completeExceptionally(e);
+              catch (Throwable t) {
+                future.completeExceptionally(t);
                 LOGGER.error(
                   "Failure processing tile; resolution={} plane={} " +
                   "xx={} yy={} width={} height={}",
-                  resolution, plane, xx, yy, width, height, e);
+                  resolution, plane, xx, yy, width, height, t);
               }
             });
           }
