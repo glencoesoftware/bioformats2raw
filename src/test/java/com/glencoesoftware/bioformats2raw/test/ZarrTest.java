@@ -41,6 +41,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -325,6 +327,97 @@ public class ZarrTest {
   }
 
   /**
+   * Test single beginning -series conversion.
+   */
+  @Test
+  public void testSingleBeginningSeries() throws Exception {
+    input = fake("series", "2");
+    assertTool("-s", "0");
+    ZarrGroup z =
+        ZarrGroup.open(output.resolve("data.zarr").toString());
+
+    // Check series 0 dimensions and special pixels
+    ZarrArray series0 = z.openArray("0/0");
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getShape());
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getChunks());
+    int[] shape = new int[] {1, 1, 1, 512, 512};
+    byte[] tile = new byte[512 * 512];
+    series0.read(tile, shape);
+    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
+    assertArrayEquals(new int[] {0, 0, 0, 0, 0}, seriesPlaneNumberZCT);
+    try {
+      z.openArray("1/0");
+      fail("Array exists!");
+    }
+    catch (IOException e) {
+      // Pass
+    }
+  }
+
+  /**
+   * Test single end series conversion.
+   */
+  @Test
+  public void testSingleEndSeries() throws Exception {
+    input = fake("series", "2");
+    assertTool("-s", "1");
+    ZarrGroup z =
+        ZarrGroup.open(output.resolve("data.zarr").toString());
+
+    // Check series 1 dimensions and special pixels
+    ZarrArray series0 = z.openArray("0/0");
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getShape());
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getChunks());
+    int[] shape = new int[] {1, 1, 1, 512, 512};
+    byte[] tile = new byte[512 * 512];
+    series0.read(tile, shape);
+    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
+    assertArrayEquals(new int[] {1, 0, 0, 0, 0}, seriesPlaneNumberZCT);
+    try {
+      z.openArray("1/0");
+      fail("Array exists!");
+    }
+    catch (IOException e) {
+      // Pass
+    }
+  }
+
+  /**
+   * Test single middle series conversion.
+   */
+  @Test
+  public void testSingleMiddleSeries() throws Exception {
+    input = fake("series", "3");
+    assertTool("-s", "1");
+    ZarrGroup z =
+        ZarrGroup.open(output.resolve("data.zarr").toString());
+
+    // Check series 1 dimensions and special pixels
+    ZarrArray series0 = z.openArray("0/0");
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getShape());
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getChunks());
+    int[] shape = new int[] {1, 1, 1, 512, 512};
+    byte[] tile = new byte[512 * 512];
+    series0.read(tile, shape);
+    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
+    assertArrayEquals(new int[] {1, 0, 0, 0, 0}, seriesPlaneNumberZCT);
+    try {
+      z.openArray("1/0");
+      fail("Array exists!");
+    }
+    catch (IOException e) {
+      // Pass
+    }
+    try {
+      z.openArray("2/0");
+      fail("Array exists!");
+    }
+    catch (IOException e) {
+      // Pass
+    }
+  }
+
+  /**
    * Test more than one Z-section.
    */
   @Test
@@ -541,18 +634,31 @@ public class ZarrTest {
     ZarrGroup z =
         ZarrGroup.open(output.resolve("data.zarr").toString());
 
+    ZarrArray series0 = z.openArray("0/0");
+    assertEquals(DataType.u2, series0.getDataType());
+    assertArrayEquals(new int[] {1, 1, 1, 300, 60}, series0.getShape());
+    int[] shape = new int[] {1, 1, 1, 10, 10};
+    int[] offset = new int[] {0, 0, 0, 290, 0};
+    short[] tile = new short[10 * 10];
+    series0.read(tile, shape, offset);
+    for (int y=0; y<10; y++) {
+      for (int x=0; x<10; x++) {
+        assertEquals(x, tile[y * 10 + x]);
+      }
+    }
+
     // Check series dimensions
     ZarrArray series1 = z.openArray("0/1");
     assertEquals(DataType.u2, series1.getDataType());
     assertArrayEquals(new int[] {1, 1, 1, 150, 30}, series1.getShape());
     assertArrayEquals(new int[] {1, 1, 1, 75, 25}, series1.getChunks());
-    int[] shape = new int[] {1, 1, 1, 75, 5};
-    int[] offset = new int[] {0, 0, 0, 75, 25};
-    short[] tile = new short[75 * 5];
+    shape = new int[] {1, 1, 1, 75, 5};
+    offset = new int[] {0, 0, 0, 75, 25};
+    tile = new short[75 * 5];
     series1.read(tile, shape, offset);
     // Last row first pixel should be the 2x2 downsampled value;
     // test will break if the downsampling algorithm changes
-    assertEquals(12800, tile[75 * 4]);
+    assertEquals(50, tile[75 * 4]);
   }
 
   /**
@@ -655,6 +761,118 @@ public class ZarrTest {
   public void testNestedStorage(boolean nested) throws IOException {
     input = fake();
     assertTool(nested ? "--nested" : "--no-nested");
+  }
+
+  /**
+   * Convert a plate with the --no-hcs option.
+   * The output should not be compliant with OME Zarr HCS.
+   */
+  @Test
+  public void testNoHCSOption() throws IOException {
+    input = fake(
+      "plates", "1", "plateAcqs", "1",
+      "plateRows", "2", "plateCols", "3", "fields", "2");
+    assertTool("--no-hcs");
+
+    ZarrGroup z = ZarrGroup.open(output.resolve("data.zarr"));
+
+    // Check dimensions and block size
+    ZarrArray series0 = z.openArray("0/0");
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getShape());
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getChunks());
+    assertEquals(12, z.getGroupKeys().size());
+  }
+
+  /**
+   * Convert a plate with default options.
+   * The output should be compliant with OME Zarr HCS.
+   */
+  @Test
+  public void testHCSMetadata() throws IOException {
+    input = fake(
+      "plates", "1", "plateAcqs", "1",
+      "plateRows", "2", "plateCols", "3", "fields", "2");
+    assertTool();
+
+    Path root = output.resolve("data.zarr");
+    ZarrGroup z = ZarrGroup.open(root);
+
+    // check valid group layout
+    // .zattrs (Plate), .zgroup (Plate) and 2 rows
+    assertEquals(4, Files.list(root).toArray().length);
+    for (int row=0; row<2; row++) {
+      Path rowPath = root.resolve(Integer.toString(row));
+      // .zgroup (Row) and 3 columns
+      assertEquals(4, Files.list(rowPath).toArray().length);
+      for (int col=0; col<3; col++) {
+        Path colPath = rowPath.resolve(Integer.toString(col));
+        ZarrGroup colGroup = ZarrGroup.open(colPath);
+        // .zattrs (Column/Image), .zgroup (Column/Image) and 2 fields
+        assertEquals(4, Files.list(colPath).toArray().length);
+        for (int field=0; field<2; field++) {
+          // append resolution index
+          ZarrArray series0 = colGroup.openArray(field + "/0");
+          assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getShape());
+          assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getChunks());
+        }
+      }
+    }
+
+    // check plate/well level metadata
+    Map<String, Object> plate =
+        (Map<String, Object>) z.getAttributes().get("plate");
+    assertEquals(2, ((Number) plate.get("field_count")).intValue());
+
+    List<Map<String, Object>> acquisitions =
+      (List<Map<String, Object>>) plate.get("acquisitions");
+    List<Map<String, Object>> rows =
+      (List<Map<String, Object>>) plate.get("rows");
+    List<Map<String, Object>> columns =
+      (List<Map<String, Object>>) plate.get("columns");
+    List<Map<String, Object>> wells =
+      (List<Map<String, Object>>) plate.get("wells");
+
+    assertEquals(1, acquisitions.size());
+    assertEquals("0", acquisitions.get(0).get("id"));
+
+    assertEquals(2, rows.size());
+    for (int row=0; row<rows.size(); row++) {
+      assertEquals(String.valueOf(row), rows.get(row).get("name"));
+    }
+
+    assertEquals(3, columns.size());
+    for (int col=0; col<columns.size(); col++) {
+      assertEquals(String.valueOf(col), columns.get(col).get("name"));
+    }
+
+    assertEquals(rows.size() * columns.size(), wells.size());
+    for (int row=0; row<rows.size(); row++) {
+      for (int col=0; col<columns.size(); col++) {
+        int well = row * columns.size() + col;
+        assertEquals(row + "/" + col, wells.get(well).get("path"));
+      }
+    }
+
+    // check well metadata
+    for (Map<String, Object> row : rows) {
+      String rowName = (String) row.get("name");
+      for (Map<String, Object> column : columns) {
+        String columnName = (String) column.get("name");
+        ZarrGroup wellGroup = ZarrGroup.open(
+            root.resolve(rowName).resolve(columnName));
+        Map<String, Object> well =
+            (Map<String, Object>) wellGroup.getAttributes().get("well");
+        List<Map<String, Object>> images =
+            (List<Map<String, Object>>) well.get("images");
+        assertEquals(2, images.size());
+        Map<String, Object> field1 = images.get(0);  // Field 1
+        assertEquals(field1.get("path"), "0");
+        assertEquals(0, field1.get("acquisition"));
+        Map<String, Object> field2 = images.get(1);  // Field 2
+        assertEquals(field2.get("path"), "1");
+        assertEquals(0, field2.get("acquisition"));
+      }
+    }
   }
 
 }
