@@ -1019,8 +1019,9 @@ public class Converter implements Callable<Void> {
       List<CompletableFuture<Void>> futures =
         new ArrayList<CompletableFuture<Void>>();
 
-      try (ProgressBar pb = new ProgressBar("resolution " + resCounter,
-                  tileCount))
+      try (ProgressBar pb = new ProgressBar(
+                  String.format("series %d resolution %d",
+                      series, resolution), tileCount))
       {
         for (int j=0; j<scaledHeight; j+=tileHeight) {
           final int yy = j;
