@@ -587,7 +587,7 @@ public class ZarrTest {
   }
 
   /**
-   * @return pairs of pixel type strings and N5 data types
+   * @return pairs of pixel type strings and Zarr data types
    */
   static Stream<Arguments> getPixelTypes() {
     return Stream.of(
