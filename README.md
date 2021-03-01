@@ -53,6 +53,10 @@ Maximum tile dimensions are can be configured with the `--tile_width` and `--til
 `bioformats2raw --help`.  `--resolutions` is optional; if omitted, the number of resolutions is set so that the smallest
 resolution is no greater than 256x256.
 
+If the input file has multiple series, a subset of the series can be converted by specifying a comma-separated list of indexes:
+
+    bioformats2raw /path/to/file.scn /path/to/zarr-pyramid --series 0,2,3,4
+
 By default, two additional readers (MiraxReader and PyramidTiffReader) are added to the beginning of Bio-Formats' list of reader classes.
 Either or both of these readers can be excluded with the `--extra-readers` option:
 
@@ -71,6 +75,12 @@ removed in order for new options to take effect.  This file will be e.g. `/path/
 The output in `/path/to/zarr-pyramid` can be passed to `raw2ometiff` to produce
 an OME-TIFF that can be opened in ImageJ, imported into OMERO, etc. See
 https://github.com/glencoesoftware/raw2ometiff for more information.
+
+Usage Changes
+=============
+
+Versions 0.2.6 and prior supported both N5 and Zarr output using the `--file_type` option.
+This option is not present in 0.3.0 and later, as only Zarr output is supported.
 
 Performance
 ===========
