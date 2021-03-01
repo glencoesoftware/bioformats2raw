@@ -75,7 +75,9 @@ import com.univocity.parsers.csv.CsvParser;
 import com.univocity.parsers.csv.CsvParserSettings;
 
 import ch.qos.logback.classic.Level;
+import me.tongfei.progressbar.DelegatingProgressBarConsumer;
 import me.tongfei.progressbar.ProgressBar;
+import me.tongfei.progressbar.ProgressBarBuilder;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -1019,10 +1021,18 @@ public class Converter implements Callable<Void> {
       List<CompletableFuture<Void>> futures =
         new ArrayList<CompletableFuture<Void>>();
 
-      try (ProgressBar pb = new ProgressBar(
-                  String.format("series %d resolution %d",
-                      series, resolution), tileCount))
+      ProgressBarBuilder builder = new ProgressBarBuilder()
+        .setInitialMax(tileCount)
+        .setTaskName(String.format("[%d/%d]", series, resolution));
+
+      if (!(logLevel.equals("OFF") ||
+        logLevel.equals("ERROR") ||
+        logLevel.equals("WARN")))
       {
+        builder.setConsumer(new DelegatingProgressBarConsumer(LOGGER::info));
+      }
+
+      try (ProgressBar pb = builder.build()) {
         for (int j=0; j<scaledHeight; j+=tileHeight) {
           final int yy = j;
           int height = (int) Math.min(tileHeight, scaledHeight - yy);
