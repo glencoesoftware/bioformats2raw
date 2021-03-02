@@ -1029,7 +1029,7 @@ public class Converter implements Callable<Void> {
         logLevel.equals("ERROR") ||
         logLevel.equals("WARN")))
       {
-        builder.setConsumer(new DelegatingProgressBarConsumer(LOGGER::info));
+        builder.setConsumer(new DelegatingProgressBarConsumer(LOGGER::trace));
       }
 
       try (ProgressBar pb = builder.build()) {
