@@ -2,7 +2,7 @@ bioformats2raw converter
 ========================
 
 Java application to convert image file formats, including .mrxs,
-to an intermediate N5/Zarr structure.
+to an intermediate Zarr structure.
 The [raw2ometiff](https://github.com/glencoesoftware/raw2ometiff)
 application can then be used to produce a
 Bio-Formats 5.9.x ("Faas") or Bio-Formats 6.x (true OME-TIFF) pyramid.
@@ -11,7 +11,7 @@ Requirements
 ============
 
 libblosc (https://github.com/Blosc/c-blosc) version 1.9.0 or later must be installed separately.
-The native libraries are not packaged with any relevant jars.  See also note in n5-zarr readme (https://github.com/saalfeldlab/n5-zarr/blob/0.0.2-beta/README.md)
+The native libraries are not packaged with any relevant jars.  See also note in jzarr readme (https://github.com/bcdev/jzarr/blob/master/README.md)
 
  * Mac OSX: `brew install c-blosc`
  * Ubuntu 18.04+: `apt-get install libblosc1`
@@ -46,31 +46,41 @@ Usage
 
 Run the conversion:
 
-    bioformats2raw /path/to/file.mrxs /path/to/n5-pyramid --resolutions 6
-    bioformats2raw /path/to/file.svs /path/to/n5-pyramid --resolutions 6
+    bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --resolutions 6
+    bioformats2raw /path/to/file.svs /path/to/zarr-pyramid --resolutions 6
 
 Maximum tile dimensions are can be configured with the `--tile_width` and `--tile_height` options.  Defaults can be viewed with
 `bioformats2raw --help`.  `--resolutions` is optional; if omitted, the number of resolutions is set so that the smallest
 resolution is no greater than 256x256.
 
+If the input file has multiple series, a subset of the series can be converted by specifying a comma-separated list of indexes:
+
+    bioformats2raw /path/to/file.scn /path/to/zarr-pyramid --series 0,2,3,4
+
 By default, two additional readers (MiraxReader and PyramidTiffReader) are added to the beginning of Bio-Formats' list of reader classes.
 Either or both of these readers can be excluded with the `--extra-readers` option:
 
     # only include the reader for .mrxs, exclude the reader for Faas pyramids
-    bioformats2raw /path/to/file.tiff /path/to/n5-pyramid --extra-readers com.glencoesoftware.bioformats2raw.MiraxReader
+    bioformats2raw /path/to/file.tiff /path/to/zarr-pyramid --extra-readers com.glencoesoftware.bioformats2raw.MiraxReader
     # don't add any additional readers, just use the ones provided by Bio-Formats
-    bioformats2raw /path/to/file.mrxs /path/to/n5-pyramid --extra-readers
+    bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --extra-readers
 
 Reader-specific options can be specified using `--options`:
 
-    bioformats2raw /path/to/file.mrxs /path/to/n5-pyramid --options mirax.use_metadata_dimensions=false
+    bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --options mirax.use_metadata_dimensions=false
 
 Be aware when experimenting with different values for `--options` that the corresponding memo (cache) file may need to be
 removed in order for new options to take effect.  This file will be e.g. `/path/to/.file.mrxs.bfmemo`.
 
-The output in `/path/to/n5-pyramid` can be passed to `raw2ometiff` to produce
+The output in `/path/to/zarr-pyramid` can be passed to `raw2ometiff` to produce
 an OME-TIFF that can be opened in ImageJ, imported into OMERO, etc. See
 https://github.com/glencoesoftware/raw2ometiff for more information.
+
+Usage Changes
+=============
+
+Versions 0.2.6 and prior supported both N5 and Zarr output using the `--file_type` option.
+This option is not present in 0.3.0 and later, as only Zarr output is supported.
 
 Performance
 ===========

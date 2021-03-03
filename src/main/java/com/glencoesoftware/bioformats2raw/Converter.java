@@ -81,7 +81,7 @@ import picocli.CommandLine.Parameters;
 import ucar.ma2.InvalidRangeException;
 
 /**
- * Command line tool for converting whole slide imaging files to N5.
+ * Command line tool for converting whole slide imaging files to Zarr.
  */
 public class Converter implements Callable<Void> {
 
