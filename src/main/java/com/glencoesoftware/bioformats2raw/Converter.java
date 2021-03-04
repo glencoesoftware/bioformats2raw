@@ -75,6 +75,9 @@ import com.univocity.parsers.csv.CsvParser;
 import com.univocity.parsers.csv.CsvParserSettings;
 
 import ch.qos.logback.classic.Level;
+import me.tongfei.progressbar.DelegatingProgressBarConsumer;
+import me.tongfei.progressbar.ProgressBar;
+import me.tongfei.progressbar.ProgressBarBuilder;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -152,7 +155,14 @@ public class Converter implements Callable<Void> {
       "(default: ${DEFAULT-VALUE})",
     fallbackValue = "DEBUG"
   )
-  private volatile String logLevel = "INFO";
+  private volatile String logLevel = "WARN";
+
+  @Option(
+    names = {"-p", "--progress"},
+    description = "Print progress bars during conversion",
+    help = true
+  )
+  private volatile boolean progressBars = false;
 
   @Option(
     names = "--version",
@@ -990,12 +1000,12 @@ public class Converter implements Callable<Void> {
       int activeTileWidth = tileWidth;
       int activeTileHeight = tileHeight;
       if (scaledWidth < activeTileWidth) {
-        LOGGER.warn("Reducing active tileWidth to {}", scaledWidth);
+        LOGGER.info("Reducing active tileWidth to {}", scaledWidth);
         activeTileWidth = scaledWidth;
       }
 
       if (scaledHeight < activeTileHeight) {
-        LOGGER.warn("Reducing active tileHeight to {}", scaledHeight);
+        LOGGER.info("Reducing active tileHeight to {}", scaledHeight);
         activeTileHeight = scaledHeight;
       }
 
@@ -1017,48 +1027,79 @@ public class Converter implements Callable<Void> {
           * imageCount;
       List<CompletableFuture<Void>> futures =
         new ArrayList<CompletableFuture<Void>>();
-      for (int j=0; j<scaledHeight; j+=tileHeight) {
-        final int yy = j;
-        int height = (int) Math.min(tileHeight, scaledHeight - yy);
-        for (int k=0; k<scaledWidth; k+=tileWidth) {
-          final int xx = k;
-          int width = (int) Math.min(tileWidth, scaledWidth - xx);
-          for (int i=0; i<imageCount; i++) {
-            final int plane = i;
 
-            CompletableFuture<Void> future = new CompletableFuture<Void>();
-            futures.add(future);
-            executor.execute(() -> {
-              try {
-                processTile(series, resolution, plane, xx, yy, width, height);
-                LOGGER.info(
-                    "Successfully processed tile; resolution={} plane={} " +
-                    "xx={} yy={} width={} height={}",
-                    resolution, plane, xx, yy, width, height);
-                future.complete(null);
-              }
-              catch (Throwable t) {
-                future.completeExceptionally(t);
-                LOGGER.error(
-                  "Failure processing tile; resolution={} plane={} " +
-                  "xx={} yy={} width={} height={}",
-                  resolution, plane, xx, yy, width, height, t);
-              }
-            });
-          }
+      final ProgressBar pb;
+      if (progressBars) {
+        ProgressBarBuilder builder = new ProgressBarBuilder()
+          .setInitialMax(tileCount)
+          .setTaskName(String.format("[%d/%d]", series, resolution));
+
+        if (!(logLevel.equals("OFF") ||
+          logLevel.equals("ERROR") ||
+          logLevel.equals("WARN")))
+        {
+          builder.setConsumer(new DelegatingProgressBarConsumer(LOGGER::trace));
         }
+
+        pb = builder.build();
+      }
+      else {
+        pb = null;
       }
 
-      // Wait until the entire resolution has completed before proceeding to
-      // the next one
-      CompletableFuture.allOf(
-        futures.toArray(new CompletableFuture[futures.size()])).join();
+      try {
+        for (int j=0; j<scaledHeight; j+=tileHeight) {
+          final int yy = j;
+          int height = (int) Math.min(tileHeight, scaledHeight - yy);
+          for (int k=0; k<scaledWidth; k+=tileWidth) {
+            final int xx = k;
+            int width = (int) Math.min(tileWidth, scaledWidth - xx);
+            for (int i=0; i<imageCount; i++) {
+              final int plane = i;
 
-      // TODO: some of these futures may be completelyExceptionally
-      //  and need re-throwing
+              CompletableFuture<Void> future = new CompletableFuture<Void>();
+              futures.add(future);
+              executor.execute(() -> {
+                try {
+                  processTile(series, resolution, plane, xx, yy, width, height);
+                  LOGGER.info(
+                      "Successfully processed tile; resolution={} plane={} " +
+                      "xx={} yy={} width={} height={}",
+                      resolution, plane, xx, yy, width, height);
+                  future.complete(null);
+                }
+                catch (Throwable t) {
+                  future.completeExceptionally(t);
+                  LOGGER.error(
+                    "Failure processing tile; resolution={} plane={} " +
+                    "xx={} yy={} width={} height={}",
+                    resolution, plane, xx, yy, width, height, t);
+                }
+                finally {
+                  if (pb != null) {
+                    pb.step();
+                  }
+                }
+              });
+            }
+          }
+        }
 
+        // Wait until the entire resolution has completed before proceeding to
+        // the next one
+        CompletableFuture.allOf(
+          futures.toArray(new CompletableFuture[futures.size()])).join();
+
+        // TODO: some of these futures may be completelyExceptionally
+        //  and need re-throwing
+
+      }
+      finally {
+        if (pb != null) {
+          pb.close();
+        }
+      }
     }
-
   }
 
   private void saveHCSMetadata(IMetadata meta) throws IOException {
