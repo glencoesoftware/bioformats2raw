@@ -158,6 +158,13 @@ public class Converter implements Callable<Void> {
   private volatile String logLevel = "WARN";
 
   @Option(
+    names = {"-p", "--progress"},
+    description = "Print progress bars during conversion",
+    help = true
+  )
+  private volatile boolean progressBars = false;
+
+  @Option(
     names = "--version",
     description = "Print version information and exit",
     help = true
@@ -1021,18 +1028,26 @@ public class Converter implements Callable<Void> {
       List<CompletableFuture<Void>> futures =
         new ArrayList<CompletableFuture<Void>>();
 
-      ProgressBarBuilder builder = new ProgressBarBuilder()
-        .setInitialMax(tileCount)
-        .setTaskName(String.format("[%d/%d]", series, resolution));
+      final ProgressBar pb;
+      if (progressBars) {
+        ProgressBarBuilder builder = new ProgressBarBuilder()
+          .setInitialMax(tileCount)
+          .setTaskName(String.format("[%d/%d]", series, resolution));
 
-      if (!(logLevel.equals("OFF") ||
-        logLevel.equals("ERROR") ||
-        logLevel.equals("WARN")))
-      {
-        builder.setConsumer(new DelegatingProgressBarConsumer(LOGGER::trace));
+        if (!(logLevel.equals("OFF") ||
+          logLevel.equals("ERROR") ||
+          logLevel.equals("WARN")))
+        {
+          builder.setConsumer(new DelegatingProgressBarConsumer(LOGGER::trace));
+        }
+
+        pb = builder.build();
+      }
+      else {
+        pb = null;
       }
 
-      try (ProgressBar pb = builder.build()) {
+      try {
         for (int j=0; j<scaledHeight; j+=tileHeight) {
           final int yy = j;
           int height = (int) Math.min(tileHeight, scaledHeight - yy);
@@ -1061,7 +1076,9 @@ public class Converter implements Callable<Void> {
                     resolution, plane, xx, yy, width, height, t);
                 }
                 finally {
-                  pb.step();
+                  if (pb != null) {
+                    pb.step();
+                  }
                 }
               });
             }
@@ -1076,6 +1093,11 @@ public class Converter implements Callable<Void> {
         // TODO: some of these futures may be completelyExceptionally
         //  and need re-throwing
 
+      }
+      finally {
+        if (pb != null) {
+          pb.close();
+        }
       }
     }
   }
