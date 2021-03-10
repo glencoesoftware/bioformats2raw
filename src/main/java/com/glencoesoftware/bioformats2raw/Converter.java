@@ -487,6 +487,10 @@ public class Converter implements Callable<Void> {
         for (int s=0; s<meta.getImageCount(); s++) {
           meta.setPixelsBigEndian(true, s);
 
+          if (dimensionOrder != null) {
+            meta.setPixelsDimensionOrder(dimensionOrder, s);
+          }
+
           PixelType type = meta.getPixelsType(s);
           int bfType =
             getRealType(FormatTools.pixelTypeFromString(type.getValue()));
