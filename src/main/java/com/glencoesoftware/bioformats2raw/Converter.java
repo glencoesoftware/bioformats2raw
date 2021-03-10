@@ -252,7 +252,9 @@ public class Converter implements Callable<Void> {
           names = "--dimension-order",
           description = "Override the input file dimension order in the " +
                   "output file [Can break compatibility with raw2ometiff] " +
-                  "(${COMPLETION-CANDIDATES})"
+                  "(${COMPLETION-CANDIDATES})",
+          converter = DimensionOrderConverter.class,
+          defaultValue = "XYZCT"
   )
   private volatile DimensionOrder dimensionOrder;
 

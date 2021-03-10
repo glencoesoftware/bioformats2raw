@@ -251,7 +251,7 @@ public class ZarrTest {
     ZarrGroup z =
         ZarrGroup.open(output.resolve("data.zarr").toString());
     ZarrArray array = z.openArray("0/0");
-    assertArrayEquals(new int[] {1, 1, 2, 512, 512}, array.getShape());
+    assertArrayEquals(new int[] {1, 2, 1, 512, 512}, array.getShape());
   }
 
   /**
@@ -261,6 +261,19 @@ public class ZarrTest {
   public void testSetXYCZTDimensionOrder() throws Exception {
     input = fake("sizeC", "2");
     assertTool("--dimension-order", "XYCZT");
+    ZarrGroup z =
+        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrArray array = z.openArray("0/0");
+    assertArrayEquals(new int[] {1, 1, 2, 512, 512}, array.getShape());
+  }
+
+  /**
+   * Test setting original (source file) dimension order.
+   */
+  @Test
+  public void testSetOriginalDimensionOrder() throws Exception {
+    input = fake("sizeC", "2", "dimOrder", "XYCZT");
+    assertTool("--dimension-order", "original");
     ZarrGroup z =
         ZarrGroup.open(output.resolve("data.zarr").toString());
     ZarrArray array = z.openArray("0/0");
