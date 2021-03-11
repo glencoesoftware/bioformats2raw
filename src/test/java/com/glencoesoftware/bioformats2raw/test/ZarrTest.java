@@ -85,8 +85,9 @@ public class ZarrTest {
     try {
       converter = new Converter();
       CommandLine.call(converter, args.toArray(new String[]{}));
-      assertTrue(Files.exists(output.resolve("data.zarr")));
-      assertTrue(Files.exists(output.resolve("METADATA.ome.xml")));
+      Path zarr = output.resolve("data.zarr");
+      assertTrue(Files.exists(zarr));
+      assertTrue(Files.exists(zarr.resolve("METADATA.ome.xml")));
     }
     catch (RuntimeException rt) {
       throw rt;
@@ -671,7 +672,7 @@ public class ZarrTest {
 
     input = fake(null, null, originalMetadata);
     assertTool();
-    Path omexml = output.resolve("METADATA.ome.xml");
+    Path omexml = output.resolve("data.zarr").resolve("METADATA.ome.xml");
     StringBuilder xml = new StringBuilder();
     Files.lines(omexml).forEach(v -> xml.append(v));
 
@@ -785,8 +786,8 @@ public class ZarrTest {
     ZarrGroup z = ZarrGroup.open(root);
 
     // check valid group layout
-    // .zattrs (Plate), .zgroup (Plate) and 2 rows
-    assertEquals(4, Files.list(root).toArray().length);
+    // METADATA.ome.xml, .zattrs (Plate), .zgroup (Plate) and 2 rows
+    assertEquals(5, Files.list(root).toArray().length);
     for (int row=0; row<2; row++) {
       Path rowPath = root.resolve(Integer.toString(row));
       // .zgroup (Row) and 3 columns
