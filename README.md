@@ -93,6 +93,10 @@ or can be set to use the input file's ordering, preserving the behavior of 0.2.6
 
     bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --dimension-order original
 
+If a specific dimension order is passed to `--dimension-order`, it must be a valid dimension order as defined in
+the [OME 2016-06 schema](https://www.openmicroscopy.org/Schemas/Documentation/Generated/OME-2016-06/ome_xsd.html#Pixels_DimensionOrder).
+The specified dimension order is then reversed when creating Zarr arrays, e.g. `XYCZT` would become `TZCYX` in Zarr.
+
 Performance
 ===========
 
