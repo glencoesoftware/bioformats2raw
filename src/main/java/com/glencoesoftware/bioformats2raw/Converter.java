@@ -510,10 +510,11 @@ public class Converter implements Callable<Void> {
         String xml = getService().getOMEXML(meta);
 
         // write the original OME-XML to a file
-        if (!Files.exists(outputPath)) {
-          Files.createDirectories(outputPath);
+        Path metadataPath = outputPath.resolve(pyramidName);
+        if (!Files.exists(metadataPath)) {
+          Files.createDirectories(metadataPath);
         }
-        Path omexmlFile = outputPath.resolve(METADATA_FILE);
+        Path omexmlFile = metadataPath.resolve(METADATA_FILE);
         Files.write(omexmlFile, xml.getBytes(Constants.ENCODING));
       }
       catch (ServiceException se) {
