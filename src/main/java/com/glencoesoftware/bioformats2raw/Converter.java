@@ -252,7 +252,9 @@ public class Converter implements Callable<Void> {
           names = "--dimension-order",
           description = "Override the input file dimension order in the " +
                   "output file [Can break compatibility with raw2ometiff] " +
-                  "(${COMPLETION-CANDIDATES})"
+                  "(${COMPLETION-CANDIDATES})",
+          converter = DimensionOrderConverter.class,
+          defaultValue = "XYZCT"
   )
   private volatile DimensionOrder dimensionOrder;
 
@@ -486,6 +488,10 @@ public class Converter implements Callable<Void> {
         for (int s=0; s<meta.getImageCount(); s++) {
           meta.setPixelsBigEndian(true, s);
 
+          if (dimensionOrder != null) {
+            meta.setPixelsDimensionOrder(dimensionOrder, s);
+          }
+
           PixelType type = meta.getPixelsType(s);
           int bfType =
             getRealType(FormatTools.pixelTypeFromString(type.getValue()));
@@ -505,10 +511,11 @@ public class Converter implements Callable<Void> {
         String xml = getService().getOMEXML(meta);
 
         // write the original OME-XML to a file
-        if (!Files.exists(outputPath)) {
-          Files.createDirectories(outputPath);
+        Path metadataPath = outputPath.resolve(pyramidName);
+        if (!Files.exists(metadataPath)) {
+          Files.createDirectories(metadataPath);
         }
-        Path omexmlFile = outputPath.resolve(METADATA_FILE);
+        Path omexmlFile = metadataPath.resolve(METADATA_FILE);
         Files.write(omexmlFile, xml.getBytes(Constants.ENCODING));
       }
       catch (ServiceException se) {
