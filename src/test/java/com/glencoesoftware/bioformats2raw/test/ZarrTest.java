@@ -10,6 +10,7 @@ package com.glencoesoftware.bioformats2raw.test;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -32,6 +33,8 @@ import loci.formats.FormatTools;
 import loci.formats.in.FakeReader;
 import loci.formats.ome.OMEXMLMetadata;
 import loci.formats.services.OMEXMLService;
+import ome.xml.model.OME;
+import ome.xml.model.Pixels;
 import picocli.CommandLine;
 import picocli.CommandLine.ExecutionException;
 
@@ -874,6 +877,24 @@ public class ZarrTest {
         assertEquals(0, field2.get("acquisition"));
       }
     }
+  }
+
+  /**
+   * Convert an RGB image.  Ensure that the Channels are correctly split.
+   */
+  @Test
+  public void testRGBChannelSeparator() throws Exception {
+    input = fake("sizeC", "3", "rgb", "3");
+    assertTool();
+
+    Path xml = output.resolve("data.zarr").resolve("METADATA.ome.xml");
+    ServiceFactory sf = new ServiceFactory();
+    OMEXMLService xmlService = sf.getInstance(OMEXMLService.class);
+    OME ome = (OME) xmlService.createOMEXMLRoot(
+        new String(Files.readAllBytes(xml), StandardCharsets.UTF_8));
+    assertEquals(1, ome.sizeOfImageList());
+    Pixels pixels = ome.getImage(0).getPixels();
+    assertEquals(3, pixels.sizeOfChannelList());
   }
 
 }

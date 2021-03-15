@@ -442,12 +442,13 @@ public class Converter implements Callable<Void> {
       memoizer.setFlattenedResolutions(false);
       memoizer.setMetadataFiltered(true);
       memoizer.setMetadataStore(createMetadata());
-      memoizer.setId(inputPath.toString());
-      memoizer.setResolution(0);
+      ChannelSeparator separator = new ChannelSeparator(memoizer);
+      separator.setId(inputPath.toString());
+      separator.setResolution(0);
       if (reader instanceof MiraxReader) {
         ((MiraxReader) reader).setTileCache(tileCache);
       }
-      readers.add(new ChannelSeparator(memoizer));
+      readers.add(separator);
     }
 
     // Finally, perform conversion on all series
