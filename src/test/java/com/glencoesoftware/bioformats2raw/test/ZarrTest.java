@@ -887,7 +887,7 @@ public class ZarrTest {
     input = fake("sizeC", "3", "rgb", "3");
     assertTool();
 
-    Path xml = output.resolve("METADATA.ome.xml");
+    Path xml = output.resolve("data.zarr").resolve("METADATA.ome.xml");
     ServiceFactory sf = new ServiceFactory();
     OMEXMLService xmlService = sf.getInstance(OMEXMLService.class);
     OME ome = (OME) xmlService.createOMEXMLRoot(
