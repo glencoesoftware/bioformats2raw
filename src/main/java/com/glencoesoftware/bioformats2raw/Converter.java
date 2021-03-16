@@ -303,6 +303,18 @@ public class Converter implements Callable<Void> {
   )
   private volatile boolean noHCS = false;
 
+  @Option(
+          names = "--even",
+          description = "Export even indices"
+  )
+  private volatile boolean even = false;
+
+  @Option(
+          names = "--uneven",
+          description = "Export uneven indices"
+  )
+  private volatile boolean uneven = false;
+
   /** Scaling implementation that will be used during downsampling. */
   private volatile IImageScaler scaler = new SimpleImageScaler();
 
@@ -477,7 +489,15 @@ public class Converter implements Callable<Void> {
           meta.setRoot(root);
         }
         else {
-          for (int i=0; i<meta.getImageCount(); i++) {
+          int inc = 1;
+          int start = 0;
+          if (even|uneven) {
+            inc = 2;
+            if (uneven) {
+              start = 1;
+            }
+          }
+          for (int i=start; i<meta.getImageCount(); i+=inc) {
             seriesList.add(i);
           }
         }
