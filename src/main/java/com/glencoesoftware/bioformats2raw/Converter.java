@@ -1170,7 +1170,6 @@ public class Converter implements Callable<Void> {
 
           Map<String, Object> well = new HashMap<String, Object>();
           well.put("path", wellPath);
-          wells.add(well);
 
           List<Map<String, Object>> imageList =
             new ArrayList<Map<String, Object>>();
@@ -1199,31 +1198,37 @@ public class Converter implements Callable<Void> {
           int column = index.getWellColumnIndex();
           int row = index.getWellRowIndex();
 
-          boolean foundColumn = false;
-          for (Map<String, Object> colMap : columns) {
-            if (colMap.get("name").equals(String.valueOf(column))) {
-              foundColumn = true;
+          int columnIndex = -1;
+          for (int c=0; c<columns.size(); c++) {
+            if (columns.get(c).get("name").equals(String.valueOf(column))) {
+              columnIndex = c;
               break;
             }
           }
-          if (!foundColumn) {
+          if (columnIndex < 0) {
             Map<String, Object> colMap = new HashMap<String, Object>();
             colMap.put("name", String.valueOf(column));
+            columnIndex = columns.size();
             columns.add(colMap);
           }
 
-          boolean foundRow = false;
-          for (Map<String, Object> rowMap : rows) {
-            if (rowMap.get("name").equals(String.valueOf(row))) {
-              foundRow = true;
+          int rowIndex = -1;
+          for (int r=0; r<rows.size(); r++) {
+            if (rows.get(r).get("name").equals(String.valueOf(row))) {
+              rowIndex = r;
               break;
             }
           }
-          if (!foundRow) {
+          if (rowIndex < 0) {
             Map<String, Object> rowMap = new HashMap<String, Object>();
             rowMap.put("name", String.valueOf(row));
+            rowIndex = rows.size();
             rows.add(rowMap);
           }
+
+          well.put("row_index", rowIndex);
+          well.put("column_index", columnIndex);
+          wells.add(well);
         }
 
         maxField = (int) Math.max(maxField, index.getFieldIndex());
