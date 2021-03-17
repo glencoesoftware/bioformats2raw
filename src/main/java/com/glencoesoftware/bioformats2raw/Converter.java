@@ -16,7 +16,6 @@ import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -554,7 +553,8 @@ public class Converter implements Callable<Void> {
           if (!exists) {
             Files.createDirectories(metadataPath);
           }
-        } catch (AmazonS3Exception s3) {
+        }
+        catch (AmazonS3Exception s3){
           // can't "createDirectories()" on s3.
           // FIXME: shouldn't need to catch explicit s3.
           // FIXME: check for 403 forbidden which == "DNE"
