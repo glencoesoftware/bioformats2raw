@@ -39,6 +39,7 @@ dependencies {
     implementation 'info.picocli:picocli:4.2.0'
     implementation 'com.univocity:univocity-parsers:2.8.4'
     implementation 'com.bc.zarr:jzarr:0.3.99-SNAPSHOT'
+    implementation 'org.lasersonlab:s3fs:2.2.3'
 
     implementation 'org.openpnp:opencv:3.4.2-1'
     implementation 'me.tongfei:progressbar:0.9.0'

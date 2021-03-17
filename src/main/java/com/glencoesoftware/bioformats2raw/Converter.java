@@ -9,10 +9,14 @@ package com.glencoesoftware.bioformats2raw;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -31,6 +35,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
+import com.amazonaws.services.s3.model.AmazonS3Exception;
+import com.google.common.collect.ImmutableMap;
+import com.upplication.s3fs.AmazonS3Factory;
 import loci.common.Constants;
 import loci.common.DataTools;
 import loci.common.image.IImageScaler;
@@ -120,6 +127,12 @@ public class Converter implements Callable<Void> {
     description = "path to the output pyramid directory"
   )
   private volatile Path outputPath;
+
+  @Option(
+          names = {"--remote"},
+          description = "remote location for saving the data"
+  )
+  private volatile String remote;
 
   @Option(
     names = {"-r", "--resolutions"},
@@ -364,7 +377,23 @@ public class Converter implements Callable<Void> {
         LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
     root.setLevel(Level.toLevel(logLevel));
 
-    if (Files.exists(outputPath)) {
+    if (remote != null) {
+
+      LOGGER.warn("*** experimental remote support ***");
+      // FIXME check for existence. support overwrite?
+      int split = remote.lastIndexOf("/");
+      String bucket = remote.substring(split); // include "/"
+      remote = remote.substring(0, split);
+      URI uri = URI.create(remote);
+
+      // FIXME: too hard-coded.
+      Map<String, String> env = ImmutableMap.<String, String>builder()
+              .put(AmazonS3Factory.PATH_STYLE_ACCESS, "true").build();
+      FileSystem s3fs = FileSystems.newFileSystem(uri, env);
+      outputPath = s3fs.getPath(bucket, outputPath.toString());
+
+    }
+    else if (Files.exists(outputPath)) {
       if (!overwrite) {
         throw new IllegalArgumentException(
           "Output path " + outputPath + " already exists");
@@ -519,9 +548,18 @@ public class Converter implements Callable<Void> {
 
         // write the original OME-XML to a file
         Path metadataPath = outputPath.resolve(pyramidName);
-        if (!Files.exists(metadataPath)) {
-          Files.createDirectories(metadataPath);
+        boolean exists = false;
+        try {
+          exists = Files.exists(metadataPath);
+          if (!exists) {
+            Files.createDirectories(metadataPath);
+          }
+        } catch (AmazonS3Exception s3) {
+          // can't "createDirectories()" on s3.
+          // FIXME: shouldn't need to catch explicit s3.
+          // FIXME: check for 403 forbidden which == "DNE"
         }
+
         Path omexmlFile = metadataPath.resolve(METADATA_FILE);
         Files.write(omexmlFile, xml.getBytes(Constants.ENCODING));
       }
@@ -997,7 +1035,7 @@ public class Converter implements Callable<Void> {
     );
 
     // fileset level metadata
-    final String pyramidPath = outputPath.resolve(pyramidName).toString();
+    final Path pyramidPath = outputPath.resolve(pyramidName);
     final ZarrGroup root = ZarrGroup.create(pyramidPath);
     Map<String, Object> attributes = new HashMap<String, Object>();
     attributes.put("bioformats2raw.layout", LAYOUT);
@@ -1348,7 +1386,7 @@ public class Converter implements Callable<Void> {
       MetadataTools.populateMetadata(metadata, 0, null,
         reader.getCoreMetadataList().get(reader.getCoreIndex()));
       writer.setMetadataRetrieve(metadata);
-      writer.setId(outputPath.resolve(filename).toString());
+      writer.setId(outputPath.resolve(filename).toString()); // FIXME: use Path?
       writer.saveBytes(0, reader.openBytes(0));
     }
     finally {
