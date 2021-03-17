@@ -315,6 +315,12 @@ public class Converter implements Callable<Void> {
   )
   private volatile boolean uneven = false;
 
+  @Option(
+          names = "--skip-meta",
+          description = "Skip exporting OME metadata file"
+  )
+  private volatile boolean skipMeta = false;
+
   /** Scaling implementation that will be used during downsampling. */
   private volatile IImageScaler scaler = new SimpleImageScaler();
 
@@ -502,33 +508,35 @@ public class Converter implements Callable<Void> {
           }
         }
 
-        for (int s=0; s<meta.getImageCount(); s++) {
-          meta.setPixelsBigEndian(true, s);
+        if (!skipMeta) {
+          for (int s=0; s<meta.getImageCount(); s++) {
+            meta.setPixelsBigEndian(true, s);
 
-          PixelType type = meta.getPixelsType(s);
-          int bfType =
-            getRealType(FormatTools.pixelTypeFromString(type.getValue()));
-          String realType = FormatTools.getPixelTypeString(bfType);
-          if (!type.getValue().equals(realType)) {
-            meta.setPixelsType(PixelType.fromString(realType), s);
-            meta.setPixelsSignificantBits(new PositiveInteger(
-              FormatTools.getBytesPerPixel(bfType) * 8), s);
+            PixelType type = meta.getPixelsType(s);
+            int bfType =
+              getRealType(FormatTools.pixelTypeFromString(type.getValue()));
+            String realType = FormatTools.getPixelTypeString(bfType);
+            if (!type.getValue().equals(realType)) {
+              meta.setPixelsType(PixelType.fromString(realType), s);
+              meta.setPixelsSignificantBits(new PositiveInteger(
+                FormatTools.getBytesPerPixel(bfType) * 8), s);
+            }
+
+            if (!noHCS) {
+              HCSIndex index = new HCSIndex(meta, s);
+              hcsIndexes.add(index);
+            }
           }
 
-          if (!noHCS) {
-            HCSIndex index = new HCSIndex(meta, s);
-            hcsIndexes.add(index);
+          String xml = getService().getOMEXML(meta);
+
+          // write the original OME-XML to a file
+          if (!Files.exists(outputPath)) {
+            Files.createDirectories(outputPath);
           }
+          Path omexmlFile = outputPath.resolve(METADATA_FILE);
+          Files.write(omexmlFile, xml.getBytes(Constants.ENCODING));
         }
-
-        String xml = getService().getOMEXML(meta);
-
-        // write the original OME-XML to a file
-        if (!Files.exists(outputPath)) {
-          Files.createDirectories(outputPath);
-        }
-        Path omexmlFile = outputPath.resolve(METADATA_FILE);
-        Files.write(omexmlFile, xml.getBytes(Constants.ENCODING));
       }
       catch (ServiceException se) {
         LOGGER.error("Could not retrieve OME-XML", se);
