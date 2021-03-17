@@ -75,13 +75,16 @@ import com.univocity.parsers.csv.CsvParser;
 import com.univocity.parsers.csv.CsvParserSettings;
 
 import ch.qos.logback.classic.Level;
+import me.tongfei.progressbar.DelegatingProgressBarConsumer;
+import me.tongfei.progressbar.ProgressBar;
+import me.tongfei.progressbar.ProgressBarBuilder;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 import ucar.ma2.InvalidRangeException;
 
 /**
- * Command line tool for converting whole slide imaging files to N5.
+ * Command line tool for converting whole slide imaging files to Zarr.
  */
 public class Converter implements Callable<Void> {
 
@@ -152,7 +155,14 @@ public class Converter implements Callable<Void> {
       "(default: ${DEFAULT-VALUE})",
     fallbackValue = "DEBUG"
   )
-  private volatile String logLevel = "INFO";
+  private volatile String logLevel = "WARN";
+
+  @Option(
+    names = {"-p", "--progress"},
+    description = "Print progress bars during conversion",
+    help = true
+  )
+  private volatile boolean progressBars = false;
 
   @Option(
     names = "--version",
@@ -249,7 +259,9 @@ public class Converter implements Callable<Void> {
           names = "--dimension-order",
           description = "Override the input file dimension order in the " +
                   "output file [Can break compatibility with raw2ometiff] " +
-                  "(${COMPLETION-CANDIDATES})"
+                  "(${COMPLETION-CANDIDATES})",
+          converter = DimensionOrderConverter.class,
+          defaultValue = "XYZCT"
   )
   private volatile DimensionOrder dimensionOrder;
 
@@ -437,12 +449,13 @@ public class Converter implements Callable<Void> {
       memoizer.setFlattenedResolutions(false);
       memoizer.setMetadataFiltered(true);
       memoizer.setMetadataStore(createMetadata());
-      memoizer.setId(inputPath.toString());
-      memoizer.setResolution(0);
+      ChannelSeparator separator = new ChannelSeparator(memoizer);
+      separator.setId(inputPath.toString());
+      separator.setResolution(0);
       if (reader instanceof MiraxReader) {
         ((MiraxReader) reader).setTileCache(tileCache);
       }
-      readers.add(new ChannelSeparator(memoizer));
+      readers.add(separator);
     }
 
     // Finally, perform conversion on all series
@@ -482,6 +495,10 @@ public class Converter implements Callable<Void> {
         for (int s=0; s<meta.getImageCount(); s++) {
           meta.setPixelsBigEndian(true, s);
 
+          if (dimensionOrder != null) {
+            meta.setPixelsDimensionOrder(dimensionOrder, s);
+          }
+
           PixelType type = meta.getPixelsType(s);
           int bfType =
             getRealType(FormatTools.pixelTypeFromString(type.getValue()));
@@ -501,10 +518,11 @@ public class Converter implements Callable<Void> {
         String xml = getService().getOMEXML(meta);
 
         // write the original OME-XML to a file
-        if (!Files.exists(outputPath)) {
-          Files.createDirectories(outputPath);
+        Path metadataPath = outputPath.resolve(pyramidName);
+        if (!Files.exists(metadataPath)) {
+          Files.createDirectories(metadataPath);
         }
-        Path omexmlFile = outputPath.resolve(METADATA_FILE);
+        Path omexmlFile = metadataPath.resolve(METADATA_FILE);
         Files.write(omexmlFile, xml.getBytes(Constants.ENCODING));
       }
       catch (ServiceException se) {
@@ -997,12 +1015,12 @@ public class Converter implements Callable<Void> {
       int activeTileWidth = tileWidth;
       int activeTileHeight = tileHeight;
       if (scaledWidth < activeTileWidth) {
-        LOGGER.warn("Reducing active tileWidth to {}", scaledWidth);
+        LOGGER.info("Reducing active tileWidth to {}", scaledWidth);
         activeTileWidth = scaledWidth;
       }
 
       if (scaledHeight < activeTileHeight) {
-        LOGGER.warn("Reducing active tileHeight to {}", scaledHeight);
+        LOGGER.info("Reducing active tileHeight to {}", scaledHeight);
         activeTileHeight = scaledHeight;
       }
 
@@ -1025,48 +1043,79 @@ public class Converter implements Callable<Void> {
           * imageCount;
       List<CompletableFuture<Void>> futures =
         new ArrayList<CompletableFuture<Void>>();
-      for (int j=0; j<scaledHeight; j+=tileHeight) {
-        final int yy = j;
-        int height = (int) Math.min(tileHeight, scaledHeight - yy);
-        for (int k=0; k<scaledWidth; k+=tileWidth) {
-          final int xx = k;
-          int width = (int) Math.min(tileWidth, scaledWidth - xx);
-          for (int i=0; i<imageCount; i++) {
-            final int plane = i;
 
-            CompletableFuture<Void> future = new CompletableFuture<Void>();
-            futures.add(future);
-            executor.execute(() -> {
-              try {
-                processTile(series, resolution, plane, xx, yy, width, height);
-                LOGGER.info(
-                    "Successfully processed tile; resolution={} plane={} " +
-                    "xx={} yy={} width={} height={}",
-                    resolution, plane, xx, yy, width, height);
-                future.complete(null);
-              }
-              catch (Exception e) {
-                future.completeExceptionally(e);
-                LOGGER.error(
-                  "Failure processing tile; resolution={} plane={} " +
-                  "xx={} yy={} width={} height={}",
-                  resolution, plane, xx, yy, width, height, e);
-              }
-            });
-          }
+      final ProgressBar pb;
+      if (progressBars) {
+        ProgressBarBuilder builder = new ProgressBarBuilder()
+          .setInitialMax(tileCount)
+          .setTaskName(String.format("[%d/%d]", series, resolution));
+
+        if (!(logLevel.equals("OFF") ||
+          logLevel.equals("ERROR") ||
+          logLevel.equals("WARN")))
+        {
+          builder.setConsumer(new DelegatingProgressBarConsumer(LOGGER::trace));
         }
+
+        pb = builder.build();
+      }
+      else {
+        pb = null;
       }
 
-      // Wait until the entire resolution has completed before proceeding to
-      // the next one
-      CompletableFuture.allOf(
-        futures.toArray(new CompletableFuture[futures.size()])).join();
+      try {
+        for (int j=0; j<scaledHeight; j+=tileHeight) {
+          final int yy = j;
+          int height = (int) Math.min(tileHeight, scaledHeight - yy);
+          for (int k=0; k<scaledWidth; k+=tileWidth) {
+            final int xx = k;
+            int width = (int) Math.min(tileWidth, scaledWidth - xx);
+            for (int i=0; i<imageCount; i++) {
+              final int plane = i;
 
-      // TODO: some of these futures may be completelyExceptionally
-      //  and need re-throwing
+              CompletableFuture<Void> future = new CompletableFuture<Void>();
+              futures.add(future);
+              executor.execute(() -> {
+                try {
+                  processTile(series, resolution, plane, xx, yy, width, height);
+                  LOGGER.info(
+                      "Successfully processed tile; resolution={} plane={} " +
+                      "xx={} yy={} width={} height={}",
+                      resolution, plane, xx, yy, width, height);
+                  future.complete(null);
+                }
+                catch (Throwable t) {
+                  future.completeExceptionally(t);
+                  LOGGER.error(
+                    "Failure processing tile; resolution={} plane={} " +
+                    "xx={} yy={} width={} height={}",
+                    resolution, plane, xx, yy, width, height, t);
+                }
+                finally {
+                  if (pb != null) {
+                    pb.step();
+                  }
+                }
+              });
+            }
+          }
+        }
 
+        // Wait until the entire resolution has completed before proceeding to
+        // the next one
+        CompletableFuture.allOf(
+          futures.toArray(new CompletableFuture[futures.size()])).join();
+
+        // TODO: some of these futures may be completelyExceptionally
+        //  and need re-throwing
+
+      }
+      finally {
+        if (pb != null) {
+          pb.close();
+        }
+      }
     }
-
   }
 
   private void saveHCSMetadata(IMetadata meta) throws IOException {

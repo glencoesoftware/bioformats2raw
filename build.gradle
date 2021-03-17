@@ -41,6 +41,7 @@ dependencies {
     implementation 'com.bc.zarr:jzarr:0.3.99-SNAPSHOT'
 
     implementation 'org.openpnp:opencv:3.4.2-1'
+    implementation 'me.tongfei:progressbar:0.9.0'
 
     // https://github.com/junit-team/junit5-samples/blob/master/junit5-migration-gradle/build.gradle
     def junitVintageVersion  = '5.7.0'
