@@ -305,6 +305,12 @@ public class Converter implements Callable<Void> {
   )
   private volatile boolean noHCS = false;
 
+  @Option(
+          names = "--no-ome-meta-export",
+          description = "Turn off OME metadata exporting"
+  )
+  private volatile boolean noOMEMeta = false;
+
   /** Scaling implementation that will be used during downsampling. */
   private volatile IImageScaler scaler = new SimpleImageScaler();
 
@@ -508,15 +514,17 @@ public class Converter implements Callable<Void> {
           }
         }
 
-        String xml = getService().getOMEXML(meta);
+        if (!noOMEMeta) {
+          String xml = getService().getOMEXML(meta);
 
-        // write the original OME-XML to a file
-        Path metadataPath = outputPath.resolve(pyramidName);
-        if (!Files.exists(metadataPath)) {
-          Files.createDirectories(metadataPath);
+          // write the original OME-XML to a file
+          Path metadataPath = outputPath.resolve(pyramidName);
+          if (!Files.exists(metadataPath)) {
+            Files.createDirectories(metadataPath);
+          }
+          Path omexmlFile = metadataPath.resolve(METADATA_FILE);
+          Files.write(omexmlFile, xml.getBytes(Constants.ENCODING));
         }
-        Path omexmlFile = metadataPath.resolve(METADATA_FILE);
-        Files.write(omexmlFile, xml.getBytes(Constants.ENCODING));
       }
       catch (ServiceException se) {
         LOGGER.error("Could not retrieve OME-XML", se);
