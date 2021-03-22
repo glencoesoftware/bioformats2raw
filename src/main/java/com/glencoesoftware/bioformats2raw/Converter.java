@@ -221,7 +221,7 @@ public class Converter implements Callable<Void> {
           description = "Name of pyramid (default: ${DEFAULT-VALUE}) " +
                   "[Can break compatibility with raw2ometiff]"
   )
-  private volatile String pyramidName = "data.zarr";
+  private volatile String pyramidName = null;
 
   @Option(
           names = "--scale-format-string",
@@ -511,7 +511,7 @@ public class Converter implements Callable<Void> {
         String xml = getService().getOMEXML(meta);
 
         // write the original OME-XML to a file
-        Path metadataPath = outputPath.resolve(pyramidName);
+        Path metadataPath = getRootPath();
         if (!Files.exists(metadataPath)) {
           Files.createDirectories(metadataPath);
         }
@@ -578,6 +578,21 @@ public class Converter implements Callable<Void> {
       reader.setSeries(series);
     });
     saveResolutions(series);
+  }
+
+  /**
+   * Get the root path of the dataset, which will contain Zarr and OME-XML.
+   * By default, this is the specified output directory.
+   * If "--pyramid-name" was used, then this will be the pyramid name
+   * as a subdirectory of the output directory.
+   *
+   * @return directory into which Zarr and OME-XML data is written
+   */
+  private Path getRootPath() {
+    if (pyramidName == null) {
+      return outputPath;
+    }
+    return outputPath.resolve(pyramidName);
   }
 
   /**
@@ -771,7 +786,7 @@ public class Converter implements Callable<Void> {
     final String pathName =
         String.format(scaleFormatString,
             getScaleFormatStringArgs(series, resolution - 1));
-    final ZarrGroup root = ZarrGroup.open(outputPath.resolve(pyramidName));
+    final ZarrGroup root = ZarrGroup.open(getRootPath());
     final ZarrArray zarr = root.openArray(pathName);
 
     int[] dimensions = zarr.getShape();
@@ -902,7 +917,7 @@ public class Converter implements Callable<Void> {
     String pathName =
         String.format(scaleFormatString,
             getScaleFormatStringArgs(series, resolution));
-    final ZarrGroup root = ZarrGroup.open(outputPath.resolve(pyramidName));
+    final ZarrGroup root = ZarrGroup.open(getRootPath());
     final ZarrArray zarr = root.openArray(pathName);
     IFormatReader reader = readers.take();
     boolean littleEndian = reader.isLittleEndian();
@@ -990,7 +1005,7 @@ public class Converter implements Callable<Void> {
     );
 
     // fileset level metadata
-    final String pyramidPath = outputPath.resolve(pyramidName).toString();
+    final String pyramidPath = getRootPath().toString();
     final ZarrGroup root = ZarrGroup.create(pyramidPath);
     Map<String, Object> attributes = new HashMap<String, Object>();
     attributes.put("bioformats2raw.layout", LAYOUT);
@@ -1116,7 +1131,7 @@ public class Converter implements Callable<Void> {
     }
 
     // assumes only one plate defined
-    Path rootPath = outputPath.resolve(pyramidName);
+    Path rootPath = getRootPath();
     ZarrGroup root = ZarrGroup.open(rootPath);
     int plate = 0;
     Map<String, Object> plateMap = new HashMap<String, Object>();
@@ -1517,9 +1532,7 @@ public class Converter implements Callable<Void> {
   }
 
   private void checkOutputPaths() {
-    if ((!pyramidName.equals("data.zarr")) ||
-          !scaleFormatString.equals("%d/%d"))
-    {
+    if (pyramidName != null || !scaleFormatString.equals("%d/%d")) {
       LOGGER.info("Output will be incompatible with raw2ometiff " +
               "(pyramidName: {}, scaleFormatString: {})",
               pyramidName, scaleFormatString);
