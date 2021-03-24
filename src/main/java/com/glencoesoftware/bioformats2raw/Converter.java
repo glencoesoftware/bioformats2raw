@@ -305,6 +305,14 @@ public class Converter implements Callable<Void> {
   )
   private volatile boolean noHCS = false;
 
+  @Option(
+          names = "--no-root-group",
+          description = "Turn off creation of root group and corresponding " +
+                        "metadata [Will break compatibility with raw2ometiff]"
+
+  )
+  private volatile boolean noRootGroup = false;
+
   /** Scaling implementation that will be used during downsampling. */
   private volatile IImageScaler scaler = new SimpleImageScaler();
 
@@ -786,9 +794,7 @@ public class Converter implements Callable<Void> {
     final String pathName =
         String.format(scaleFormatString,
             getScaleFormatStringArgs(series, resolution - 1));
-    final ZarrGroup root = ZarrGroup.open(getRootPath());
-    final ZarrArray zarr = root.openArray(pathName);
-
+    final ZarrArray zarr = ZarrArray.open(getRootPath().resolve(pathName));
     int[] dimensions = zarr.getShape();
     int[] blockSizes = zarr.getChunks();
     int activeTileWidth = blockSizes[blockSizes.length - 1];
@@ -917,8 +923,7 @@ public class Converter implements Callable<Void> {
     String pathName =
         String.format(scaleFormatString,
             getScaleFormatStringArgs(series, resolution));
-    final ZarrGroup root = ZarrGroup.open(getRootPath());
-    final ZarrArray zarr = root.openArray(pathName);
+    final ZarrArray zarr = ZarrArray.open(getRootPath().resolve(pathName));
     IFormatReader reader = readers.take();
     boolean littleEndian = reader.isLittleEndian();
     int bpp = FormatTools.getBytesPerPixel(reader.getPixelType());
@@ -1005,14 +1010,15 @@ public class Converter implements Callable<Void> {
     );
 
     // fileset level metadata
-    final String pyramidPath = getRootPath().toString();
-    final ZarrGroup root = ZarrGroup.create(pyramidPath);
-    Map<String, Object> attributes = new HashMap<String, Object>();
-    attributes.put("bioformats2raw.layout", LAYOUT);
-    root.writeAttributes(attributes);
+    if (!noRootGroup) {
+      final ZarrGroup root = ZarrGroup.create(getRootPath());
+      Map<String, Object> attributes = new HashMap<String, Object>();
+      attributes.put("bioformats2raw.layout", LAYOUT);
+      root.writeAttributes(attributes);
+    }
 
     // series level metadata
-    setSeriesLevelMetadata(root, series, resolutions);
+    setSeriesLevelMetadata(series, resolutions);
 
     for (int resCounter=0; resCounter<resolutions; resCounter++) {
       final int resolution = resCounter;
@@ -1033,7 +1039,7 @@ public class Converter implements Callable<Void> {
       }
 
       DataType dataType = getZarrType(pixelType);
-      String resolutionString = "/" +  String.format(
+      String resolutionString = String.format(
               scaleFormatString, getScaleFormatStringArgs(series, resolution));
       ArrayParams arrayParams = new ArrayParams()
           .shape(getDimensions(
@@ -1042,7 +1048,7 @@ public class Converter implements Callable<Void> {
           .dataType(dataType)
           .compressor(CompressorFactory.create(
               compressionType.toString(), compressionProperties));
-      root.createArray(resolutionString, arrayParams);
+      ZarrArray.create(getRootPath().resolve(resolutionString), arrayParams);
 
       nTile = new AtomicInteger(0);
       tileCount = (int) Math.ceil((double) scaledWidth / tileWidth)
@@ -1266,11 +1272,10 @@ public class Converter implements Callable<Void> {
    *                    names will be generated.
    * @throws IOException
    */
-  private void setSeriesLevelMetadata(
-      ZarrGroup root, int series, int resolutions)
-          throws IOException
+  private void setSeriesLevelMetadata(int series, int resolutions)
+      throws IOException
   {
-    String resolutionString = "/" +  String.format(
+    String resolutionString = String.format(
             scaleFormatString, getScaleFormatStringArgs(series, 0));
     String seriesString = resolutionString.substring(0,
             resolutionString.lastIndexOf('/'));
@@ -1295,14 +1300,14 @@ public class Converter implements Callable<Void> {
     multiscales.add(multiscale);
     List<Map<String, String>> datasets = new ArrayList<Map<String, String>>();
     for (int r = 0; r < resolutions; r++) {
-      resolutionString = "/" +  String.format(
+      resolutionString = String.format(
               scaleFormatString, getScaleFormatStringArgs(series, r));
       String lastPath = resolutionString.substring(
               resolutionString.lastIndexOf('/') + 1);
       datasets.add(Collections.singletonMap("path", lastPath));
     }
     multiscale.put("datasets", datasets);
-    ZarrGroup subGroup = root.createSubGroup(seriesString);
+    ZarrGroup subGroup = ZarrGroup.create(getRootPath().resolve(seriesString));
     Map<String, Object> attributes = new HashMap<String, Object>();
     attributes.put("multiscales", multiscales);
     subGroup.writeAttributes(attributes);

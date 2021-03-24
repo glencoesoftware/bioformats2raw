@@ -88,7 +88,6 @@ public class ZarrTest {
     try {
       converter = new Converter();
       CommandLine.call(converter, args.toArray(new String[]{}));
-      assertTrue(Files.exists(output.resolve(".zattrs")));
       assertTrue(Files.exists(output.resolve("METADATA.ome.xml")));
     }
     catch (RuntimeException rt) {
@@ -877,4 +876,29 @@ public class ZarrTest {
     assertEquals(3, pixels.sizeOfChannelList());
   }
 
+
+  /**
+   * Check that a root group and attributes are created and populated.
+   */
+  @Test
+  public void testRootGroup() throws Exception {
+    input = fake();
+    assertTool();
+
+    assertTrue(Files.exists(output.resolve(".zattrs")));
+    assertTrue(Files.exists(output.resolve(".zgroup")));
+  }
+
+  /**
+   * Convert with the --no-root-group option.  Conversion should succeed but
+   * no root group or attributes should be created or populated.
+   */
+  @Test
+  public void testNoRootGroupOption() throws Exception {
+    input = fake();
+    assertTool("--no-root-group");
+
+    assertTrue(!Files.exists(output.resolve(".zattrs")));
+    assertTrue(!Files.exists(output.resolve(".zgroup")));
+  }
 }
