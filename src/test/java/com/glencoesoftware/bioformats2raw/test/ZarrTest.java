@@ -52,6 +52,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.opencv.core.Core;
 
 public class ZarrTest {
@@ -765,6 +766,18 @@ public class ZarrTest {
       assertEquals("Bio-Formats " + FormatTools.VERSION, version);
       assertEquals("loci.common.image.SimpleImageScaler", method);
     }
+  }
+
+  /**
+   * Test that nested storage works equivalently.
+   *
+   * @param nested whether to use "/" or "." as the chunk separator.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testNestedStorage(boolean nested) throws IOException {
+    input = fake();
+    assertTool(nested ? "--nested" : "--no-nested");
   }
 
   /**
