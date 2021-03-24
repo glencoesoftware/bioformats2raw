@@ -89,9 +89,7 @@ public class ZarrTest {
     try {
       converter = new Converter();
       CommandLine.call(converter, args.toArray(new String[]{}));
-      Path zarr = output.resolve("data.zarr");
-      assertTrue(Files.exists(zarr));
-      assertTrue(Files.exists(zarr.resolve("METADATA.ome.xml")));
+      assertTrue(Files.exists(output.resolve("METADATA.ome.xml")));
     }
     catch (RuntimeException rt) {
       throw rt;
@@ -205,10 +203,9 @@ public class ZarrTest {
         "--scale-format-string", "%3$s/%4$s/%1$s/%2$s",
         "--additional-scale-format-string-args", csv.toString()
     );
-    Path root = output.resolve("data.zarr");
-    ZarrGroup series0 = ZarrGroup.open(root.resolve("abc/888/0").toString());
+    ZarrGroup series0 = ZarrGroup.open(output.resolve("abc/888/0").toString());
     series0.openArray("0");
-    series0 = ZarrGroup.open(root.resolve("ghi/999/1").toString());
+    series0 = ZarrGroup.open(output.resolve("ghi/999/1").toString());
     series0.openArray("0");
   }
 
@@ -219,8 +216,7 @@ public class ZarrTest {
   public void testDefaultLayoutIsSet() throws Exception {
     input = fake();
     assertTool();
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
     Integer layout = (Integer)
         z.getAttributes().get("bioformats2raw.layout");
     assertEquals(Converter.LAYOUT, layout);
@@ -234,7 +230,7 @@ public class ZarrTest {
     input = fake();
     assertTool();
     ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").resolve("0").toString());
+        ZarrGroup.open(output.resolve("0").toString());
     List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
             z.getAttributes().get("multiscales");
     assertEquals(1, multiscales.size());
@@ -253,8 +249,7 @@ public class ZarrTest {
   public void testXYCZTDimensionOrder() throws Exception {
     input = fake("sizeC", "2", "dimOrder", "XYCZT");
     assertTool();
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
     ZarrArray array = z.openArray("0/0");
     assertArrayEquals(new int[] {1, 2, 1, 512, 512}, array.getShape());
   }
@@ -266,8 +261,7 @@ public class ZarrTest {
   public void testSetXYCZTDimensionOrder() throws Exception {
     input = fake("sizeC", "2");
     assertTool("--dimension-order", "XYCZT");
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
     ZarrArray array = z.openArray("0/0");
     assertArrayEquals(new int[] {1, 1, 2, 512, 512}, array.getShape());
   }
@@ -279,8 +273,7 @@ public class ZarrTest {
   public void testSetOriginalDimensionOrder() throws Exception {
     input = fake("sizeC", "2", "dimOrder", "XYCZT");
     assertTool("--dimension-order", "original");
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
     ZarrArray array = z.openArray("0/0");
     assertArrayEquals(new int[] {1, 1, 2, 512, 512}, array.getShape());
   }
@@ -292,8 +285,7 @@ public class ZarrTest {
   public void testSetSmallerDefault() throws Exception {
     input = fake();
     assertTool("-h", "128", "-w", "128");
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
     ZarrArray array = z.openArray("0/0");
     assertArrayEquals(new int[] {1, 1, 1, 512, 512}, array.getShape());
     assertArrayEquals(new int[] {1, 1, 1, 128, 128}, array.getChunks());
@@ -307,8 +299,7 @@ public class ZarrTest {
   public void testSetSmallerDefaultWithRemainder() throws Exception {
     input = fake();
     assertTool("-h", "384", "-w", "384");
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
     ZarrArray array = z.openArray("0/0");
     assertArrayEquals(new int[] {1, 1, 1, 512, 512}, array.getShape());
     assertArrayEquals(new int[] {1, 1, 1, 384, 384}, array.getChunks());
@@ -321,8 +312,7 @@ public class ZarrTest {
   public void testMultiSeries() throws Exception {
     input = fake("series", "2");
     assertTool();
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
 
     // Check series 0 dimensions and special pixels
     ZarrArray series0 = z.openArray("0/0");
@@ -350,8 +340,7 @@ public class ZarrTest {
   public void testSingleBeginningSeries() throws Exception {
     input = fake("series", "2");
     assertTool("-s", "0");
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
 
     // Check series 0 dimensions and special pixels
     ZarrArray series0 = z.openArray("0/0");
@@ -378,8 +367,7 @@ public class ZarrTest {
   public void testSingleEndSeries() throws Exception {
     input = fake("series", "2");
     assertTool("-s", "1");
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
 
     // Check series 1 dimensions and special pixels
     ZarrArray series0 = z.openArray("0/0");
@@ -406,8 +394,7 @@ public class ZarrTest {
   public void testSingleMiddleSeries() throws Exception {
     input = fake("series", "3");
     assertTool("-s", "1");
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
 
     // Check series 1 dimensions and special pixels
     ZarrArray series0 = z.openArray("0/0");
@@ -441,8 +428,7 @@ public class ZarrTest {
   public void testMultiZ() throws Exception {
     input = fake("sizeZ", "2");
     assertTool();
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
 
     // Check dimensions and block size
     ZarrArray series0 = z.openArray("0/0");
@@ -469,8 +455,7 @@ public class ZarrTest {
   public void testMultiC() throws Exception {
     input = fake("sizeC", "2");
     assertTool();
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
 
     // Check dimensions and block size
     ZarrArray series0 = z.openArray("0/0");
@@ -497,8 +482,7 @@ public class ZarrTest {
   public void testMultiT() throws Exception {
     input = fake("sizeT", "2");
     assertTool();
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
 
     // Check dimensions and block size
     ZarrArray series0 = z.openArray("0/0");
@@ -549,8 +533,7 @@ public class ZarrTest {
   public void testPixelType(String type, DataType dataType) throws Exception {
     input = fake("pixelType", type);
     assertTool();
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
 
     // Check series dimensions and special pixels
     ZarrArray series0 = z.openArray("0/0");
@@ -624,8 +607,7 @@ public class ZarrTest {
   public void testDownsampleEdgeEffectsUInt8() throws Exception {
     input = fake("sizeX", "60", "sizeY", "300");
     assertTool("-w", "25", "-h", "75");
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
 
     // Check series dimensions
     ZarrArray series1 = z.openArray("0/1");
@@ -648,8 +630,7 @@ public class ZarrTest {
   public void testDownsampleEdgeEffectsUInt16() throws Exception {
     input = fake("sizeX", "60", "sizeY", "300", "pixelType", "uint16");
     assertTool("-w", "25", "-h", "75");
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
 
     ZarrArray series0 = z.openArray("0/0");
     assertEquals(DataType.u2, series0.getDataType());
@@ -689,7 +670,7 @@ public class ZarrTest {
 
     input = fake(null, null, originalMetadata);
     assertTool();
-    Path omexml = output.resolve("data.zarr").resolve("METADATA.ome.xml");
+    Path omexml = output.resolve("METADATA.ome.xml");
     StringBuilder xml = new StringBuilder();
     Files.lines(omexml).forEach(v -> xml.append(v));
 
@@ -739,8 +720,7 @@ public class ZarrTest {
     input = fake();
     assertTool("--downsample-type", type.toString());
 
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").resolve("0").toString());
+    ZarrGroup z = ZarrGroup.open(output.resolve("0").toString());
     List<Map<String, Object>> multiscales =
           (List<Map<String, Object>>) z.getAttributes().get("multiscales");
     assertEquals(1, multiscales.size());
@@ -791,7 +771,7 @@ public class ZarrTest {
       "plateRows", "2", "plateCols", "3", "fields", "2");
     assertTool("--no-hcs");
 
-    ZarrGroup z = ZarrGroup.open(output.resolve("data.zarr"));
+    ZarrGroup z = ZarrGroup.open(output);
 
     // Check dimensions and block size
     ZarrArray series0 = z.openArray("0/0");
@@ -811,14 +791,13 @@ public class ZarrTest {
       "plateRows", "2", "plateCols", "3", "fields", "2");
     assertTool();
 
-    Path root = output.resolve("data.zarr");
-    ZarrGroup z = ZarrGroup.open(root);
+    ZarrGroup z = ZarrGroup.open(output);
 
     // check valid group layout
     // METADATA.ome.xml, .zattrs (Plate), .zgroup (Plate) and 2 rows
-    assertEquals(5, Files.list(root).toArray().length);
+    assertEquals(5, Files.list(output).toArray().length);
     for (int row=0; row<2; row++) {
-      Path rowPath = root.resolve(Integer.toString(row));
+      Path rowPath = output.resolve(Integer.toString(row));
       // .zgroup (Row) and 3 columns
       assertEquals(4, Files.list(rowPath).toArray().length);
       for (int col=0; col<3; col++) {
@@ -876,7 +855,7 @@ public class ZarrTest {
       for (Map<String, Object> column : columns) {
         String columnName = (String) column.get("name");
         ZarrGroup wellGroup = ZarrGroup.open(
-            root.resolve(rowName).resolve(columnName));
+            output.resolve(rowName).resolve(columnName));
         Map<String, Object> well =
             (Map<String, Object>) wellGroup.getAttributes().get("well");
         List<Map<String, Object>> images =
@@ -900,7 +879,7 @@ public class ZarrTest {
     input = fake("sizeC", "3", "rgb", "3");
     assertTool();
 
-    Path xml = output.resolve("data.zarr").resolve("METADATA.ome.xml");
+    Path xml = output.resolve("METADATA.ome.xml");
     ServiceFactory sf = new ServiceFactory();
     OMEXMLService xmlService = sf.getInstance(OMEXMLService.class);
     OME ome = (OME) xmlService.createOMEXMLRoot(
@@ -910,4 +889,29 @@ public class ZarrTest {
     assertEquals(3, pixels.sizeOfChannelList());
   }
 
+
+  /**
+   * Check that a root group and attributes are created and populated.
+   */
+  @Test
+  public void testRootGroup() throws Exception {
+    input = fake();
+    assertTool();
+
+    assertTrue(Files.exists(output.resolve(".zattrs")));
+    assertTrue(Files.exists(output.resolve(".zgroup")));
+  }
+
+  /**
+   * Convert with the --no-root-group option.  Conversion should succeed but
+   * no root group or attributes should be created or populated.
+   */
+  @Test
+  public void testNoRootGroupOption() throws Exception {
+    input = fake();
+    assertTool("--no-root-group");
+
+    assertTrue(!Files.exists(output.resolve(".zattrs")));
+    assertTrue(!Files.exists(output.resolve(".zgroup")));
+  }
 }
