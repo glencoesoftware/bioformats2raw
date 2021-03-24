@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OME xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Creator="OME Bio-Formats 6.6.1-SNAPSHOT" xsi:schemaLocation="http://www.openmicroscopy.org/Schemas/OME/2016-06 http://www.openmicroscopy.org/Schemas/OME/2016-06/ome.xsd">
+<Plate ColumnNamingConvention="number" Columns="12" ExternalIdentifier="External Identifier" ID="Plate:0" Name="Plate Name 0" RowNamingConvention="letter" Rows="8" Status="Plate status" WellOriginX="0.0" WellOriginXUnit="µm" WellOriginY="1.0" WellOriginYUnit="µm">
+<Description>Plate 0 of 1</Description>
+<Well Color="255" Column="0" ExternalDescription="External Description" ExternalIdentifier="External Identifier" ID="Well:0_0_0_0" Row="5" Type="Transfection: done">
+<WellSample ID="WellSample:0_0_0_0_0_0" Index="0" PositionX="0.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" Timepoint="2006-05-04T18:13:51">
+<ImageRef ID="Image:0"></ImageRef></WellSample></Well>
+<Well Color="255" Column="1" ExternalDescription="External Description" ExternalIdentifier="External Identifier" ID="Well:0_0_0_1" Row="5" Type="Transfection: done">
+<WellSample ID="WellSample:0_0_0_1_0_0" Index="1" PositionX="0.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" Timepoint="2006-05-04T18:13:51">
+<ImageRef ID="Image:1"></ImageRef></WellSample></Well>
+<Well Color="255" Column="2" ExternalDescription="External Description" ExternalIdentifier="External Identifier" ID="Well:0_0_0_2" Row="5" Type="Transfection: done">
+<WellSample ID="WellSample:0_0_0_2_0_0" Index="2" PositionX="0.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" Timepoint="2006-05-04T18:13:51">
+<ImageRef ID="Image:2"></ImageRef></WellSample></Well>
+<Well Color="255" Column="3" ExternalDescription="External Description" ExternalIdentifier="External Identifier" ID="Well:0_0_0_3" Row="5" Type="Transfection: done">
+<WellSample ID="WellSample:0_0_0_3_0_0" Index="3" PositionX="0.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" Timepoint="2006-05-04T18:13:51">
+<ImageRef ID="Image:3"></ImageRef></WellSample></Well>
+<Well Color="255" Column="4" ExternalDescription="External Description" ExternalIdentifier="External Identifier" ID="Well:0_0_0_4" Row="5" Type="Transfection: done">
+<WellSample ID="WellSample:0_0_0_4_0_0" Index="4" PositionX="0.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" Timepoint="2006-05-04T18:13:51">
+<ImageRef ID="Image:4"></ImageRef></WellSample></Well>
+<Well Color="255" Column="5" ExternalDescription="External Description" ExternalIdentifier="External Identifier" ID="Well:0_0_0_5" Row="5" Type="Transfection: done">
+<WellSample ID="WellSample:0_0_0_5_0_0" Index="5" PositionX="0.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" Timepoint="2006-05-04T18:13:51">
+<ImageRef ID="Image:5"></ImageRef></WellSample></Well>
+<Well Color="255" Column="6" ExternalDescription="External Description" ExternalIdentifier="External Identifier" ID="Well:0_0_0_6" Row="5" Type="Transfection: done">
+<WellSample ID="WellSample:0_0_0_6_0_0" Index="6" PositionX="0.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" Timepoint="2006-05-04T18:13:51">
+<ImageRef ID="Image:6"></ImageRef></WellSample></Well>
+<Well Color="255" Column="7" ExternalDescription="External Description" ExternalIdentifier="External Identifier" ID="Well:0_0_0_7" Row="5" Type="Transfection: done">
+<WellSample ID="WellSample:0_0_0_7_0_0" Index="7" PositionX="0.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" Timepoint="2006-05-04T18:13:51">
+<ImageRef ID="Image:7"></ImageRef></WellSample></Well>
+<Well Color="255" Column="8" ExternalDescription="External Description" ExternalIdentifier="External Identifier" ID="Well:0_0_0_8" Row="5" Type="Transfection: done">
+<WellSample ID="WellSample:0_0_0_8_0_0" Index="8" PositionX="0.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" Timepoint="2006-05-04T18:13:51">
+<ImageRef ID="Image:8"></ImageRef></WellSample></Well>
+<Well Color="255" Column="9" ExternalDescription="External Description" ExternalIdentifier="External Identifier" ID="Well:0_0_0_9" Row="5" Type="Transfection: done">
+<WellSample ID="WellSample:0_0_0_9_0_0" Index="9" PositionX="0.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" Timepoint="2006-05-04T18:13:51">
+<ImageRef ID="Image:9"></ImageRef></WellSample></Well>
+<Well Color="255" Column="10" ExternalDescription="External Description" ExternalIdentifier="External Identifier" ID="Well:0_0_0_10" Row="5" Type="Transfection: done">
+<WellSample ID="WellSample:0_0_0_10_0_0" Index="10" PositionX="0.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" Timepoint="2006-05-04T18:13:51">
+<ImageRef ID="Image:10"></ImageRef></WellSample></Well>
+<Well Color="255" Column="11" ExternalDescription="External Description" ExternalIdentifier="External Identifier" ID="Well:0_0_0_11" Row="5" Type="Transfection: done">
+<WellSample ID="WellSample:0_0_0_11_0_0" Index="11" PositionX="0.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" Timepoint="2006-05-04T18:13:51">
+<ImageRef ID="Image:11"></ImageRef></WellSample></Well>
+<PlateAcquisition EndTime="2006-05-04T18:13:51" ID="PlateAcquisition:0" Name="PlateAcquisition Name 0" StartTime="2006-05-04T18:13:51">
+<Description>PlateAcquisition 0 of 1</Description>
+<WellSampleRef ID="WellSample:0_0_0_0_0_0"></WellSampleRef>
+<WellSampleRef ID="WellSample:0_0_0_1_0_0"></WellSampleRef>
+<WellSampleRef ID="WellSample:0_0_0_2_0_0"></WellSampleRef>
+<WellSampleRef ID="WellSample:0_0_0_3_0_0"></WellSampleRef>
+<WellSampleRef ID="WellSample:0_0_0_4_0_0"></WellSampleRef>
+<WellSampleRef ID="WellSample:0_0_0_5_0_0"></WellSampleRef>
+<WellSampleRef ID="WellSample:0_0_0_6_0_0"></WellSampleRef>
+<WellSampleRef ID="WellSample:0_0_0_7_0_0"></WellSampleRef>
+<WellSampleRef ID="WellSample:0_0_0_8_0_0"></WellSampleRef>
+<WellSampleRef ID="WellSample:0_0_0_9_0_0"></WellSampleRef>
+<WellSampleRef ID="WellSample:0_0_0_10_0_0"></WellSampleRef>
+<WellSampleRef ID="WellSample:0_0_0_11_0_0"></WellSampleRef></PlateAcquisition></Plate>
+<Image ID="Image:0" Name="test">
+<Description>Image Description 0</Description>
+<Pixels BigEndian="false" DimensionOrder="XYZCT" ID="Pixels:0" Interleaved="false" PhysicalSizeX="1.0" PhysicalSizeXUnit="µm" PhysicalSizeY="1.0" PhysicalSizeYUnit="µm" PhysicalSizeZ="1.0" PhysicalSizeZUnit="µm" SignificantBits="8" SizeC="1" SizeT="1" SizeX="2" SizeY="2" SizeZ="1" Type="uint8">
+<Channel AcquisitionMode="FluorescenceLifetime" Color="1687603455" ContrastMethod="Brightfield" EmissionWavelength="300.3" EmissionWavelengthUnit="nm" ExcitationWavelength="400.3" ExcitationWavelengthUnit="nm" Fluor="Fluor" ID="Channel:0:0" IlluminationType="Oblique" NDFilter="1.0" Name="Name" PinholeSize="0.5" PinholeSizeUnit="µm" PockelCellSetting="0" SamplesPerPixel="1"/>
+<Plane DeltaT="0.1" DeltaTUnit="s" ExposureTime="10.0" ExposureTimeUnit="s" PositionX="1.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" PositionZ="1.0" PositionZUnit="reference frame" TheC="0" TheT="0" TheZ="0"/>
+<BinData xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06" Length="4" BigEndian="false">AAAAAA==</BinData></Pixels></Image>
+<Image ID="Image:1" Name="test 2">
+<Description>Image Description 1</Description>
+<Pixels BigEndian="false" DimensionOrder="XYZCT" ID="Pixels:1" Interleaved="false" PhysicalSizeX="1.0" PhysicalSizeXUnit="µm" PhysicalSizeY="1.0" PhysicalSizeYUnit="µm" PhysicalSizeZ="1.0" PhysicalSizeZUnit="µm" SignificantBits="8" SizeC="1" SizeT="1" SizeX="2" SizeY="2" SizeZ="1" Type="uint8">
+<Channel AcquisitionMode="FluorescenceLifetime" Color="1687603455" ContrastMethod="Brightfield" EmissionWavelength="300.3" EmissionWavelengthUnit="nm" ExcitationWavelength="400.3" ExcitationWavelengthUnit="nm" Fluor="Fluor" ID="Channel:1:0" IlluminationType="Oblique" NDFilter="1.0" Name="Name" PinholeSize="0.5" PinholeSizeUnit="µm" PockelCellSetting="0" SamplesPerPixel="1"/>
+<Plane DeltaT="0.1" DeltaTUnit="s" ExposureTime="10.0" ExposureTimeUnit="s" PositionX="1.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" PositionZ="1.0" PositionZUnit="reference frame" TheC="0" TheT="0" TheZ="0"/>
+<BinData xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06" Length="4" BigEndian="false">AQEBAQ==</BinData></Pixels></Image>
+<Image ID="Image:2" Name="test 3">
+<Description>Image Description 2</Description>
+<Pixels BigEndian="false" DimensionOrder="XYZCT" ID="Pixels:2" Interleaved="false" PhysicalSizeX="1.0" PhysicalSizeXUnit="µm" PhysicalSizeY="1.0" PhysicalSizeYUnit="µm" PhysicalSizeZ="1.0" PhysicalSizeZUnit="µm" SignificantBits="8" SizeC="1" SizeT="1" SizeX="2" SizeY="2" SizeZ="1" Type="uint8">
+<Channel AcquisitionMode="FluorescenceLifetime" Color="1687603455" ContrastMethod="Brightfield" EmissionWavelength="300.3" EmissionWavelengthUnit="nm" ExcitationWavelength="400.3" ExcitationWavelengthUnit="nm" Fluor="Fluor" ID="Channel:2:0" IlluminationType="Oblique" NDFilter="1.0" Name="Name" PinholeSize="0.5" PinholeSizeUnit="µm" PockelCellSetting="0" SamplesPerPixel="1"/>
+<Plane DeltaT="0.1" DeltaTUnit="s" ExposureTime="10.0" ExposureTimeUnit="s" PositionX="1.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" PositionZ="1.0" PositionZUnit="reference frame" TheC="0" TheT="0" TheZ="0"/>
+<BinData xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06" Length="4" BigEndian="false">AgICAg==</BinData></Pixels></Image>
+<Image ID="Image:3" Name="test 4">
+<Description>Image Description 3</Description>
+<Pixels BigEndian="false" DimensionOrder="XYZCT" ID="Pixels:3" Interleaved="false" PhysicalSizeX="1.0" PhysicalSizeXUnit="µm" PhysicalSizeY="1.0" PhysicalSizeYUnit="µm" PhysicalSizeZ="1.0" PhysicalSizeZUnit="µm" SignificantBits="8" SizeC="1" SizeT="1" SizeX="2" SizeY="2" SizeZ="1" Type="uint8">
+<Channel AcquisitionMode="FluorescenceLifetime" Color="1687603455" ContrastMethod="Brightfield" EmissionWavelength="300.3" EmissionWavelengthUnit="nm" ExcitationWavelength="400.3" ExcitationWavelengthUnit="nm" Fluor="Fluor" ID="Channel:3:0" IlluminationType="Oblique" NDFilter="1.0" Name="Name" PinholeSize="0.5" PinholeSizeUnit="µm" PockelCellSetting="0" SamplesPerPixel="1"/>
+<Plane DeltaT="0.1" DeltaTUnit="s" ExposureTime="10.0" ExposureTimeUnit="s" PositionX="1.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" PositionZ="1.0" PositionZUnit="reference frame" TheC="0" TheT="0" TheZ="0"/>
+<BinData xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06" Length="4" BigEndian="false">AwMDAw==</BinData></Pixels></Image>
+<Image ID="Image:4" Name="test 5">
+<Description>Image Description 4</Description>
+<Pixels BigEndian="false" DimensionOrder="XYZCT" ID="Pixels:4" Interleaved="false" PhysicalSizeX="1.0" PhysicalSizeXUnit="µm" PhysicalSizeY="1.0" PhysicalSizeYUnit="µm" PhysicalSizeZ="1.0" PhysicalSizeZUnit="µm" SignificantBits="8" SizeC="1" SizeT="1" SizeX="2" SizeY="2" SizeZ="1" Type="uint8">
+<Channel AcquisitionMode="FluorescenceLifetime" Color="1687603455" ContrastMethod="Brightfield" EmissionWavelength="300.3" EmissionWavelengthUnit="nm" ExcitationWavelength="400.3" ExcitationWavelengthUnit="nm" Fluor="Fluor" ID="Channel:4:0" IlluminationType="Oblique" NDFilter="1.0" Name="Name" PinholeSize="0.5" PinholeSizeUnit="µm" PockelCellSetting="0" SamplesPerPixel="1"/>
+<Plane DeltaT="0.1" DeltaTUnit="s" ExposureTime="10.0" ExposureTimeUnit="s" PositionX="1.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" PositionZ="1.0" PositionZUnit="reference frame" TheC="0" TheT="0" TheZ="0"/>
+<BinData xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06" Length="4" BigEndian="false">BAQEBA==</BinData></Pixels></Image>
+<Image ID="Image:5" Name="test 6">
+<Description>Image Description 5</Description>
+<Pixels BigEndian="false" DimensionOrder="XYZCT" ID="Pixels:5" Interleaved="false" PhysicalSizeX="1.0" PhysicalSizeXUnit="µm" PhysicalSizeY="1.0" PhysicalSizeYUnit="µm" PhysicalSizeZ="1.0" PhysicalSizeZUnit="µm" SignificantBits="8" SizeC="1" SizeT="1" SizeX="2" SizeY="2" SizeZ="1" Type="uint8">
+<Channel AcquisitionMode="FluorescenceLifetime" Color="1687603455" ContrastMethod="Brightfield" EmissionWavelength="300.3" EmissionWavelengthUnit="nm" ExcitationWavelength="400.3" ExcitationWavelengthUnit="nm" Fluor="Fluor" ID="Channel:5:0" IlluminationType="Oblique" NDFilter="1.0" Name="Name" PinholeSize="0.5" PinholeSizeUnit="µm" PockelCellSetting="0" SamplesPerPixel="1"/>
+<Plane DeltaT="0.1" DeltaTUnit="s" ExposureTime="10.0" ExposureTimeUnit="s" PositionX="1.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" PositionZ="1.0" PositionZUnit="reference frame" TheC="0" TheT="0" TheZ="0"/>
+<BinData xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06" Length="4" BigEndian="false">BQUFBQ==</BinData></Pixels></Image>
+<Image ID="Image:6" Name="test 7">
+<Description>Image Description 6</Description>
+<Pixels BigEndian="false" DimensionOrder="XYZCT" ID="Pixels:6" Interleaved="false" PhysicalSizeX="1.0" PhysicalSizeXUnit="µm" PhysicalSizeY="1.0" PhysicalSizeYUnit="µm" PhysicalSizeZ="1.0" PhysicalSizeZUnit="µm" SignificantBits="8" SizeC="1" SizeT="1" SizeX="2" SizeY="2" SizeZ="1" Type="uint8">
+<Channel AcquisitionMode="FluorescenceLifetime" Color="1687603455" ContrastMethod="Brightfield" EmissionWavelength="300.3" EmissionWavelengthUnit="nm" ExcitationWavelength="400.3" ExcitationWavelengthUnit="nm" Fluor="Fluor" ID="Channel:6:0" IlluminationType="Oblique" NDFilter="1.0" Name="Name" PinholeSize="0.5" PinholeSizeUnit="µm" PockelCellSetting="0" SamplesPerPixel="1"/>
+<Plane DeltaT="0.1" DeltaTUnit="s" ExposureTime="10.0" ExposureTimeUnit="s" PositionX="1.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" PositionZ="1.0" PositionZUnit="reference frame" TheC="0" TheT="0" TheZ="0"/>
+<BinData xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06" Length="4" BigEndian="false">BgYGBg==</BinData></Pixels></Image>
+<Image ID="Image:7" Name="test 8">
+<Description>Image Description 7</Description>
+<Pixels BigEndian="false" DimensionOrder="XYZCT" ID="Pixels:7" Interleaved="false" PhysicalSizeX="1.0" PhysicalSizeXUnit="µm" PhysicalSizeY="1.0" PhysicalSizeYUnit="µm" PhysicalSizeZ="1.0" PhysicalSizeZUnit="µm" SignificantBits="8" SizeC="1" SizeT="1" SizeX="2" SizeY="2" SizeZ="1" Type="uint8">
+<Channel AcquisitionMode="FluorescenceLifetime" Color="1687603455" ContrastMethod="Brightfield" EmissionWavelength="300.3" EmissionWavelengthUnit="nm" ExcitationWavelength="400.3" ExcitationWavelengthUnit="nm" Fluor="Fluor" ID="Channel:7:0" IlluminationType="Oblique" NDFilter="1.0" Name="Name" PinholeSize="0.5" PinholeSizeUnit="µm" PockelCellSetting="0" SamplesPerPixel="1"/>
+<Plane DeltaT="0.1" DeltaTUnit="s" ExposureTime="10.0" ExposureTimeUnit="s" PositionX="1.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" PositionZ="1.0" PositionZUnit="reference frame" TheC="0" TheT="0" TheZ="0"/>
+<BinData xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06" Length="4" BigEndian="false">BwcHBw==</BinData></Pixels></Image>
+<Image ID="Image:8" Name="test 9">
+<Description>Image Description 8</Description>
+<Pixels BigEndian="false" DimensionOrder="XYZCT" ID="Pixels:8" Interleaved="false" PhysicalSizeX="1.0" PhysicalSizeXUnit="µm" PhysicalSizeY="1.0" PhysicalSizeYUnit="µm" PhysicalSizeZ="1.0" PhysicalSizeZUnit="µm" SignificantBits="8" SizeC="1" SizeT="1" SizeX="2" SizeY="2" SizeZ="1" Type="uint8">
+<Channel AcquisitionMode="FluorescenceLifetime" Color="1687603455" ContrastMethod="Brightfield" EmissionWavelength="300.3" EmissionWavelengthUnit="nm" ExcitationWavelength="400.3" ExcitationWavelengthUnit="nm" Fluor="Fluor" ID="Channel:8:0" IlluminationType="Oblique" NDFilter="1.0" Name="Name" PinholeSize="0.5" PinholeSizeUnit="µm" PockelCellSetting="0" SamplesPerPixel="1"/>
+<Plane DeltaT="0.1" DeltaTUnit="s" ExposureTime="10.0" ExposureTimeUnit="s" PositionX="1.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" PositionZ="1.0" PositionZUnit="reference frame" TheC="0" TheT="0" TheZ="0"/>
+<BinData xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06" Length="4" BigEndian="false">CAgICA==</BinData></Pixels></Image>
+<Image ID="Image:9" Name="test 10">
+<Description>Image Description 9</Description>
+<Pixels BigEndian="false" DimensionOrder="XYZCT" ID="Pixels:9" Interleaved="false" PhysicalSizeX="1.0" PhysicalSizeXUnit="µm" PhysicalSizeY="1.0" PhysicalSizeYUnit="µm" PhysicalSizeZ="1.0" PhysicalSizeZUnit="µm" SignificantBits="8" SizeC="1" SizeT="1" SizeX="2" SizeY="2" SizeZ="1" Type="uint8">
+<Channel AcquisitionMode="FluorescenceLifetime" Color="1687603455" ContrastMethod="Brightfield" EmissionWavelength="300.3" EmissionWavelengthUnit="nm" ExcitationWavelength="400.3" ExcitationWavelengthUnit="nm" Fluor="Fluor" ID="Channel:9:0" IlluminationType="Oblique" NDFilter="1.0" Name="Name" PinholeSize="0.5" PinholeSizeUnit="µm" PockelCellSetting="0" SamplesPerPixel="1"/>
+<Plane DeltaT="0.1" DeltaTUnit="s" ExposureTime="10.0" ExposureTimeUnit="s" PositionX="1.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" PositionZ="1.0" PositionZUnit="reference frame" TheC="0" TheT="0" TheZ="0"/>
+<BinData xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06" Length="4" BigEndian="false">CQkJCQ==</BinData></Pixels></Image>
+<Image ID="Image:10" Name="test 11">
+<Description>Image Description 10</Description>
+<Pixels BigEndian="false" DimensionOrder="XYZCT" ID="Pixels:10" Interleaved="false" PhysicalSizeX="1.0" PhysicalSizeXUnit="µm" PhysicalSizeY="1.0" PhysicalSizeYUnit="µm" PhysicalSizeZ="1.0" PhysicalSizeZUnit="µm" SignificantBits="8" SizeC="1" SizeT="1" SizeX="2" SizeY="2" SizeZ="1" Type="uint8">
+<Channel AcquisitionMode="FluorescenceLifetime" Color="1687603455" ContrastMethod="Brightfield" EmissionWavelength="300.3" EmissionWavelengthUnit="nm" ExcitationWavelength="400.3" ExcitationWavelengthUnit="nm" Fluor="Fluor" ID="Channel:10:0" IlluminationType="Oblique" NDFilter="1.0" Name="Name" PinholeSize="0.5" PinholeSizeUnit="µm" PockelCellSetting="0" SamplesPerPixel="1"/>
+<Plane DeltaT="0.1" DeltaTUnit="s" ExposureTime="10.0" ExposureTimeUnit="s" PositionX="1.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" PositionZ="1.0" PositionZUnit="reference frame" TheC="0" TheT="0" TheZ="0"/>
+<BinData xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06" Length="4" BigEndian="false">CgoKCg==</BinData></Pixels></Image>
+<Image ID="Image:11" Name="test 12">
+<Description>Image Description 11</Description>
+<Pixels BigEndian="false" DimensionOrder="XYZCT" ID="Pixels:11" Interleaved="false" PhysicalSizeX="1.0" PhysicalSizeXUnit="µm" PhysicalSizeY="1.0" PhysicalSizeYUnit="µm" PhysicalSizeZ="1.0" PhysicalSizeZUnit="µm" SignificantBits="8" SizeC="1" SizeT="1" SizeX="2" SizeY="2" SizeZ="1" Type="uint8">
+<Channel AcquisitionMode="FluorescenceLifetime" Color="1687603455" ContrastMethod="Brightfield" EmissionWavelength="300.3" EmissionWavelengthUnit="nm" ExcitationWavelength="400.3" ExcitationWavelengthUnit="nm" Fluor="Fluor" ID="Channel:11:0" IlluminationType="Oblique" NDFilter="1.0" Name="Name" PinholeSize="0.5" PinholeSizeUnit="µm" PockelCellSetting="0" SamplesPerPixel="1"/>
+<Plane DeltaT="0.1" DeltaTUnit="s" ExposureTime="10.0" ExposureTimeUnit="s" PositionX="1.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" PositionZ="1.0" PositionZUnit="reference frame" TheC="0" TheT="0" TheZ="0"/>
+<BinData xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06" Length="4" BigEndian="false">CwsLCw==</BinData></Pixels></Image></OME>
