@@ -1266,7 +1266,6 @@ public class Converter implements Callable<Void> {
    * to attach the multiscales metadata to the group containing
    * the pyramids.
    *
-   * @param root Root {@link ZarrGroup}.
    * @param series Series which is currently being written.
    * @param resolutions Total number of resolutions from which
    *                    names will be generated.
