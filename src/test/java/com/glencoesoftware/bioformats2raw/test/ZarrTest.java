@@ -801,31 +801,15 @@ public class ZarrTest {
     Path root = output.resolve("data.zarr");
     ZarrGroup z = ZarrGroup.open(root);
 
-    // check valid group layout
-    // METADATA.ome.xml, .zattrs (Plate), .zgroup (Plate) and 2 rows
-    assertEquals(5, Files.list(root).toArray().length);
-    for (int row=0; row<2; row++) {
-      Path rowPath = root.resolve(Integer.toString(row));
-      // .zgroup (Row) and 3 columns
-      assertEquals(4, Files.list(rowPath).toArray().length);
-      for (int col=0; col<3; col++) {
-        Path colPath = rowPath.resolve(Integer.toString(col));
-        ZarrGroup colGroup = ZarrGroup.open(colPath);
-        // .zattrs (Column/Image), .zgroup (Column/Image) and 2 fields
-        assertEquals(4, Files.list(colPath).toArray().length);
-        for (int field=0; field<2; field++) {
-          // append resolution index
-          ZarrArray series0 = colGroup.openArray(field + "/0");
-          assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getShape());
-          assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getChunks());
-        }
-      }
-    }
+    int rowCount = 2;
+    int colCount = 3;
+    int fieldCount = 2;
+    checkPlateGroupLayout(root, rowCount, colCount, fieldCount, 512, 512);
 
     // check plate/well level metadata
     Map<String, Object> plate =
         (Map<String, Object>) z.getAttributes().get("plate");
-    assertEquals(2, ((Number) plate.get("field_count")).intValue());
+    assertEquals(fieldCount, ((Number) plate.get("field_count")).intValue());
 
     List<Map<String, Object>> acquisitions =
       (List<Map<String, Object>>) plate.get("acquisitions");
@@ -839,15 +823,8 @@ public class ZarrTest {
     assertEquals(1, acquisitions.size());
     assertEquals("0", acquisitions.get(0).get("id"));
 
-    assertEquals(2, rows.size());
-    for (int row=0; row<rows.size(); row++) {
-      assertEquals(String.valueOf(row), rows.get(row).get("name"));
-    }
-
-    assertEquals(3, columns.size());
-    for (int col=0; col<columns.size(); col++) {
-      assertEquals(String.valueOf(col), columns.get(col).get("name"));
-    }
+    checkDimension(rows, rowCount);
+    checkDimension(columns, colCount);
 
     assertEquals(rows.size() * columns.size(), wells.size());
     for (int row=0; row<rows.size(); row++) {
@@ -864,18 +841,155 @@ public class ZarrTest {
         String columnName = (String) column.get("name");
         ZarrGroup wellGroup = ZarrGroup.open(
             root.resolve(rowName).resolve(columnName));
-        Map<String, Object> well =
-            (Map<String, Object>) wellGroup.getAttributes().get("well");
-        List<Map<String, Object>> images =
-            (List<Map<String, Object>>) well.get("images");
-        assertEquals(2, images.size());
-        Map<String, Object> field1 = images.get(0);  // Field 1
-        assertEquals(field1.get("path"), "0");
-        assertEquals(0, field1.get("acquisition"));
-        Map<String, Object> field2 = images.get(1);  // Field 2
-        assertEquals(field2.get("path"), "1");
-        assertEquals(0, field2.get("acquisition"));
+        checkWell(wellGroup, fieldCount);
       }
+    }
+  }
+
+  /**
+   * 96 well plate with only well E6.
+   */
+  @Test
+  public void testSingleWell() throws IOException {
+    input = getTestFile("E6-only.ome.xml");
+    assertTool();
+
+    Path root = output.resolve("data.zarr");
+    ZarrGroup z = ZarrGroup.open(root);
+
+    int rowCount = 8;
+    int colCount = 12;
+    int fieldCount = 1;
+
+    // check plate/well level metadata
+    Map<String, Object> plate =
+        (Map<String, Object>) z.getAttributes().get("plate");
+    assertEquals(fieldCount, ((Number) plate.get("field_count")).intValue());
+
+    List<Map<String, Object>> acquisitions =
+      (List<Map<String, Object>>) plate.get("acquisitions");
+    List<Map<String, Object>> rows =
+      (List<Map<String, Object>>) plate.get("rows");
+    List<Map<String, Object>> columns =
+      (List<Map<String, Object>>) plate.get("columns");
+    List<Map<String, Object>> wells =
+      (List<Map<String, Object>>) plate.get("wells");
+
+    assertEquals(1, acquisitions.size());
+    assertEquals("0", acquisitions.get(0).get("id"));
+
+    checkDimension(rows, rowCount);
+    checkDimension(columns, colCount);
+
+    assertEquals(1, wells.size());
+    Map<String, Object> well = wells.get(0);
+    String wellPath = (String) well.get("path");
+    assertEquals("4/5", wellPath);
+    assertEquals(4, ((Number) well.get("row_index")).intValue());
+    assertEquals(5, ((Number) well.get("column_index")).intValue());
+
+    // check well metadata
+    ZarrGroup wellGroup = ZarrGroup.open(root.resolve(wellPath));
+    checkWell(wellGroup, fieldCount);
+  }
+
+  /**
+   * 96 well plate with only wells C4 and H2.
+   */
+  @Test
+  public void testTwoWells() throws IOException {
+    input = getTestFile("C4-H2-only.ome.xml");
+    assertTool();
+
+    Path root = output.resolve("data.zarr");
+    ZarrGroup z = ZarrGroup.open(root);
+
+    int rowCount = 8;
+    int colCount = 12;
+    int fieldCount = 1;
+
+    // check plate/well level metadata
+    Map<String, Object> plate =
+        (Map<String, Object>) z.getAttributes().get("plate");
+    assertEquals(fieldCount, ((Number) plate.get("field_count")).intValue());
+
+    List<Map<String, Object>> acquisitions =
+      (List<Map<String, Object>>) plate.get("acquisitions");
+    List<Map<String, Object>> rows =
+      (List<Map<String, Object>>) plate.get("rows");
+    List<Map<String, Object>> columns =
+      (List<Map<String, Object>>) plate.get("columns");
+    List<Map<String, Object>> wells =
+      (List<Map<String, Object>>) plate.get("wells");
+
+    assertEquals(1, acquisitions.size());
+    assertEquals("0", acquisitions.get(0).get("id"));
+
+    checkDimension(rows, rowCount);
+    checkDimension(columns, colCount);
+
+    assertEquals(2, wells.size());
+    Map<String, Object> well = wells.get(0);
+    String wellPath = (String) well.get("path");
+    assertEquals("2/3", wellPath);
+    assertEquals(2, ((Number) well.get("row_index")).intValue());
+    assertEquals(3, ((Number) well.get("column_index")).intValue());
+    ZarrGroup wellGroup = ZarrGroup.open(root.resolve(wellPath));
+    checkWell(wellGroup, fieldCount);
+
+    well = wells.get(1);
+    wellPath = (String) well.get("path");
+    assertEquals("7/1", wellPath);
+    assertEquals(7, ((Number) well.get("row_index")).intValue());
+    assertEquals(1, ((Number) well.get("column_index")).intValue());
+    wellGroup = ZarrGroup.open(root.resolve(wellPath));
+    checkWell(wellGroup, fieldCount);
+  }
+
+  /**
+   * 96 well plate with all wells in row F.
+   */
+  @Test
+  public void testOnePlateRow() throws IOException {
+    input = getTestFile("row-F-only.ome.xml");
+    assertTool();
+
+    Path root = output.resolve("data.zarr");
+    ZarrGroup z = ZarrGroup.open(root);
+
+    int rowCount = 8;
+    int colCount = 12;
+    int fieldCount = 1;
+
+    // check plate/well level metadata
+    Map<String, Object> plate =
+        (Map<String, Object>) z.getAttributes().get("plate");
+    assertEquals(fieldCount, ((Number) plate.get("field_count")).intValue());
+
+    List<Map<String, Object>> acquisitions =
+      (List<Map<String, Object>>) plate.get("acquisitions");
+    List<Map<String, Object>> rows =
+      (List<Map<String, Object>>) plate.get("rows");
+    List<Map<String, Object>> columns =
+      (List<Map<String, Object>>) plate.get("columns");
+    List<Map<String, Object>> wells =
+      (List<Map<String, Object>>) plate.get("wells");
+
+    assertEquals(1, acquisitions.size());
+    assertEquals("0", acquisitions.get(0).get("id"));
+
+    checkDimension(rows, rowCount);
+    checkDimension(columns, colCount);
+
+    assertEquals(colCount, wells.size());
+    for (int col=0; col<wells.size(); col++) {
+      Map<String, Object> well = wells.get(col);
+      String wellPath = (String) well.get("path");
+      assertEquals("5/" + col, wellPath);
+      assertEquals(5, ((Number) well.get("row_index")).intValue());
+      assertEquals(col, ((Number) well.get("column_index")).intValue());
+      ZarrGroup wellGroup = ZarrGroup.open(root.resolve(wellPath));
+      checkWell(wellGroup, fieldCount);
     }
   }
 
@@ -895,6 +1009,66 @@ public class ZarrTest {
     assertEquals(1, ome.sizeOfImageList());
     Pixels pixels = ome.getImage(0).getPixels();
     assertEquals(3, pixels.sizeOfChannelList());
+  }
+
+  private void checkPlateGroupLayout(Path root, int rowCount, int colCount,
+    int fieldCount, int x, int y)
+    throws IOException
+  {
+    // check valid group layout
+    // METADATA.ome.xml, .zattrs (Plate), .zgroup (Plate) and rows
+    assertEquals(rowCount + 3, Files.list(root).toArray().length);
+    for (int row=0; row<rowCount; row++) {
+      Path rowPath = root.resolve(Integer.toString(row));
+      // .zgroup (Row) and columns
+      assertEquals(colCount + 1, Files.list(rowPath).toArray().length);
+      for (int col=0; col<colCount; col++) {
+        Path colPath = rowPath.resolve(Integer.toString(col));
+        ZarrGroup colGroup = ZarrGroup.open(colPath);
+        // .zattrs (Column/Image), .zgroup (Column/Image) and fields
+        assertEquals(fieldCount + 2, Files.list(colPath).toArray().length);
+        for (int field=0; field<fieldCount; field++) {
+          // append resolution index
+          ZarrArray series0 = colGroup.openArray(field + "/0");
+          assertArrayEquals(new int[] {1, 1, 1, y, x}, series0.getShape());
+          assertArrayEquals(new int[] {1, 1, 1, y, x}, series0.getChunks());
+        }
+      }
+    }
+  }
+
+  private void checkDimension(List<Map<String, Object>> dims, int dimCount)
+    throws IOException
+  {
+    assertEquals(dimCount, dims.size());
+    for (int dim=0; dim<dims.size(); dim++) {
+      assertEquals(String.valueOf(dim), dims.get(dim).get("name"));
+    }
+  }
+
+  private void checkWell(ZarrGroup wellGroup, int fieldCount)
+    throws IOException
+  {
+    Map<String, Object> well =
+        (Map<String, Object>) wellGroup.getAttributes().get("well");
+    List<Map<String, Object>> images =
+        (List<Map<String, Object>>) well.get("images");
+    assertEquals(fieldCount, images.size());
+
+    for (int i=0; i<fieldCount; i++) {
+      Map<String, Object> field = images.get(i);
+      assertEquals(field.get("path"), String.valueOf(i));
+      assertEquals(0, field.get("acquisition"));
+    }
+  }
+
+  private Path getTestFile(String resourceName) throws IOException {
+    try {
+      return Paths.get(this.getClass().getResource(resourceName).toURI());
+    }
+    catch (Exception e) {
+      throw new IOException(e);
+    }
   }
 
 }
