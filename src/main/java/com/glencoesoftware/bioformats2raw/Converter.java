@@ -105,7 +105,7 @@ public class Converter implements Callable<Void> {
   private static final int PYRAMID_SCALE = 2;
 
   /** Version of the bioformats2raw layout. */
-  public static final Integer LAYOUT = 1;
+  public static final Integer LAYOUT = 2;
 
   @Parameters(
     index = "0",
