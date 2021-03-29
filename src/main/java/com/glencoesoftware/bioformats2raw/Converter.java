@@ -221,7 +221,7 @@ public class Converter implements Callable<Void> {
           description = "Whether to use '/' as the chunk path seprator " +
                   "(false by default)"
   )
-  private volatile boolean nested = false;
+  private volatile boolean nested = true;
 
   @Option(
           names = "--pyramid-name",
@@ -1308,7 +1308,7 @@ public class Converter implements Callable<Void> {
       multiscale.put("type", downsampling.getName());
     }
     multiscale.put("metadata", metadata);
-    multiscale.put("version", "0.1");
+    multiscale.put("version", nested ? "0.2" : "0.1");
     multiscales.add(multiscale);
     List<Map<String, String>> datasets = new ArrayList<Map<String, String>>();
     for (int r = 0; r < resolutions; r++) {
