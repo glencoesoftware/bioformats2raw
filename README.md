@@ -84,7 +84,7 @@ This option is not present in 0.3.0 and later, as only Zarr output is supported.
 
 Versions 0.2.6 and prior used the input file's dimension order to determine the output
 dimension order, unless `--dimension-order` was specified.
-Version 0.3.0 uses the `TCZYX` order by default, for compatibility with https://ngff.openmicroscopy.org/0.1/#image-layout.
+Version 0.3.0 uses the `TCZYX` order by default, for compatibility with https://ngff.openmicroscopy.org/0.2/#image-layout.
 The `--dimension-order` option can still be used to set a specific output dimension order, e.g.:
 
     bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --dimension-order XYCZT
