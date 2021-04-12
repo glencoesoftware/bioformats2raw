@@ -526,7 +526,7 @@ public class Converter implements Callable<Void> {
         String xml = getService().getOMEXML(meta);
 
         // write the original OME-XML to a file
-        Path metadataPath = getRootPath();
+        Path metadataPath = getRootPath().resolve("OME");
         if (!Files.exists(metadataPath)) {
           Files.createDirectories(metadataPath);
         }
