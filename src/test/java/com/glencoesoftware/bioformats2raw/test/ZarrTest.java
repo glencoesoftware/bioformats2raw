@@ -89,7 +89,8 @@ public class ZarrTest {
     try {
       converter = new Converter();
       CommandLine.call(converter, args.toArray(new String[]{}));
-      assertTrue(Files.exists(output.resolve("METADATA.ome.xml")));
+      assertTrue(Files.exists(
+        output.resolve("OME").resolve("METADATA.ome.xml")));
     }
     catch (RuntimeException rt) {
       throw rt;
@@ -670,7 +671,7 @@ public class ZarrTest {
 
     input = fake(null, null, originalMetadata);
     assertTool();
-    Path omexml = output.resolve("METADATA.ome.xml");
+    Path omexml = output.resolve("OME").resolve("METADATA.ome.xml");
     StringBuilder xml = new StringBuilder();
     Files.lines(omexml).forEach(v -> xml.append(v));
 
@@ -990,7 +991,7 @@ public class ZarrTest {
     input = fake("sizeC", "3", "rgb", "3");
     assertTool();
 
-    Path xml = output.resolve("METADATA.ome.xml");
+    Path xml = output.resolve("OME").resolve("METADATA.ome.xml");
     ServiceFactory sf = new ServiceFactory();
     OMEXMLService xmlService = sf.getInstance(OMEXMLService.class);
     OME ome = (OME) xmlService.createOMEXMLRoot(
@@ -1030,7 +1031,7 @@ public class ZarrTest {
     throws IOException
   {
     // check valid group layout
-    // METADATA.ome.xml, .zattrs (Plate), .zgroup (Plate) and rows
+    // OME (OME-XML metadata), .zattrs (Plate), .zgroup (Plate) and rows
     assertEquals(rowCount + 3, Files.list(root).toArray().length);
     for (int row=0; row<rowCount; row++) {
       Path rowPath = root.resolve(Integer.toString(row));
