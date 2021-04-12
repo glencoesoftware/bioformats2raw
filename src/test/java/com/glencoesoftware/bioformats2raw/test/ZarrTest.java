@@ -25,6 +25,8 @@ import java.util.stream.Stream;
 import com.bc.zarr.DataType;
 import com.bc.zarr.ZarrArray;
 import com.bc.zarr.ZarrGroup;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.glencoesoftware.bioformats2raw.Converter;
 import com.glencoesoftware.bioformats2raw.Downsampling;
 import loci.common.LogbackTools;
@@ -211,15 +213,23 @@ public class ZarrTest {
   }
 
   /**
-   * Test a fake file conversion and ensure the layout is set.
+   * Test a fake file conversion and ensure the layout is set and that the
+   * output is nested.
    */
   @Test
-  public void testDefaultLayoutIsSet() throws Exception {
+  public void testDefaultLayoutIsSetAndIsNested() throws Exception {
     input = fake();
     assertTool();
     ZarrGroup z = ZarrGroup.open(output.toString());
     Integer layout = (Integer)
         z.getAttributes().get("bioformats2raw.layout");
+    ZarrArray series0 = ZarrGroup.open(output.resolve("0")).openArray("0");
+    assertTrue(series0.getNested());
+    // Also ensure we're using the latest .zarray metadata
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode root = objectMapper.readTree(
+        output.resolve("0/0/.zarray").toFile());
+    assertEquals("/", root.path("dimension_separator").asText());
     assertEquals(Converter.LAYOUT, layout);
   }
 
