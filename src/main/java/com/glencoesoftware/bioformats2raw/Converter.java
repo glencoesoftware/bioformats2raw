@@ -492,6 +492,9 @@ public class Converter implements Callable<Void> {
           for (int i=0; i<toRemove; i++) {
             root.removeImage(root.getImage(0));
           }
+          for (int i=0; i<meta.getPlateCount(); i++) {
+            root.removePlate(root.getPlate(0));
+          }
           meta.setRoot(root);
         }
         else {
