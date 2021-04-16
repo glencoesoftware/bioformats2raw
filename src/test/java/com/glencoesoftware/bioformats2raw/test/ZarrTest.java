@@ -776,7 +776,7 @@ public class ZarrTest {
    * The output should not be compliant with OME Zarr HCS.
    */
   @Test
-  public void testNoHCSOption() throws IOException {
+  public void testNoHCSOption() throws Exception {
     input = fake(
       "plates", "1", "plateAcqs", "1",
       "plateRows", "2", "plateCols", "3", "fields", "2");
@@ -800,7 +800,7 @@ public class ZarrTest {
    * The output should be compliant with OME Zarr HCS.
    */
   @Test
-  public void testHCSMetadata() throws IOException {
+  public void testHCSMetadata() throws Exception {
     input = fake(
       "plates", "1", "plateAcqs", "1",
       "plateRows", "2", "plateCols", "3", "fields", "2");
