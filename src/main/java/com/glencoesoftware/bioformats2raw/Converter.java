@@ -105,7 +105,7 @@ public class Converter implements Callable<Void> {
   private static final int PYRAMID_SCALE = 2;
 
   /** Version of the bioformats2raw layout. */
-  public static final Integer LAYOUT = 1;
+  public static final Integer LAYOUT = 3;
 
   @Parameters(
     index = "0",
@@ -217,11 +217,18 @@ public class Converter implements Callable<Void> {
   };
 
   @Option(
+          names = "--nested", negatable=true,
+          description = "Whether to use '/' as the chunk path seprator " +
+                  "(false by default)"
+  )
+  private volatile boolean nested = true;
+
+  @Option(
           names = "--pyramid-name",
           description = "Name of pyramid (default: ${DEFAULT-VALUE}) " +
                   "[Can break compatibility with raw2ometiff]"
   )
-  private volatile String pyramidName = "data.zarr";
+  private volatile String pyramidName = null;
 
   @Option(
           names = "--scale-format-string",
@@ -310,6 +317,14 @@ public class Converter implements Callable<Void> {
           description = "Turn off OME metadata exporting"
   )
   private volatile boolean noOMEMeta = false;
+
+  @Option(
+          names = "--no-root-group",
+          description = "Turn off creation of root group and corresponding " +
+                        "metadata [Will break compatibility with raw2ometiff]"
+
+  )
+  private volatile boolean noRootGroup = false;
 
   /** Scaling implementation that will be used during downsampling. */
   private volatile IImageScaler scaler = new SimpleImageScaler();
@@ -518,7 +533,7 @@ public class Converter implements Callable<Void> {
           String xml = getService().getOMEXML(meta);
 
           // write the original OME-XML to a file
-          Path metadataPath = outputPath.resolve(pyramidName);
+          Path metadataPath = getRootPath().resolve("OME");
           if (!Files.exists(metadataPath)) {
             Files.createDirectories(metadataPath);
           }
@@ -586,6 +601,21 @@ public class Converter implements Callable<Void> {
       reader.setSeries(series);
     });
     saveResolutions(series);
+  }
+
+  /**
+   * Get the root path of the dataset, which will contain Zarr and OME-XML.
+   * By default, this is the specified output directory.
+   * If "--pyramid-name" was used, then this will be the pyramid name
+   * as a subdirectory of the output directory.
+   *
+   * @return directory into which Zarr and OME-XML data is written
+   */
+  private Path getRootPath() {
+    if (pyramidName == null) {
+      return outputPath;
+    }
+    return outputPath.resolve(pyramidName);
   }
 
   /**
@@ -779,9 +809,7 @@ public class Converter implements Callable<Void> {
     final String pathName =
         String.format(scaleFormatString,
             getScaleFormatStringArgs(series, resolution - 1));
-    final ZarrGroup root = ZarrGroup.open(outputPath.resolve(pyramidName));
-    final ZarrArray zarr = root.openArray(pathName);
-
+    final ZarrArray zarr = ZarrArray.open(getRootPath().resolve(pathName));
     int[] dimensions = zarr.getShape();
     int[] blockSizes = zarr.getChunks();
     int activeTileWidth = blockSizes[blockSizes.length - 1];
@@ -910,8 +938,7 @@ public class Converter implements Callable<Void> {
     String pathName =
         String.format(scaleFormatString,
             getScaleFormatStringArgs(series, resolution));
-    final ZarrGroup root = ZarrGroup.open(outputPath.resolve(pyramidName));
-    final ZarrArray zarr = root.openArray(pathName);
+    final ZarrArray zarr = ZarrArray.open(getRootPath().resolve(pathName));
     IFormatReader reader = readers.take();
     boolean littleEndian = reader.isLittleEndian();
     int bpp = FormatTools.getBytesPerPixel(reader.getPixelType());
@@ -998,14 +1025,15 @@ public class Converter implements Callable<Void> {
     );
 
     // fileset level metadata
-    final String pyramidPath = outputPath.resolve(pyramidName).toString();
-    final ZarrGroup root = ZarrGroup.create(pyramidPath);
-    Map<String, Object> attributes = new HashMap<String, Object>();
-    attributes.put("bioformats2raw.layout", LAYOUT);
-    root.writeAttributes(attributes);
+    if (!noRootGroup) {
+      final ZarrGroup root = ZarrGroup.create(getRootPath());
+      Map<String, Object> attributes = new HashMap<String, Object>();
+      attributes.put("bioformats2raw.layout", LAYOUT);
+      root.writeAttributes(attributes);
+    }
 
     // series level metadata
-    setSeriesLevelMetadata(root, series, resolutions);
+    setSeriesLevelMetadata(series, resolutions);
 
     for (int resCounter=0; resCounter<resolutions; resCounter++) {
       final int resolution = resCounter;
@@ -1026,16 +1054,17 @@ public class Converter implements Callable<Void> {
       }
 
       DataType dataType = getZarrType(pixelType);
-      String resolutionString = "/" +  String.format(
+      String resolutionString = String.format(
               scaleFormatString, getScaleFormatStringArgs(series, resolution));
       ArrayParams arrayParams = new ArrayParams()
           .shape(getDimensions(
               workingReader, scaledWidth, scaledHeight))
           .chunks(new int[] {1, 1, 1, activeTileHeight, activeTileWidth})
           .dataType(dataType)
+          .nested(nested)
           .compressor(CompressorFactory.create(
               compressionType.toString(), compressionProperties));
-      root.createArray(resolutionString, arrayParams);
+      ZarrArray.create(getRootPath().resolve(resolutionString), arrayParams);
 
       nTile = new AtomicInteger(0);
       tileCount = (int) Math.ceil((double) scaledWidth / tileWidth)
@@ -1124,7 +1153,7 @@ public class Converter implements Callable<Void> {
     }
 
     // assumes only one plate defined
-    Path rootPath = outputPath.resolve(pyramidName);
+    Path rootPath = getRootPath();
     ZarrGroup root = ZarrGroup.open(rootPath);
     int plate = 0;
     Map<String, Object> plateMap = new HashMap<String, Object>();
@@ -1178,7 +1207,6 @@ public class Converter implements Callable<Void> {
 
           Map<String, Object> well = new HashMap<String, Object>();
           well.put("path", wellPath);
-          wells.add(well);
 
           List<Map<String, Object>> imageList =
             new ArrayList<Map<String, Object>>();
@@ -1207,31 +1235,37 @@ public class Converter implements Callable<Void> {
           int column = index.getWellColumnIndex();
           int row = index.getWellRowIndex();
 
-          boolean foundColumn = false;
-          for (Map<String, Object> colMap : columns) {
-            if (colMap.get("name").equals(String.valueOf(column))) {
-              foundColumn = true;
+          int columnIndex = -1;
+          for (int c=0; c<columns.size(); c++) {
+            if (columns.get(c).get("name").equals(String.valueOf(column))) {
+              columnIndex = c;
               break;
             }
           }
-          if (!foundColumn) {
+          if (columnIndex < 0) {
             Map<String, Object> colMap = new HashMap<String, Object>();
             colMap.put("name", String.valueOf(column));
+            columnIndex = columns.size();
             columns.add(colMap);
           }
 
-          boolean foundRow = false;
-          for (Map<String, Object> rowMap : rows) {
-            if (rowMap.get("name").equals(String.valueOf(row))) {
-              foundRow = true;
+          int rowIndex = -1;
+          for (int r=0; r<rows.size(); r++) {
+            if (rows.get(r).get("name").equals(String.valueOf(row))) {
+              rowIndex = r;
               break;
             }
           }
-          if (!foundRow) {
+          if (rowIndex < 0) {
             Map<String, Object> rowMap = new HashMap<String, Object>();
             rowMap.put("name", String.valueOf(row));
+            rowIndex = rows.size();
             rows.add(rowMap);
           }
+
+          well.put("row_index", rowIndex);
+          well.put("column_index", columnIndex);
+          wells.add(well);
         }
 
         maxField = (int) Math.max(maxField, index.getFieldIndex());
@@ -1253,17 +1287,15 @@ public class Converter implements Callable<Void> {
    * to attach the multiscales metadata to the group containing
    * the pyramids.
    *
-   * @param root Root {@link ZarrGroup}.
    * @param series Series which is currently being written.
    * @param resolutions Total number of resolutions from which
    *                    names will be generated.
    * @throws IOException
    */
-  private void setSeriesLevelMetadata(
-      ZarrGroup root, int series, int resolutions)
-          throws IOException
+  private void setSeriesLevelMetadata(int series, int resolutions)
+      throws IOException
   {
-    String resolutionString = "/" +  String.format(
+    String resolutionString = String.format(
             scaleFormatString, getScaleFormatStringArgs(series, 0));
     String seriesString = resolutionString.substring(0,
             resolutionString.lastIndexOf('/'));
@@ -1284,18 +1316,18 @@ public class Converter implements Callable<Void> {
       multiscale.put("type", downsampling.getName());
     }
     multiscale.put("metadata", metadata);
-    multiscale.put("version", "0.1");
+    multiscale.put("version", nested ? "0.2" : "0.1");
     multiscales.add(multiscale);
     List<Map<String, String>> datasets = new ArrayList<Map<String, String>>();
     for (int r = 0; r < resolutions; r++) {
-      resolutionString = "/" +  String.format(
+      resolutionString = String.format(
               scaleFormatString, getScaleFormatStringArgs(series, r));
       String lastPath = resolutionString.substring(
               resolutionString.lastIndexOf('/') + 1);
       datasets.add(Collections.singletonMap("path", lastPath));
     }
     multiscale.put("datasets", datasets);
-    ZarrGroup subGroup = root.createSubGroup(seriesString);
+    ZarrGroup subGroup = ZarrGroup.create(getRootPath().resolve(seriesString));
     Map<String, Object> attributes = new HashMap<String, Object>();
     attributes.put("multiscales", multiscales);
     subGroup.writeAttributes(attributes);
@@ -1525,9 +1557,7 @@ public class Converter implements Callable<Void> {
   }
 
   private void checkOutputPaths() {
-    if ((!pyramidName.equals("data.zarr")) ||
-          !scaleFormatString.equals("%d/%d"))
-    {
+    if (pyramidName != null || !scaleFormatString.equals("%d/%d")) {
       LOGGER.info("Output will be incompatible with raw2ometiff " +
               "(pyramidName: {}, scaleFormatString: {})",
               pyramidName, scaleFormatString);
