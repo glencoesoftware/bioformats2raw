@@ -217,9 +217,9 @@ public class Converter implements Callable<Void> {
   };
 
   @Option(
-          names = "--nested", negatable=true,
+          names = "--no-nested", negatable=true,
           description = "Whether to use '/' as the chunk path seprator " +
-                  "(false by default)"
+                  "(true by default)"
   )
   private volatile boolean nested = true;
 
