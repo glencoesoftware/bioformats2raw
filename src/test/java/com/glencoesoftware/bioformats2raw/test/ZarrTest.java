@@ -776,7 +776,7 @@ public class ZarrTest {
    * The output should not be compliant with OME Zarr HCS.
    */
   @Test
-  public void testNoHCSOption() throws IOException {
+  public void testNoHCSOption() throws Exception {
     input = fake(
       "plates", "1", "plateAcqs", "1",
       "plateRows", "2", "plateCols", "3", "fields", "2");
@@ -789,6 +789,10 @@ public class ZarrTest {
     assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getShape());
     assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getChunks());
     assertEquals(12, z.getGroupKeys().size());
+
+    // Check OME metadata
+    OME ome = getOMEMetadata();
+    assertEquals(0, ome.sizeOfPlateList());
   }
 
   /**
@@ -796,7 +800,7 @@ public class ZarrTest {
    * The output should be compliant with OME Zarr HCS.
    */
   @Test
-  public void testHCSMetadata() throws IOException {
+  public void testHCSMetadata() throws Exception {
     input = fake(
       "plates", "1", "plateAcqs", "1",
       "plateRows", "2", "plateCols", "3", "fields", "2");
@@ -847,6 +851,10 @@ public class ZarrTest {
         checkWell(wellGroup, fieldCount);
       }
     }
+
+    // check OME metadata
+    OME ome = getOMEMetadata();
+    assertEquals(1, ome.sizeOfPlateList());
   }
 
   /**
@@ -1001,11 +1009,7 @@ public class ZarrTest {
     input = fake("sizeC", "3", "rgb", "3");
     assertTool();
 
-    Path xml = output.resolve("OME").resolve("METADATA.ome.xml");
-    ServiceFactory sf = new ServiceFactory();
-    OMEXMLService xmlService = sf.getInstance(OMEXMLService.class);
-    OME ome = (OME) xmlService.createOMEXMLRoot(
-        new String(Files.readAllBytes(xml), StandardCharsets.UTF_8));
+    OME ome = getOMEMetadata();
     assertEquals(1, ome.sizeOfImageList());
     Pixels pixels = ome.getImage(0).getPixels();
     assertEquals(3, pixels.sizeOfChannelList());
@@ -1096,4 +1100,11 @@ public class ZarrTest {
     }
   }
 
+  private OME getOMEMetadata() throws Exception {
+    Path xml = output.resolve("OME").resolve("METADATA.ome.xml");
+    ServiceFactory sf = new ServiceFactory();
+    OMEXMLService xmlService = sf.getInstance(OMEXMLService.class);
+    return (OME) xmlService.createOMEXMLRoot(
+      new String(Files.readAllBytes(xml), StandardCharsets.UTF_8));
+  }
 }

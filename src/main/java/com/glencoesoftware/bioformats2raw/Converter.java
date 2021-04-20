@@ -477,6 +477,14 @@ public class Converter implements Callable<Void> {
         if (!noHCS) {
           noHCS = meta.getPlateCount() == 0;
         }
+        else {
+          ((OMEXMLMetadata) meta).resolveReferences();
+          OMEXMLMetadataRoot root = (OMEXMLMetadataRoot) meta.getRoot();
+          for (int i=0; i<meta.getPlateCount(); i++) {
+            root.removePlate(root.getPlate(0));
+          }
+          meta.setRoot(root);
+        }
 
         if (seriesList.size() > 0) {
           ((OMEXMLMetadata) meta).resolveReferences();
