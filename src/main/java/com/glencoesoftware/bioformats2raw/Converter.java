@@ -16,6 +16,7 @@ import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -35,8 +36,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 import com.amazonaws.services.s3.model.AmazonS3Exception;
-import com.google.common.collect.ImmutableMap;
-import com.upplication.s3fs.AmazonS3Factory;
 import loci.common.Constants;
 import loci.common.DataTools;
 import loci.common.image.IImageScaler;
@@ -123,15 +122,12 @@ public class Converter implements Callable<Void> {
   @Parameters(
     index = "1",
     arity = "1",
-    description = "path to the output pyramid directory"
+    description = "path or uri to the output pyramid directory"
   )
-  private volatile Path outputPath;
+  private volatile String outputLocation;
 
-  @Option(
-          names = {"--remote"},
-          description = "remote location for saving the data"
-  )
-  private volatile String remote;
+  @Option(names = "--output-options", split = "\\|")
+  private Map<String, String> outputOptions;
 
   @Option(
     names = {"-r", "--resolutions"},
@@ -363,6 +359,8 @@ public class Converter implements Callable<Void> {
 
   private List<HCSIndex> hcsIndexes = new ArrayList<HCSIndex>();
 
+  private volatile Path outputPath;
+
   @Override
   public Void call() throws Exception {
     if (printVersion) {
@@ -384,32 +382,50 @@ public class Converter implements Callable<Void> {
         LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
     root.setLevel(Level.toLevel(logLevel));
 
-    if (remote != null) {
+    if (outputLocation.contains("://")) {
 
-      LOGGER.warn("*** experimental remote support ***");
-      // FIXME check for existence. support overwrite?
-      int split = remote.lastIndexOf("/");
-      String bucket = remote.substring(split); // include "/"
-      remote = remote.substring(0, split);
-      URI uri = URI.create(remote);
+      LOGGER.info("*** experimental remote support ***");
 
-      // FIXME: too hard-coded.
-      Map<String, String> env = ImmutableMap.<String, String>builder()
-              .put(AmazonS3Factory.PATH_STYLE_ACCESS, "true").build();
-      FileSystem s3fs = FileSystems.newFileSystem(uri, env);
-      outputPath = s3fs.getPath(bucket, outputPath.toString());
+      URI uri = URI.create(outputLocation);
+      // URI endpoint = new URI(uri.getScheme(), uri.getUserInfo(), uri.getAuthority());
+      URI endpoint = new URI(uri.getScheme(), uri.getUserInfo(), uri.getHost(), uri.getPort(), "", "", "");
+      String path = uri.getRawPath().substring(1); // drop initial "/"
+      int first = path.indexOf("/");
+      String bucket = "/" + path.substring(0, first);
+      String rest = path.substring(first + 1);
 
-    }
-    else if (Files.exists(outputPath)) {
-      if (!overwrite) {
+      // FIXME: remove. May need different behavior when PATH_STYLE_ACCESS is not set.
+      //Map<String, String> env = ImmutableMap.<String, String>builder()
+      //        .put(AmazonS3Factory.PATH_STYLE_ACCESS, "true") // s3fs_path_style_access
+      //        .put(AmazonS3Factory.PROTOCOL, "HTTP") // s3fs_protocol
+      //        .build();
+
+      LOGGER.warn("endpoint: {}", endpoint);
+      LOGGER.warn("bucket: {}", bucket);
+      LOGGER.warn("path: {}", rest);
+      LOGGER.warn("opts: {}", outputOptions);
+
+      FileSystem fs = FileSystems.newFileSystem(endpoint, outputOptions);
+      outputPath = fs.getPath(bucket, rest);
+      if (Files.exists(outputPath)) {
         throw new IllegalArgumentException(
-          "Output path " + outputPath + " already exists");
+                "Output path " + outputPath + " already exists");
       }
-      LOGGER.warn("Overwriting output path {}", outputPath);
-      Files.walk(outputPath)
-          .sorted(Comparator.reverseOrder())
-          .map(Path::toFile)
-          .forEach(File::delete);
+    }
+    else {
+      outputPath = Paths.get(outputLocation);
+
+      if (Files.exists(outputPath)) {
+        if (!overwrite) {
+          throw new IllegalArgumentException(
+                  "Output path " + outputPath + " already exists");
+        }
+        LOGGER.warn("Overwriting output path {}", outputPath);
+        Files.walk(outputPath)
+                .sorted(Comparator.reverseOrder())
+                .map(Path::toFile)
+                .forEach(File::delete);
+      }
     }
 
     readers = new ArrayBlockingQueue<IFormatReader>(maxWorkers);
@@ -566,6 +582,7 @@ public class Converter implements Callable<Void> {
         boolean exists = false;
         try {
           exists = Files.exists(metadataPath);
+
           if (!exists) {
             Files.createDirectories(metadataPath);
           }
