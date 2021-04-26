@@ -387,23 +387,17 @@ public class Converter implements Callable<Void> {
       LOGGER.info("*** experimental remote support ***");
 
       URI uri = URI.create(outputLocation);
-      // URI endpoint = new URI(uri.getScheme(), uri.getUserInfo(), uri.getAuthority());
-      URI endpoint = new URI(uri.getScheme(), uri.getUserInfo(), uri.getHost(), uri.getPort(), "", "", "");
+      URI endpoint = new URI(uri.getScheme(), uri.getUserInfo(), uri.getHost(),
+              uri.getPort(), "", "", "");
       String path = uri.getRawPath().substring(1); // drop initial "/"
       int first = path.indexOf("/");
       String bucket = "/" + path.substring(0, first);
       String rest = path.substring(first + 1);
 
-      // FIXME: remove. May need different behavior when PATH_STYLE_ACCESS is not set.
-      //Map<String, String> env = ImmutableMap.<String, String>builder()
-      //        .put(AmazonS3Factory.PATH_STYLE_ACCESS, "true") // s3fs_path_style_access
-      //        .put(AmazonS3Factory.PROTOCOL, "HTTP") // s3fs_protocol
-      //        .build();
-
-      LOGGER.warn("endpoint: {}", endpoint);
-      LOGGER.warn("bucket: {}", bucket);
-      LOGGER.warn("path: {}", rest);
-      LOGGER.warn("opts: {}", outputOptions);
+      LOGGER.debug("endpoint: {}", endpoint);
+      LOGGER.debug("bucket: {}", bucket);
+      LOGGER.debug("path: {}", rest);
+      LOGGER.debug("opts: {}", outputOptions);
 
       FileSystem fs = FileSystems.newFileSystem(endpoint, outputOptions);
       outputPath = fs.getPath(bucket, rest);
