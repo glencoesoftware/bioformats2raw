@@ -10,6 +10,7 @@ package com.glencoesoftware.bioformats2raw.test;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -24,6 +25,8 @@ import java.util.stream.Stream;
 import com.bc.zarr.DataType;
 import com.bc.zarr.ZarrArray;
 import com.bc.zarr.ZarrGroup;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.glencoesoftware.bioformats2raw.Converter;
 import com.glencoesoftware.bioformats2raw.Downsampling;
 import loci.common.LogbackTools;
@@ -32,6 +35,8 @@ import loci.formats.FormatTools;
 import loci.formats.in.FakeReader;
 import loci.formats.ome.OMEXMLMetadata;
 import loci.formats.services.OMEXMLService;
+import ome.xml.model.OME;
+import ome.xml.model.Pixels;
 import picocli.CommandLine;
 import picocli.CommandLine.ExecutionException;
 
@@ -40,6 +45,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -47,6 +54,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.opencv.core.Core;
 
 public class ZarrTest {
@@ -83,8 +91,8 @@ public class ZarrTest {
     try {
       converter = new Converter();
       CommandLine.call(converter, args.toArray(new String[]{}));
-      assertTrue(Files.exists(output.resolve("data.zarr")));
-      assertTrue(Files.exists(output.resolve("METADATA.ome.xml")));
+      assertTrue(Files.exists(
+        output.resolve("OME").resolve("METADATA.ome.xml")));
     }
     catch (RuntimeException rt) {
       throw rt;
@@ -198,24 +206,30 @@ public class ZarrTest {
         "--scale-format-string", "%3$s/%4$s/%1$s/%2$s",
         "--additional-scale-format-string-args", csv.toString()
     );
-    Path root = output.resolve("data.zarr");
-    ZarrGroup series0 = ZarrGroup.open(root.resolve("abc/888/0").toString());
+    ZarrGroup series0 = ZarrGroup.open(output.resolve("abc/888/0").toString());
     series0.openArray("0");
-    series0 = ZarrGroup.open(root.resolve("ghi/999/1").toString());
+    series0 = ZarrGroup.open(output.resolve("ghi/999/1").toString());
     series0.openArray("0");
   }
 
   /**
-   * Test a fake file conversion and ensure the layout is set.
+   * Test a fake file conversion and ensure the layout is set and that the
+   * output is nested.
    */
   @Test
-  public void testDefaultLayoutIsSet() throws Exception {
+  public void testDefaultLayoutIsSetAndIsNested() throws Exception {
     input = fake();
     assertTool();
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
     Integer layout = (Integer)
         z.getAttributes().get("bioformats2raw.layout");
+    ZarrArray series0 = ZarrGroup.open(output.resolve("0")).openArray("0");
+    assertTrue(series0.getNested());
+    // Also ensure we're using the latest .zarray metadata
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode root = objectMapper.readTree(
+        output.resolve("0/0/.zarray").toFile());
+    assertEquals("/", root.path("dimension_separator").asText());
     assertEquals(Converter.LAYOUT, layout);
   }
 
@@ -227,12 +241,12 @@ public class ZarrTest {
     input = fake();
     assertTool();
     ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").resolve("0").toString());
+        ZarrGroup.open(output.resolve("0").toString());
     List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
             z.getAttributes().get("multiscales");
     assertEquals(1, multiscales.size());
     Map<String, Object> multiscale = multiscales.get(0);
-    assertEquals("0.1", multiscale.get("version"));
+    assertEquals("0.2", multiscale.get("version"));
     List<Map<String, Object>> datasets =
             (List<Map<String, Object>>) multiscale.get("datasets");
     assertTrue(datasets.size() > 0);
@@ -246,10 +260,9 @@ public class ZarrTest {
   public void testXYCZTDimensionOrder() throws Exception {
     input = fake("sizeC", "2", "dimOrder", "XYCZT");
     assertTool();
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
     ZarrArray array = z.openArray("0/0");
-    assertArrayEquals(new int[] {1, 1, 2, 512, 512}, array.getShape());
+    assertArrayEquals(new int[] {1, 2, 1, 512, 512}, array.getShape());
   }
 
   /**
@@ -259,8 +272,19 @@ public class ZarrTest {
   public void testSetXYCZTDimensionOrder() throws Exception {
     input = fake("sizeC", "2");
     assertTool("--dimension-order", "XYCZT");
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
+    ZarrArray array = z.openArray("0/0");
+    assertArrayEquals(new int[] {1, 1, 2, 512, 512}, array.getShape());
+  }
+
+  /**
+   * Test setting original (source file) dimension order.
+   */
+  @Test
+  public void testSetOriginalDimensionOrder() throws Exception {
+    input = fake("sizeC", "2", "dimOrder", "XYCZT");
+    assertTool("--dimension-order", "original");
+    ZarrGroup z = ZarrGroup.open(output.toString());
     ZarrArray array = z.openArray("0/0");
     assertArrayEquals(new int[] {1, 1, 2, 512, 512}, array.getShape());
   }
@@ -272,8 +296,7 @@ public class ZarrTest {
   public void testSetSmallerDefault() throws Exception {
     input = fake();
     assertTool("-h", "128", "-w", "128");
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
     ZarrArray array = z.openArray("0/0");
     assertArrayEquals(new int[] {1, 1, 1, 512, 512}, array.getShape());
     assertArrayEquals(new int[] {1, 1, 1, 128, 128}, array.getChunks());
@@ -287,8 +310,7 @@ public class ZarrTest {
   public void testSetSmallerDefaultWithRemainder() throws Exception {
     input = fake();
     assertTool("-h", "384", "-w", "384");
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
     ZarrArray array = z.openArray("0/0");
     assertArrayEquals(new int[] {1, 1, 1, 512, 512}, array.getShape());
     assertArrayEquals(new int[] {1, 1, 1, 384, 384}, array.getChunks());
@@ -301,8 +323,7 @@ public class ZarrTest {
   public void testMultiSeries() throws Exception {
     input = fake("series", "2");
     assertTool();
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
 
     // Check series 0 dimensions and special pixels
     ZarrArray series0 = z.openArray("0/0");
@@ -324,14 +345,101 @@ public class ZarrTest {
   }
 
   /**
+   * Test single beginning -series conversion.
+   */
+  @Test
+  public void testSingleBeginningSeries() throws Exception {
+    input = fake("series", "2");
+    assertTool("-s", "0");
+    ZarrGroup z = ZarrGroup.open(output.toString());
+
+    // Check series 0 dimensions and special pixels
+    ZarrArray series0 = z.openArray("0/0");
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getShape());
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getChunks());
+    int[] shape = new int[] {1, 1, 1, 512, 512};
+    byte[] tile = new byte[512 * 512];
+    series0.read(tile, shape);
+    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
+    assertArrayEquals(new int[] {0, 0, 0, 0, 0}, seriesPlaneNumberZCT);
+    try {
+      z.openArray("1/0");
+      fail("Array exists!");
+    }
+    catch (IOException e) {
+      // Pass
+    }
+  }
+
+  /**
+   * Test single end series conversion.
+   */
+  @Test
+  public void testSingleEndSeries() throws Exception {
+    input = fake("series", "2");
+    assertTool("-s", "1");
+    ZarrGroup z = ZarrGroup.open(output.toString());
+
+    // Check series 1 dimensions and special pixels
+    ZarrArray series0 = z.openArray("0/0");
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getShape());
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getChunks());
+    int[] shape = new int[] {1, 1, 1, 512, 512};
+    byte[] tile = new byte[512 * 512];
+    series0.read(tile, shape);
+    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
+    assertArrayEquals(new int[] {1, 0, 0, 0, 0}, seriesPlaneNumberZCT);
+    try {
+      z.openArray("1/0");
+      fail("Array exists!");
+    }
+    catch (IOException e) {
+      // Pass
+    }
+  }
+
+  /**
+   * Test single middle series conversion.
+   */
+  @Test
+  public void testSingleMiddleSeries() throws Exception {
+    input = fake("series", "3");
+    assertTool("-s", "1");
+    ZarrGroup z = ZarrGroup.open(output.toString());
+
+    // Check series 1 dimensions and special pixels
+    ZarrArray series0 = z.openArray("0/0");
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getShape());
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getChunks());
+    int[] shape = new int[] {1, 1, 1, 512, 512};
+    byte[] tile = new byte[512 * 512];
+    series0.read(tile, shape);
+    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
+    assertArrayEquals(new int[] {1, 0, 0, 0, 0}, seriesPlaneNumberZCT);
+    try {
+      z.openArray("1/0");
+      fail("Array exists!");
+    }
+    catch (IOException e) {
+      // Pass
+    }
+    try {
+      z.openArray("2/0");
+      fail("Array exists!");
+    }
+    catch (IOException e) {
+      // Pass
+    }
+  }
+
+  /**
    * Test more than one Z-section.
    */
   @Test
   public void testMultiZ() throws Exception {
     input = fake("sizeZ", "2");
     assertTool();
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
 
     // Check dimensions and block size
     ZarrArray series0 = z.openArray("0/0");
@@ -358,8 +466,7 @@ public class ZarrTest {
   public void testMultiC() throws Exception {
     input = fake("sizeC", "2");
     assertTool();
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
 
     // Check dimensions and block size
     ZarrArray series0 = z.openArray("0/0");
@@ -386,8 +493,7 @@ public class ZarrTest {
   public void testMultiT() throws Exception {
     input = fake("sizeT", "2");
     assertTool();
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
 
     // Check dimensions and block size
     ZarrArray series0 = z.openArray("0/0");
@@ -438,8 +544,7 @@ public class ZarrTest {
   public void testPixelType(String type, DataType dataType) throws Exception {
     input = fake("pixelType", type);
     assertTool();
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
 
     // Check series dimensions and special pixels
     ZarrArray series0 = z.openArray("0/0");
@@ -494,7 +599,7 @@ public class ZarrTest {
   }
 
   /**
-   * @return pairs of pixel type strings and N5 data types
+   * @return pairs of pixel type strings and Zarr data types
    */
   static Stream<Arguments> getPixelTypes() {
     return Stream.of(
@@ -513,8 +618,7 @@ public class ZarrTest {
   public void testDownsampleEdgeEffectsUInt8() throws Exception {
     input = fake("sizeX", "60", "sizeY", "300");
     assertTool("-w", "25", "-h", "75");
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
 
     // Check series dimensions
     ZarrArray series1 = z.openArray("0/1");
@@ -537,21 +641,33 @@ public class ZarrTest {
   public void testDownsampleEdgeEffectsUInt16() throws Exception {
     input = fake("sizeX", "60", "sizeY", "300", "pixelType", "uint16");
     assertTool("-w", "25", "-h", "75");
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").toString());
+    ZarrGroup z = ZarrGroup.open(output.toString());
+
+    ZarrArray series0 = z.openArray("0/0");
+    assertEquals(DataType.u2, series0.getDataType());
+    assertArrayEquals(new int[] {1, 1, 1, 300, 60}, series0.getShape());
+    int[] shape = new int[] {1, 1, 1, 10, 10};
+    int[] offset = new int[] {0, 0, 0, 290, 0};
+    short[] tile = new short[10 * 10];
+    series0.read(tile, shape, offset);
+    for (int y=0; y<10; y++) {
+      for (int x=0; x<10; x++) {
+        assertEquals(x, tile[y * 10 + x]);
+      }
+    }
 
     // Check series dimensions
     ZarrArray series1 = z.openArray("0/1");
     assertEquals(DataType.u2, series1.getDataType());
     assertArrayEquals(new int[] {1, 1, 1, 150, 30}, series1.getShape());
     assertArrayEquals(new int[] {1, 1, 1, 75, 25}, series1.getChunks());
-    int[] shape = new int[] {1, 1, 1, 75, 5};
-    int[] offset = new int[] {0, 0, 0, 75, 25};
-    short[] tile = new short[75 * 5];
+    shape = new int[] {1, 1, 1, 75, 5};
+    offset = new int[] {0, 0, 0, 75, 25};
+    tile = new short[75 * 5];
     series1.read(tile, shape, offset);
     // Last row first pixel should be the 2x2 downsampled value;
     // test will break if the downsampling algorithm changes
-    assertEquals(12800, tile[75 * 4]);
+    assertEquals(50, tile[75 * 4]);
   }
 
   /**
@@ -565,7 +681,7 @@ public class ZarrTest {
 
     input = fake(null, null, originalMetadata);
     assertTool();
-    Path omexml = output.resolve("METADATA.ome.xml");
+    Path omexml = output.resolve("OME").resolve("METADATA.ome.xml");
     StringBuilder xml = new StringBuilder();
     Files.lines(omexml).forEach(v -> xml.append(v));
 
@@ -615,13 +731,12 @@ public class ZarrTest {
     input = fake();
     assertTool("--downsample-type", type.toString());
 
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("data.zarr").resolve("0").toString());
+    ZarrGroup z = ZarrGroup.open(output.resolve("0").toString());
     List<Map<String, Object>> multiscales =
           (List<Map<String, Object>>) z.getAttributes().get("multiscales");
     assertEquals(1, multiscales.size());
     Map<String, Object> multiscale = multiscales.get(0);
-    assertEquals("0.1", multiscale.get("version"));
+    assertEquals("0.2", multiscale.get("version"));
 
     Map<String, String> metadata =
       (Map<String, String>) multiscale.get("metadata");
@@ -644,4 +759,352 @@ public class ZarrTest {
     }
   }
 
+  /**
+   * Test that nested storage works equivalently.
+   *
+   * @param nested whether to use "/" or "." as the chunk separator.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testNestedStorage(boolean nested) throws IOException {
+    input = fake();
+    assertTool(nested ? "--nested" : "--no-nested");
+  }
+
+  /**
+   * Convert a plate with the --no-hcs option.
+   * The output should not be compliant with OME Zarr HCS.
+   */
+  @Test
+  public void testNoHCSOption() throws Exception {
+    input = fake(
+      "plates", "1", "plateAcqs", "1",
+      "plateRows", "2", "plateCols", "3", "fields", "2");
+    assertTool("--no-hcs");
+
+    ZarrGroup z = ZarrGroup.open(output);
+
+    // Check dimensions and block size
+    ZarrArray series0 = z.openArray("0/0");
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getShape());
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getChunks());
+    assertEquals(12, z.getGroupKeys().size());
+
+    // Check OME metadata
+    OME ome = getOMEMetadata();
+    assertEquals(0, ome.sizeOfPlateList());
+  }
+
+  /**
+   * Convert a plate with default options.
+   * The output should be compliant with OME Zarr HCS.
+   */
+  @Test
+  public void testHCSMetadata() throws Exception {
+    input = fake(
+      "plates", "1", "plateAcqs", "1",
+      "plateRows", "2", "plateCols", "3", "fields", "2");
+    assertTool();
+
+    ZarrGroup z = ZarrGroup.open(output);
+
+    int rowCount = 2;
+    int colCount = 3;
+    int fieldCount = 2;
+    checkPlateGroupLayout(output, rowCount, colCount, fieldCount, 512, 512);
+
+    // check plate/well level metadata
+    Map<String, Object> plate =
+        (Map<String, Object>) z.getAttributes().get("plate");
+    assertEquals(fieldCount, ((Number) plate.get("field_count")).intValue());
+
+    List<Map<String, Object>> acquisitions =
+      (List<Map<String, Object>>) plate.get("acquisitions");
+    List<Map<String, Object>> rows =
+      (List<Map<String, Object>>) plate.get("rows");
+    List<Map<String, Object>> columns =
+      (List<Map<String, Object>>) plate.get("columns");
+    List<Map<String, Object>> wells =
+      (List<Map<String, Object>>) plate.get("wells");
+
+    assertEquals(1, acquisitions.size());
+    assertEquals("0", acquisitions.get(0).get("id"));
+
+    checkDimension(rows, rowCount);
+    checkDimension(columns, colCount);
+
+    assertEquals(rows.size() * columns.size(), wells.size());
+    for (int row=0; row<rows.size(); row++) {
+      for (int col=0; col<columns.size(); col++) {
+        int well = row * columns.size() + col;
+        assertEquals(row + "/" + col, wells.get(well).get("path"));
+      }
+    }
+
+    // check well metadata
+    for (Map<String, Object> row : rows) {
+      String rowName = (String) row.get("name");
+      for (Map<String, Object> column : columns) {
+        String columnName = (String) column.get("name");
+        ZarrGroup wellGroup = ZarrGroup.open(
+            output.resolve(rowName).resolve(columnName));
+        checkWell(wellGroup, fieldCount);
+      }
+    }
+
+    // check OME metadata
+    OME ome = getOMEMetadata();
+    assertEquals(1, ome.sizeOfPlateList());
+  }
+
+  /**
+   * 96 well plate with only well E6.
+   */
+  @Test
+  public void testSingleWell() throws IOException {
+    input = getTestFile("E6-only.ome.xml");
+    assertTool();
+
+    ZarrGroup z = ZarrGroup.open(output);
+
+    int rowCount = 8;
+    int colCount = 12;
+    int fieldCount = 1;
+
+    // check plate/well level metadata
+    Map<String, Object> plate =
+        (Map<String, Object>) z.getAttributes().get("plate");
+    assertEquals(fieldCount, ((Number) plate.get("field_count")).intValue());
+
+    List<Map<String, Object>> acquisitions =
+      (List<Map<String, Object>>) plate.get("acquisitions");
+    List<Map<String, Object>> rows =
+      (List<Map<String, Object>>) plate.get("rows");
+    List<Map<String, Object>> columns =
+      (List<Map<String, Object>>) plate.get("columns");
+    List<Map<String, Object>> wells =
+      (List<Map<String, Object>>) plate.get("wells");
+
+    assertEquals(1, acquisitions.size());
+    assertEquals("0", acquisitions.get(0).get("id"));
+
+    checkDimension(rows, rowCount);
+    checkDimension(columns, colCount);
+
+    assertEquals(1, wells.size());
+    Map<String, Object> well = wells.get(0);
+    String wellPath = (String) well.get("path");
+    assertEquals("4/5", wellPath);
+    assertEquals(4, ((Number) well.get("row_index")).intValue());
+    assertEquals(5, ((Number) well.get("column_index")).intValue());
+
+    // check well metadata
+    ZarrGroup wellGroup = ZarrGroup.open(output.resolve(wellPath));
+    checkWell(wellGroup, fieldCount);
+  }
+
+  /**
+   * 96 well plate with only wells C4 and H2.
+   */
+  @Test
+  public void testTwoWells() throws IOException {
+    input = getTestFile("C4-H2-only.ome.xml");
+    assertTool();
+
+    ZarrGroup z = ZarrGroup.open(output);
+
+    int rowCount = 8;
+    int colCount = 12;
+    int fieldCount = 1;
+
+    // check plate/well level metadata
+    Map<String, Object> plate =
+        (Map<String, Object>) z.getAttributes().get("plate");
+    assertEquals(fieldCount, ((Number) plate.get("field_count")).intValue());
+
+    List<Map<String, Object>> acquisitions =
+      (List<Map<String, Object>>) plate.get("acquisitions");
+    List<Map<String, Object>> rows =
+      (List<Map<String, Object>>) plate.get("rows");
+    List<Map<String, Object>> columns =
+      (List<Map<String, Object>>) plate.get("columns");
+    List<Map<String, Object>> wells =
+      (List<Map<String, Object>>) plate.get("wells");
+
+    assertEquals(1, acquisitions.size());
+    assertEquals("0", acquisitions.get(0).get("id"));
+
+    checkDimension(rows, rowCount);
+    checkDimension(columns, colCount);
+
+    assertEquals(2, wells.size());
+    Map<String, Object> well = wells.get(0);
+    String wellPath = (String) well.get("path");
+    assertEquals("2/3", wellPath);
+    assertEquals(2, ((Number) well.get("row_index")).intValue());
+    assertEquals(3, ((Number) well.get("column_index")).intValue());
+    ZarrGroup wellGroup = ZarrGroup.open(output.resolve(wellPath));
+    checkWell(wellGroup, fieldCount);
+
+    well = wells.get(1);
+    wellPath = (String) well.get("path");
+    assertEquals("7/1", wellPath);
+    assertEquals(7, ((Number) well.get("row_index")).intValue());
+    assertEquals(1, ((Number) well.get("column_index")).intValue());
+    wellGroup = ZarrGroup.open(output.resolve(wellPath));
+    checkWell(wellGroup, fieldCount);
+  }
+
+  /**
+   * 96 well plate with all wells in row F.
+   */
+  @Test
+  public void testOnePlateRow() throws IOException {
+    input = getTestFile("row-F-only.ome.xml");
+    assertTool();
+
+    ZarrGroup z = ZarrGroup.open(output);
+
+    int rowCount = 8;
+    int colCount = 12;
+    int fieldCount = 1;
+
+    // check plate/well level metadata
+    Map<String, Object> plate =
+        (Map<String, Object>) z.getAttributes().get("plate");
+    assertEquals(fieldCount, ((Number) plate.get("field_count")).intValue());
+
+    List<Map<String, Object>> acquisitions =
+      (List<Map<String, Object>>) plate.get("acquisitions");
+    List<Map<String, Object>> rows =
+      (List<Map<String, Object>>) plate.get("rows");
+    List<Map<String, Object>> columns =
+      (List<Map<String, Object>>) plate.get("columns");
+    List<Map<String, Object>> wells =
+      (List<Map<String, Object>>) plate.get("wells");
+
+    assertEquals(1, acquisitions.size());
+    assertEquals("0", acquisitions.get(0).get("id"));
+
+    checkDimension(rows, rowCount);
+    checkDimension(columns, colCount);
+
+    assertEquals(colCount, wells.size());
+    for (int col=0; col<wells.size(); col++) {
+      Map<String, Object> well = wells.get(col);
+      String wellPath = (String) well.get("path");
+      assertEquals("5/" + col, wellPath);
+      assertEquals(5, ((Number) well.get("row_index")).intValue());
+      assertEquals(col, ((Number) well.get("column_index")).intValue());
+      ZarrGroup wellGroup = ZarrGroup.open(output.resolve(wellPath));
+      checkWell(wellGroup, fieldCount);
+    }
+  }
+
+  /**
+   * Convert an RGB image.  Ensure that the Channels are correctly split.
+   */
+  @Test
+  public void testRGBChannelSeparator() throws Exception {
+    input = fake("sizeC", "3", "rgb", "3");
+    assertTool();
+
+    OME ome = getOMEMetadata();
+    assertEquals(1, ome.sizeOfImageList());
+    Pixels pixels = ome.getImage(0).getPixels();
+    assertEquals(3, pixels.sizeOfChannelList());
+  }
+
+  /**
+   * Check that a root group and attributes are created and populated.
+   */
+  @Test
+  public void testRootGroup() throws Exception {
+    input = fake();
+    assertTool();
+
+    assertTrue(Files.exists(output.resolve(".zattrs")));
+    assertTrue(Files.exists(output.resolve(".zgroup")));
+  }
+
+  /**
+   * Convert with the --no-root-group option.  Conversion should succeed but
+   * no root group or attributes should be created or populated.
+   */
+  @Test
+  public void testNoRootGroupOption() throws Exception {
+    input = fake();
+    assertTool("--no-root-group");
+
+    assertTrue(!Files.exists(output.resolve(".zattrs")));
+    assertTrue(!Files.exists(output.resolve(".zgroup")));
+  }
+
+  private void checkPlateGroupLayout(Path root, int rowCount, int colCount,
+    int fieldCount, int x, int y)
+    throws IOException
+  {
+    // check valid group layout
+    // OME (OME-XML metadata), .zattrs (Plate), .zgroup (Plate) and rows
+    assertEquals(rowCount + 3, Files.list(root).toArray().length);
+    for (int row=0; row<rowCount; row++) {
+      Path rowPath = root.resolve(Integer.toString(row));
+      // .zgroup (Row) and columns
+      assertEquals(colCount + 1, Files.list(rowPath).toArray().length);
+      for (int col=0; col<colCount; col++) {
+        Path colPath = rowPath.resolve(Integer.toString(col));
+        ZarrGroup colGroup = ZarrGroup.open(colPath);
+        // .zattrs (Column/Image), .zgroup (Column/Image) and fields
+        assertEquals(fieldCount + 2, Files.list(colPath).toArray().length);
+        for (int field=0; field<fieldCount; field++) {
+          // append resolution index
+          ZarrArray series0 = colGroup.openArray(field + "/0");
+          assertArrayEquals(new int[] {1, 1, 1, y, x}, series0.getShape());
+          assertArrayEquals(new int[] {1, 1, 1, y, x}, series0.getChunks());
+        }
+      }
+    }
+  }
+
+  private void checkDimension(List<Map<String, Object>> dims, int dimCount)
+    throws IOException
+  {
+    assertEquals(dimCount, dims.size());
+    for (int dim=0; dim<dims.size(); dim++) {
+      assertEquals(String.valueOf(dim), dims.get(dim).get("name"));
+    }
+  }
+
+  private void checkWell(ZarrGroup wellGroup, int fieldCount)
+    throws IOException
+  {
+    Map<String, Object> well =
+        (Map<String, Object>) wellGroup.getAttributes().get("well");
+    List<Map<String, Object>> images =
+        (List<Map<String, Object>>) well.get("images");
+    assertEquals(fieldCount, images.size());
+
+    for (int i=0; i<fieldCount; i++) {
+      Map<String, Object> field = images.get(i);
+      assertEquals(field.get("path"), String.valueOf(i));
+      assertEquals(0, field.get("acquisition"));
+    }
+  }
+
+  private Path getTestFile(String resourceName) throws IOException {
+    try {
+      return Paths.get(this.getClass().getResource(resourceName).toURI());
+    }
+    catch (Exception e) {
+      throw new IOException(e);
+    }
+  }
+
+  private OME getOMEMetadata() throws Exception {
+    Path xml = output.resolve("OME").resolve("METADATA.ome.xml");
+    ServiceFactory sf = new ServiceFactory();
+    OMEXMLService xmlService = sf.getInstance(OMEXMLService.class);
+    return (OME) xmlService.createOMEXMLRoot(
+      new String(Files.readAllBytes(xml), StandardCharsets.UTF_8));
+  }
 }

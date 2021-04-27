@@ -32,6 +32,7 @@ public class OpenCVTools {
   public static void loadOpenCV() {
     try {
       nu.pattern.OpenCV.loadLocally();
+      return;
     }
     catch (Throwable e) {
       LOGGER.warn("Could not load OpenCV libraries", e);

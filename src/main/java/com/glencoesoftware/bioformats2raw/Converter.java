@@ -11,6 +11,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -32,6 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 import loci.common.Constants;
+import loci.common.DataTools;
 import loci.common.image.IImageScaler;
 import loci.common.image.SimpleImageScaler;
 import loci.common.services.DependencyException;
@@ -49,10 +51,14 @@ import loci.formats.MetadataTools;
 import loci.formats.MissingLibraryException;
 import loci.formats.in.DynamicMetadataOptions;
 import loci.formats.meta.IMetadata;
+import loci.formats.ome.OMEXMLMetadata;
 import loci.formats.services.OMEXMLService;
 import loci.formats.services.OMEXMLServiceImpl;
+import ome.xml.meta.OMEXMLMetadataRoot;
 import ome.xml.model.enums.DimensionOrder;
 import ome.xml.model.enums.EnumerationException;
+import ome.xml.model.enums.PixelType;
+import ome.xml.model.primitives.PositiveInteger;
 
 import org.perf4j.slf4j.Slf4JStopWatch;
 import org.slf4j.Logger;
@@ -70,13 +76,16 @@ import com.univocity.parsers.csv.CsvParser;
 import com.univocity.parsers.csv.CsvParserSettings;
 
 import ch.qos.logback.classic.Level;
+import me.tongfei.progressbar.DelegatingProgressBarConsumer;
+import me.tongfei.progressbar.ProgressBar;
+import me.tongfei.progressbar.ProgressBarBuilder;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 import ucar.ma2.InvalidRangeException;
 
 /**
- * Command line tool for converting whole slide imaging files to N5.
+ * Command line tool for converting whole slide imaging files to Zarr.
  */
 public class Converter implements Callable<Void> {
 
@@ -97,7 +106,7 @@ public class Converter implements Callable<Void> {
   private static final int PYRAMID_SCALE = 2;
 
   /** Version of the bioformats2raw layout. */
-  public static final Integer LAYOUT = 1;
+  public static final Integer LAYOUT = 3;
 
   @Parameters(
     index = "0",
@@ -118,6 +127,14 @@ public class Converter implements Callable<Void> {
     description = "Number of pyramid resolutions to generate"
   )
   private volatile Integer pyramidResolutions;
+
+  @Option(
+    names = {"-s", "--series"},
+    arity = "0..1",
+    split = ",",
+    description = "Comma-separated list of series indexes to convert"
+  )
+  private volatile List<Integer> seriesList = new ArrayList<Integer>();
 
   @Option(
     names = {"-w", "--tile_width"},
@@ -145,7 +162,14 @@ public class Converter implements Callable<Void> {
       "(default: ${DEFAULT-VALUE})",
     fallbackValue = "DEBUG"
   )
-  private volatile String logLevel = "INFO";
+  private volatile String logLevel = "WARN";
+
+  @Option(
+    names = {"-p", "--progress"},
+    description = "Print progress bars during conversion",
+    help = true
+  )
+  private volatile boolean progressBars = false;
 
   @Option(
     names = "--version",
@@ -200,11 +224,18 @@ public class Converter implements Callable<Void> {
   };
 
   @Option(
+          names = "--no-nested", negatable=true,
+          description = "Whether to use '/' as the chunk path seprator " +
+                  "(true by default)"
+  )
+  private volatile boolean nested = true;
+
+  @Option(
           names = "--pyramid-name",
           description = "Name of pyramid (default: ${DEFAULT-VALUE}) " +
                   "[Can break compatibility with raw2ometiff]"
   )
-  private volatile String pyramidName = "data.zarr";
+  private volatile String pyramidName = null;
 
   @Option(
           names = "--scale-format-string",
@@ -235,7 +266,9 @@ public class Converter implements Callable<Void> {
           names = "--dimension-order",
           description = "Override the input file dimension order in the " +
                   "output file [Can break compatibility with raw2ometiff] " +
-                  "(${COMPLETION-CANDIDATES})"
+                  "(${COMPLETION-CANDIDATES})",
+          converter = DimensionOrderConverter.class,
+          defaultValue = "XYZCT"
   )
   private volatile DimensionOrder dimensionOrder;
 
@@ -244,6 +277,13 @@ public class Converter implements Callable<Void> {
           description = "Directory used to store .bfmemo cache files"
   )
   private volatile File memoDirectory;
+
+  @Option(
+          names = "--pixel-type",
+          description = "Pixel type to write if input data is " +
+                  " float or double (${COMPLETION-CANDIDATES})"
+  )
+  private PixelType outputPixelType;
 
   @Option(
           names = "--downsample-type",
@@ -273,6 +313,20 @@ public class Converter implements Callable<Void> {
   )
   private volatile List<String> readerOptions = new ArrayList<String>();
 
+  @Option(
+          names = "--no-hcs",
+          description = "Turn off HCS writing"
+  )
+  private volatile boolean noHCS = false;
+
+  @Option(
+          names = "--no-root-group",
+          description = "Turn off creation of root group and corresponding " +
+                        "metadata [Will break compatibility with raw2ometiff]"
+
+  )
+  private volatile boolean noRootGroup = false;
+
   /** Scaling implementation that will be used during downsampling. */
   private volatile IImageScaler scaler = new SimpleImageScaler();
 
@@ -301,6 +355,8 @@ public class Converter implements Callable<Void> {
 
   /** Current number of tiles processed at the current resolution. */
   private volatile AtomicInteger nTile;
+
+  private List<HCSIndex> hcsIndexes = new ArrayList<HCSIndex>();
 
   @Override
   public Void call() throws Exception {
@@ -408,33 +464,88 @@ public class Converter implements Callable<Void> {
       memoizer.setFlattenedResolutions(false);
       memoizer.setMetadataFiltered(true);
       memoizer.setMetadataStore(createMetadata());
-      memoizer.setId(inputPath.toString());
-      memoizer.setResolution(0);
+      ChannelSeparator separator = new ChannelSeparator(memoizer);
+      separator.setId(inputPath.toString());
+      separator.setResolution(0);
       if (reader instanceof MiraxReader) {
         ((MiraxReader) reader).setTileCache(tileCache);
       }
-      readers.add(new ChannelSeparator(memoizer));
+      readers.add(separator);
     }
 
     // Finally, perform conversion on all series
     try {
-      int seriesCount;
       IFormatReader v = readers.take();
+      IMetadata meta = null;
       try {
-        seriesCount = v.getSeriesCount();
-        IMetadata meta = (IMetadata) v.getMetadataStore();
+        meta = (IMetadata) v.getMetadataStore();
+        ((OMEXMLMetadata) meta).resolveReferences();
+
+        if (!noHCS) {
+          noHCS = meta.getPlateCount() == 0;
+        }
+        else {
+          ((OMEXMLMetadata) meta).resolveReferences();
+          OMEXMLMetadataRoot root = (OMEXMLMetadataRoot) meta.getRoot();
+          for (int i=0; i<meta.getPlateCount(); i++) {
+            root.removePlate(root.getPlate(0));
+          }
+          meta.setRoot(root);
+        }
+
+        if (seriesList.size() > 0) {
+          ((OMEXMLMetadata) meta).resolveReferences();
+          OMEXMLMetadataRoot root = (OMEXMLMetadataRoot) meta.getRoot();
+          int toRemove = meta.getImageCount();
+
+          for (Integer index : seriesList) {
+            if (index >= 0 && index < toRemove) {
+              root.addImage(root.getImage(index));
+            }
+          }
+
+          for (int i=0; i<toRemove; i++) {
+            root.removeImage(root.getImage(0));
+          }
+          meta.setRoot(root);
+        }
+        else {
+          for (int i=0; i<meta.getImageCount(); i++) {
+            seriesList.add(i);
+          }
+        }
 
         for (int s=0; s<meta.getImageCount(); s++) {
           meta.setPixelsBigEndian(true, s);
+
+          if (dimensionOrder != null) {
+            meta.setPixelsDimensionOrder(dimensionOrder, s);
+          }
+
+          PixelType type = meta.getPixelsType(s);
+          int bfType =
+            getRealType(FormatTools.pixelTypeFromString(type.getValue()));
+          String realType = FormatTools.getPixelTypeString(bfType);
+          if (!type.getValue().equals(realType)) {
+            meta.setPixelsType(PixelType.fromString(realType), s);
+            meta.setPixelsSignificantBits(new PositiveInteger(
+              FormatTools.getBytesPerPixel(bfType) * 8), s);
+          }
+
+          if (!noHCS) {
+            HCSIndex index = new HCSIndex(meta, s);
+            hcsIndexes.add(index);
+          }
         }
 
         String xml = getService().getOMEXML(meta);
 
         // write the original OME-XML to a file
-        if (!Files.exists(outputPath)) {
-          Files.createDirectories(outputPath);
+        Path metadataPath = getRootPath().resolve("OME");
+        if (!Files.exists(metadataPath)) {
+          Files.createDirectories(metadataPath);
         }
-        Path omexmlFile = outputPath.resolve(METADATA_FILE);
+        Path omexmlFile = metadataPath.resolve(METADATA_FILE);
         Files.write(omexmlFile, xml.getBytes(Constants.ENCODING));
       }
       catch (ServiceException se) {
@@ -445,15 +556,23 @@ public class Converter implements Callable<Void> {
         readers.put(v);
       }
 
-      for (int i=0; i<seriesCount; i++) {
+      if (!noHCS) {
+        scaleFormatString = "%d/%d/%d/%d";
+      }
+
+      for (Integer index : seriesList) {
         try {
-          write(i);
+          write(index);
         }
         catch (Throwable t) {
-          LOGGER.error("Error while writing series {}", i, t);
+          LOGGER.error("Error while writing series {}", index, t);
           unwrapException(t);
           return;
         }
+      }
+
+      if (meta != null) {
+        saveHCSMetadata(meta);
       }
     }
     finally {
@@ -492,6 +611,21 @@ public class Converter implements Callable<Void> {
   }
 
   /**
+   * Get the root path of the dataset, which will contain Zarr and OME-XML.
+   * By default, this is the specified output directory.
+   * If "--pyramid-name" was used, then this will be the pyramid name
+   * as a subdirectory of the output directory.
+   *
+   * @return directory into which Zarr and OME-XML data is written
+   */
+  private Path getRootPath() {
+    if (pyramidName == null) {
+      return outputPath;
+    }
+    return outputPath.resolve(pyramidName);
+  }
+
+  /**
    * Retrieves the scaled format string arguments, adding additional ones
    * from a provided CSV file.
    * @param series current series to be prepended to the argument list
@@ -505,12 +639,23 @@ public class Converter implements Callable<Void> {
       Integer series, Integer resolution)
   {
     List<Object> args = new ArrayList<Object>();
-    args.add(series);
-    args.add(resolution);
-    if (additionalScaleFormatStringArgs != null) {
-      String[] row = additionalScaleFormatStringArgs.get(series);
-      for (String arg : row) {
-        args.add(arg);
+    if (!noHCS) {
+      HCSIndex index = hcsIndexes.get(series);
+      args.add(index.getWellRowIndex());
+      args.add(index.getWellColumnIndex());
+      args.add(index.getFieldIndex());
+      args.add(resolution);
+    }
+    else {
+      // if a single series is written,
+      // the output series index should always be 0
+      args.add(seriesList.indexOf(series));
+      args.add(resolution);
+      if (additionalScaleFormatStringArgs != null) {
+        String[] row = additionalScaleFormatStringArgs.get(series);
+        for (String arg : row) {
+          args.add(arg);
+        }
       }
     }
     return args.toArray();
@@ -613,43 +758,42 @@ public class Converter implements Callable<Void> {
    * @throws InvalidRangeException
    */
   private static void writeBytes(
-      ZarrArray zArray, int[] shape, int[] offset, byte[] tile)
+      ZarrArray zArray, int[] shape, int[] offset, ByteBuffer tile)
           throws IOException, InvalidRangeException
   {
     int size = IntStream.of(shape).reduce((a, b) -> a * b).orElse(0);
-    ByteBuffer tileAsByteBuffer = ByteBuffer.wrap(tile);
     DataType dataType = zArray.getDataType();
     Slf4JStopWatch t1 = stopWatch();
     try {
       switch (dataType) {
         case i1:
         case u1: {
-          zArray.write(tile, shape, offset);
+          zArray.write(tile.array(), shape, offset);
           break;
         }
         case i2:
         case u2: {
           short[] tileAsShorts = new short[size];
-          tileAsByteBuffer.asShortBuffer().get(tileAsShorts);
+          tile.asShortBuffer().get(tileAsShorts);
           zArray.write(tileAsShorts, shape, offset);
           break;
         }
         case i4:
         case u4: {
           int[] tileAsInts = new int[size];
-          tileAsByteBuffer.asIntBuffer().get(tileAsInts);
+          tile.asIntBuffer().get(tileAsInts);
           zArray.write(tileAsInts, shape, offset);
           break;
         }
         case f4: {
           float[] tileAsFloats = new float[size];
-          tileAsByteBuffer.asFloatBuffer().get(tileAsFloats);
+          tile.asFloatBuffer().get(tileAsFloats);
           zArray.write(tileAsFloats, shape, offset);
           break;
         }
         case f8: {
           double[] tileAsDoubles = new double[size];
-          tileAsByteBuffer.asDoubleBuffer().put(tileAsDoubles);
+          tile.asDoubleBuffer().put(tileAsDoubles);
           zArray.write(tileAsDoubles, shape, offset);
           break;
         }
@@ -672,9 +816,7 @@ public class Converter implements Callable<Void> {
     final String pathName =
         String.format(scaleFormatString,
             getScaleFormatStringArgs(series, resolution - 1));
-    final ZarrGroup root = ZarrGroup.open(outputPath.resolve(pyramidName));
-    final ZarrArray zarr = root.openArray(pathName);
-
+    final ZarrArray zarr = ZarrArray.open(getRootPath().resolve(pathName));
     int[] dimensions = zarr.getShape();
     int[] blockSizes = zarr.getChunks();
     int activeTileWidth = blockSizes[blockSizes.length - 1];
@@ -734,7 +876,9 @@ public class Converter implements Callable<Void> {
     if (resolution == 0) {
       reader = readers.take();
       try {
-        return reader.openBytes(plane, xx, yy, width, height);
+        return changePixelType(
+          reader.openBytes(plane, xx, yy, width, height),
+          reader.getPixelType(), reader.isLittleEndian());
       }
       finally {
         readers.put(reader);
@@ -812,9 +956,10 @@ public class Converter implements Callable<Void> {
     String pathName =
         String.format(scaleFormatString,
             getScaleFormatStringArgs(series, resolution));
-    final ZarrGroup root = ZarrGroup.open(outputPath.resolve(pyramidName));
-    final ZarrArray zarr = root.openArray(pathName);
+    final ZarrArray zarr = ZarrArray.open(getRootPath().resolve(pathName));
     IFormatReader reader = readers.take();
+    boolean littleEndian = reader.isLittleEndian();
+    int bpp = FormatTools.getBytesPerPixel(reader.getPixelType());
     int[] offset;
     try {
       offset = getOffset(
@@ -840,7 +985,12 @@ public class Converter implements Callable<Void> {
       t0.stop();
     }
 
-    writeBytes(zarr, shape, offset, tileAsBytes);
+    ByteBuffer tileBuffer = ByteBuffer.wrap(tileAsBytes);
+    if (resolution == 0 && bpp > 1) {
+      tileBuffer.order(
+        littleEndian ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN);
+    }
+    writeBytes(zarr, shape, offset, tileBuffer);
   }
 
   private void processChunk(
@@ -943,7 +1093,7 @@ public class Converter implements Callable<Void> {
       sizeZ = workingReader.getSizeZ();
       imageCount = workingReader.getImageCount();
       imageCount /= sizeZ;
-      pixelType = workingReader.getPixelType();
+      pixelType = getRealType(workingReader.getPixelType());
     }
     finally {
       readers.put(workingReader);
@@ -956,14 +1106,15 @@ public class Converter implements Callable<Void> {
     );
 
     // fileset level metadata
-    final String pyramidPath = outputPath.resolve(pyramidName).toString();
-    final ZarrGroup root = ZarrGroup.create(pyramidPath);
-    Map<String, Object> attributes = new HashMap<String, Object>();
-    attributes.put("bioformats2raw.layout", LAYOUT);
-    root.writeAttributes(attributes);
+    if (!noRootGroup) {
+      final ZarrGroup root = ZarrGroup.create(getRootPath());
+      Map<String, Object> attributes = new HashMap<String, Object>();
+      attributes.put("bioformats2raw.layout", LAYOUT);
+      root.writeAttributes(attributes);
+    }
 
     // series level metadata
-    setSeriesLevelMetadata(root, series, resolutions);
+    setSeriesLevelMetadata(series, resolutions);
 
     for (int resCounter=0; resCounter<resolutions; resCounter++) {
       final int resolution = resCounter;
@@ -984,12 +1135,12 @@ public class Converter implements Callable<Void> {
       int activeTileHeight = tileHeight;
       int activeChunkDepth = chunkDepth;
       if (scaledWidth < activeTileWidth) {
-        LOGGER.warn("Reducing active tileWidth to {}", scaledWidth);
+        LOGGER.info("Reducing active tileWidth to {}", scaledWidth);
         activeTileWidth = scaledWidth;
       }
 
       if (scaledHeight < activeTileHeight) {
-        LOGGER.warn("Reducing active tileHeight to {}", scaledHeight);
+        LOGGER.info("Reducing active tileHeight to {}", scaledHeight);
         activeTileHeight = scaledHeight;
       }
 
@@ -999,7 +1150,7 @@ public class Converter implements Callable<Void> {
       }
 
       DataType dataType = getZarrType(pixelType);
-      String resolutionString = "/" +  String.format(
+      String resolutionString = String.format(
               scaleFormatString, getScaleFormatStringArgs(series, resolution));
       ArrayParams arrayParams = new ArrayParams()
           .shape(getDimensions(
@@ -1007,9 +1158,10 @@ public class Converter implements Callable<Void> {
           .chunks(new int[] {1, 1, activeChunkDepth, activeTileHeight,
             activeTileWidth})
           .dataType(dataType)
+          .nested(nested)
           .compressor(CompressorFactory.create(
               compressionType.toString(), compressionProperties));
-      root.createArray(resolutionString, arrayParams);
+      ZarrArray.create(getRootPath().resolve(resolutionString), arrayParams);
 
       nTile = new AtomicInteger(0);
       tileCount = (int) Math.ceil((double) scaledWidth / tileWidth)
@@ -1029,6 +1181,27 @@ public class Converter implements Callable<Void> {
       readers.put(workingReader);
       List<CompletableFuture<Void>> futures =
         new ArrayList<CompletableFuture<Void>>();
+  
+      final ProgressBar pb;
+      if (progressBars) {
+        ProgressBarBuilder builder = new ProgressBarBuilder()
+          .setInitialMax(tileCount)
+          .setTaskName(String.format("[%d/%d]", series, resolution));
+
+        if (!(logLevel.equals("OFF") ||
+          logLevel.equals("ERROR") ||
+          logLevel.equals("WARN")))
+        {
+          builder.setConsumer(new DelegatingProgressBarConsumer(LOGGER::trace));
+        }
+
+        pb = builder.build();
+      }
+      else {
+        pb = null;
+      }
+
+      try {
       for (int j=0; j<scaledHeight; j+=tileHeight) {
         final int yy = j;
         int height = (int) Math.min(tileHeight, scaledHeight - yy);
@@ -1048,34 +1221,178 @@ public class Converter implements Callable<Void> {
                   processChunk(series, resolution, plane, xx, yy, zz,
                                width, height, depth);
                   LOGGER.info(
-                      "Successfully processed tile; resolution={} plane={} " +
+                      "Successfully processed chunk; resolution={} plane={} " +
                       "xx={} yy={} zz={} width={} height={} depth={}",
                       resolution, plane, xx, yy, zz, width, height, depth);
                   future.complete(null);
                 }
-                catch (Exception e) {
-                  future.completeExceptionally(e);
+                catch (Throwable t) {
+                  future.completeExceptionally(t);
                   LOGGER.error(
-                    "Failure processing tile; resolution={} plane={} " +
+                    "Failure processing chunk; resolution={} plane={} " +
                     "xx={} yy={} zz={} width={} height={} depth={}",
-                    resolution, plane, xx, yy, zz, width, height, depth, e);
+                    resolution, plane, xx, yy, zz, width, height, depth, t);
+                }
+                finally {
+                  if (pb != null) {
+                    pb.step();
+                  }
                 }
               });
             }
           }
         }
+
+        // Wait until the entire resolution has completed before proceeding to
+        // the next one
+        CompletableFuture.allOf(
+          futures.toArray(new CompletableFuture[futures.size()])).join();
+
+        // TODO: some of these futures may be completelyExceptionally
+        //  and need re-throwing
+
       }
+      finally {
+        if (pb != null) {
+          pb.close();
+        }
+      }
+    }
+  }
 
-      // Wait until the entire resolution has completed before proceeding to
-      // the next one
-      CompletableFuture.allOf(
-        futures.toArray(new CompletableFuture[futures.size()])).join();
-
-      // TODO: some of these futures may be completelyExceptionally
-      //  and need re-throwing
-
+  private void saveHCSMetadata(IMetadata meta) throws IOException {
+    if (noHCS) {
+      return;
     }
 
+    // assumes only one plate defined
+    Path rootPath = getRootPath();
+    ZarrGroup root = ZarrGroup.open(rootPath);
+    int plate = 0;
+    Map<String, Object> plateMap = new HashMap<String, Object>();
+
+    plateMap.put("name", meta.getPlateName(plate));
+
+    List<Map<String, Object>> columns = new ArrayList<Map<String, Object>>();
+    List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+
+    // try to set plate dimensions based upon Plate.Rows/Plate.Columns
+    // if not possible, use well data later on
+    try {
+      for (int r=0; r<meta.getPlateRows(plate).getValue(); r++) {
+        Map<String, Object> row = new HashMap<String, Object>();
+        String rowName = String.valueOf(r);
+        row.put("name", rowName);
+        rows.add(row);
+        root.createSubGroup(rowName);
+      }
+    }
+    catch (NullPointerException e) {
+      // expected when Plate.Rows not set
+    }
+    try {
+      for (int c=0; c<meta.getPlateColumns(plate).getValue(); c++) {
+        Map<String, Object> column = new HashMap<String, Object>();
+        String columnName = String.valueOf(c);
+        column.put("name", columnName);
+        columns.add(column);
+      }
+    }
+    catch (NullPointerException e) {
+      // expected when Plate.Columns not set
+    }
+
+    List<Map<String, Object>> acquisitions =
+      new ArrayList<Map<String, Object>>();
+    for (int pa=0; pa<meta.getPlateAcquisitionCount(plate); pa++) {
+      Map<String, Object> acquisition = new HashMap<String, Object>();
+      acquisition.put("id", String.valueOf(pa));
+      acquisitions.add(acquisition);
+    }
+    plateMap.put("acquisitions", acquisitions);
+
+    List<Map<String, Object>> wells = new ArrayList<Map<String, Object>>();
+    int maxField = Integer.MIN_VALUE;
+    for (HCSIndex index : hcsIndexes) {
+      if (index.getPlateIndex() == plate) {
+        if (index.getFieldIndex() == 0) {
+          String wellPath = index.getWellPath();
+
+          Map<String, Object> well = new HashMap<String, Object>();
+          well.put("path", wellPath);
+
+          List<Map<String, Object>> imageList =
+            new ArrayList<Map<String, Object>>();
+          ZarrGroup wellGroup = root.createSubGroup(wellPath);
+          for (HCSIndex field : hcsIndexes) {
+            if (field.getPlateIndex() == index.getPlateIndex() &&
+              field.getWellRowIndex() == index.getWellRowIndex() &&
+              field.getWellColumnIndex() == index.getWellColumnIndex())
+            {
+              Map<String, Object> image = new HashMap<String, Object>();
+              int plateAcq = field.getPlateAcquisitionIndex();
+              image.put("acquisition", plateAcq);
+              image.put("path", String.valueOf(field.getFieldIndex()));
+              imageList.add(image);
+            }
+          }
+
+          Map<String, Object> wellMap = new HashMap<String, Object>();
+          wellMap.put("images", imageList);
+          Map<String, Object> attributes = wellGroup.getAttributes();
+          attributes.put("well", wellMap);
+          wellGroup.writeAttributes(attributes);
+
+          // make sure the row/column indexes are added to the plate attributes
+          // this is necessary when Plate.Rows or Plate.Columns is not set
+          int column = index.getWellColumnIndex();
+          int row = index.getWellRowIndex();
+
+          int columnIndex = -1;
+          for (int c=0; c<columns.size(); c++) {
+            if (columns.get(c).get("name").equals(String.valueOf(column))) {
+              columnIndex = c;
+              break;
+            }
+          }
+          if (columnIndex < 0) {
+            Map<String, Object> colMap = new HashMap<String, Object>();
+            colMap.put("name", String.valueOf(column));
+            columnIndex = columns.size();
+            columns.add(colMap);
+          }
+
+          int rowIndex = -1;
+          for (int r=0; r<rows.size(); r++) {
+            if (rows.get(r).get("name").equals(String.valueOf(row))) {
+              rowIndex = r;
+              break;
+            }
+          }
+          if (rowIndex < 0) {
+            Map<String, Object> rowMap = new HashMap<String, Object>();
+            rowMap.put("name", String.valueOf(row));
+            rowIndex = rows.size();
+            rows.add(rowMap);
+          }
+
+          well.put("row_index", rowIndex);
+          well.put("column_index", columnIndex);
+          wells.add(well);
+        }
+
+        maxField = (int) Math.max(maxField, index.getFieldIndex());
+      }
+    }
+    plateMap.put("wells", wells);
+    plateMap.put("columns", columns);
+    plateMap.put("rows", rows);
+
+    plateMap.put("field_count", maxField + 1);
+
+    Map<String, Object> attributes = root.getAttributes();
+    attributes.put("plate", plateMap);
+    root.writeAttributes(attributes);
   }
 
   /**
@@ -1083,17 +1400,15 @@ public class Converter implements Callable<Void> {
    * to attach the multiscales metadata to the group containing
    * the pyramids.
    *
-   * @param root Root {@link ZarrGroup}.
    * @param series Series which is currently being written.
    * @param resolutions Total number of resolutions from which
    *                    names will be generated.
    * @throws IOException
    */
-  private void setSeriesLevelMetadata(
-      ZarrGroup root, int series, int resolutions)
-          throws IOException
+  private void setSeriesLevelMetadata(int series, int resolutions)
+      throws IOException
   {
-    String resolutionString = "/" +  String.format(
+    String resolutionString = String.format(
             scaleFormatString, getScaleFormatStringArgs(series, 0));
     String seriesString = resolutionString.substring(0,
             resolutionString.lastIndexOf('/'));
@@ -1114,18 +1429,18 @@ public class Converter implements Callable<Void> {
       multiscale.put("type", downsampling.getName());
     }
     multiscale.put("metadata", metadata);
-    multiscale.put("version", "0.1");
+    multiscale.put("version", nested ? "0.2" : "0.1");
     multiscales.add(multiscale);
     List<Map<String, String>> datasets = new ArrayList<Map<String, String>>();
     for (int r = 0; r < resolutions; r++) {
-      resolutionString = "/" +  String.format(
+      resolutionString = String.format(
               scaleFormatString, getScaleFormatStringArgs(series, r));
       String lastPath = resolutionString.substring(
               resolutionString.lastIndexOf('/') + 1);
       datasets.add(Collections.singletonMap("path", lastPath));
     }
     multiscale.put("datasets", datasets);
-    ZarrGroup subGroup = root.createSubGroup(seriesString);
+    ZarrGroup subGroup = ZarrGroup.create(getRootPath().resolve(seriesString));
     Map<String, Object> attributes = new HashMap<String, Object>();
     attributes.put("multiscales", multiscales);
     subGroup.writeAttributes(attributes);
@@ -1210,6 +1525,121 @@ public class Converter implements Callable<Void> {
   }
 
   /**
+   * Get the actual pixel type to write based upon the given input type
+   * and command line options.  Input and output pixel types are Bio-Formats
+   * types as defined in FormatTools.
+   *
+   * Changing the pixel type during export is only supported when the input
+   * type is float or double.
+   *
+   * @param srcPixelType pixel type of the input data
+   * @return pixel type of the output data
+   */
+  private int getRealType(int srcPixelType) {
+    if (outputPixelType == null) {
+      return srcPixelType;
+    }
+    int bfPixelType =
+      FormatTools.pixelTypeFromString(outputPixelType.getValue());
+    if (bfPixelType == srcPixelType ||
+      (srcPixelType != FormatTools.FLOAT && srcPixelType != FormatTools.DOUBLE))
+    {
+      return srcPixelType;
+    }
+    return bfPixelType;
+  }
+
+  /**
+   * Change the pixel type of the input tile as appropriate.
+   *
+   * @param tile input pixel data
+   * @param srcPixelType pixel type of the input data
+   * @param littleEndian true if tile bytes have little-endian ordering
+   * @return pixel data with the correct output pixel type
+   */
+  private byte[] changePixelType(byte[] tile, int srcPixelType,
+    boolean littleEndian)
+  {
+    if (outputPixelType == null) {
+      return tile;
+    }
+    int bfPixelType =
+      FormatTools.pixelTypeFromString(outputPixelType.getValue());
+
+    if (bfPixelType == srcPixelType ||
+      (srcPixelType != FormatTools.FLOAT && srcPixelType != FormatTools.DOUBLE))
+    {
+      return tile;
+    }
+
+    int bpp = FormatTools.getBytesPerPixel(bfPixelType);
+    int srcBpp = FormatTools.getBytesPerPixel(srcPixelType);
+    byte[] output = new byte[bpp * (tile.length / srcBpp)];
+
+    double[] range = getRange(bfPixelType);
+    if (range == null) {
+      throw new IllegalArgumentException(
+        "Cannot convert to " + outputPixelType);
+    }
+
+    if (srcPixelType == FormatTools.FLOAT) {
+      float[] pixels = DataTools.normalizeFloats(
+        (float[]) DataTools.makeDataArray(tile, 4, true, littleEndian));
+
+      for (int pixel=0; pixel<pixels.length; pixel++) {
+        long v = (long) ((pixels[pixel] * (range[1] - range[0])) + range[0]);
+        DataTools.unpackBytes(v, output, pixel * bpp, bpp, littleEndian);
+      }
+
+    }
+    else if (srcPixelType == FormatTools.DOUBLE) {
+      double[] pixels = DataTools.normalizeDoubles(
+        (double[]) DataTools.makeDataArray(tile, 8, true, littleEndian));
+
+      for (int pixel=0; pixel<pixels.length; pixel++) {
+        long v = (long) ((pixels[pixel] * (range[1] - range[0])) + range[0]);
+        DataTools.unpackBytes(v, output, pixel * bpp, bpp, littleEndian);
+      }
+    }
+
+    return output;
+  }
+
+  /**
+   * Get the minimum and maximum pixel values for the given pixel type.
+   *
+   * @param bfPixelType pixel type as defined in FormatTools
+   * @return array of length 2 representing the minimum and maximum
+   *         pixel values, or null if converting to the given type is
+   *         not supported
+   */
+  private double[] getRange(int bfPixelType) {
+    double[] range = new double[2];
+    switch (bfPixelType) {
+      case FormatTools.INT8:
+        range[0] = -128.0;
+        range[1] = 127.0;
+        break;
+      case FormatTools.UINT8:
+        range[0] = 0.0;
+        range[1] = 255.0;
+        break;
+      case FormatTools.INT16:
+        range[0] = -32768.0;
+        range[1] = 32767.0;
+        break;
+      case FormatTools.UINT16:
+        range[0] = 0.0;
+        range[1] = 65535.0;
+        break;
+      default:
+        return null;
+    }
+
+    return range;
+  }
+
+  /**
    * Convert Bio-Formats pixel type to Zarr data type.
    *
    * @param type Bio-Formats pixel type
@@ -1240,9 +1670,7 @@ public class Converter implements Callable<Void> {
   }
 
   private void checkOutputPaths() {
-    if ((!pyramidName.equals("data.zarr")) ||
-          !scaleFormatString.equals("%d/%d"))
-    {
+    if (pyramidName != null || !scaleFormatString.equals("%d/%d")) {
       LOGGER.info("Output will be incompatible with raw2ometiff " +
               "(pyramidName: {}, scaleFormatString: {})",
               pyramidName, scaleFormatString);
