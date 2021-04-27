@@ -1042,7 +1042,8 @@ public class Converter implements Callable<Void> {
       LOGGER.info("tile read complete {}/{}", nTile.get(), tileCount);
       t0.stop();
     }
-    writeBytes(zarr, shape, offset, chunkAsBytes.toByteArray());
+    ByteBuffer bb = ByteBuffer.wrap(chunkAsBytes.toByteArray());
+    writeBytes(zarr, shape, offset, bb);
   }
 
   /**
@@ -1181,7 +1182,7 @@ public class Converter implements Callable<Void> {
       readers.put(workingReader);
       List<CompletableFuture<Void>> futures =
         new ArrayList<CompletableFuture<Void>>();
-  
+
       final ProgressBar pb;
       if (progressBars) {
         ProgressBarBuilder builder = new ProgressBarBuilder()
@@ -1202,43 +1203,44 @@ public class Converter implements Callable<Void> {
       }
 
       try {
-      for (int j=0; j<scaledHeight; j+=tileHeight) {
-        final int yy = j;
-        int height = (int) Math.min(tileHeight, scaledHeight - yy);
-        for (int k=0; k<scaledWidth; k+=tileWidth) {
-          final int xx = k;
-          int width = (int) Math.min(tileWidth, scaledWidth - xx);
-          for (int l=0; l<scaledDepth; l+=chunkDepth) {
-            final int zz = l;
-            int depth = (int) Math.min(chunkDepth, scaledDepth - zz);
-            for (int i=0; i<ctIndices[l].size(); i++) {
-              final int plane = ctIndices[l].get(i);
+        for (int j=0; j<scaledHeight; j+=tileHeight) {
+          final int yy = j;
+          int height = (int) Math.min(tileHeight, scaledHeight - yy);
+          for (int k=0; k<scaledWidth; k+=tileWidth) {
+            final int xx = k;
+            int width = (int) Math.min(tileWidth, scaledWidth - xx);
+            for (int l=0; l<scaledDepth; l+=chunkDepth) {
+              final int zz = l;
+              int depth = (int) Math.min(chunkDepth, scaledDepth - zz);
+              for (int i=0; i<ctIndices[l].size(); i++) {
+                final int plane = ctIndices[l].get(i);
 
-              CompletableFuture<Void> future = new CompletableFuture<Void>();
-              futures.add(future);
-              executor.execute(() -> {
-                try {
-                  processChunk(series, resolution, plane, xx, yy, zz,
-                               width, height, depth);
-                  LOGGER.info(
-                      "Successfully processed chunk; resolution={} plane={} " +
-                      "xx={} yy={} zz={} width={} height={} depth={}",
-                      resolution, plane, xx, yy, zz, width, height, depth);
-                  future.complete(null);
-                }
-                catch (Throwable t) {
-                  future.completeExceptionally(t);
-                  LOGGER.error(
-                    "Failure processing chunk; resolution={} plane={} " +
-                    "xx={} yy={} zz={} width={} height={} depth={}",
-                    resolution, plane, xx, yy, zz, width, height, depth, t);
-                }
-                finally {
-                  if (pb != null) {
-                    pb.step();
+                CompletableFuture<Void> future = new CompletableFuture<Void>();
+                futures.add(future);
+                executor.execute(() -> {
+                  try {
+                    processChunk(series, resolution, plane, xx, yy, zz,
+                                 width, height, depth);
+                    LOGGER.info(
+                        "Successfully processed chunk; resolution={} plane={} "
+                        + "xx={} yy={} zz={} width={} height={} depth={}",
+                        resolution, plane, xx, yy, zz, width, height, depth);
+                    future.complete(null);
                   }
-                }
-              });
+                  catch (Throwable t) {
+                    future.completeExceptionally(t);
+                    LOGGER.error(
+                      "Failure processing chunk; resolution={} plane={} " +
+                      "xx={} yy={} zz={} width={} height={} depth={}",
+                      resolution, plane, xx, yy, zz, width, height, depth, t);
+                  }
+                  finally {
+                    if (pb != null) {
+                      pb.step();
+                    }
+                  }
+                });
+              }
             }
           }
         }
