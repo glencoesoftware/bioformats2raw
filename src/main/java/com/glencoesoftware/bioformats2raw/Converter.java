@@ -217,9 +217,9 @@ public class Converter implements Callable<Void> {
   };
 
   @Option(
-          names = "--nested", negatable=true,
+          names = "--no-nested", negatable=true,
           description = "Whether to use '/' as the chunk path seprator " +
-                  "(false by default)"
+                  "(true by default)"
   )
   private volatile boolean nested = true;
 
@@ -482,6 +482,14 @@ public class Converter implements Callable<Void> {
 
         if (!noHCS) {
           noHCS = meta.getPlateCount() == 0;
+        }
+        else {
+          ((OMEXMLMetadata) meta).resolveReferences();
+          OMEXMLMetadataRoot root = (OMEXMLMetadataRoot) meta.getRoot();
+          for (int i=0; i<meta.getPlateCount(); i++) {
+            root.removePlate(root.getPlate(0));
+          }
+          meta.setRoot(root);
         }
 
         if (seriesList.size() > 0) {
