@@ -1002,9 +1002,10 @@ public class Converter implements Callable<Void> {
     String pathName =
         String.format(scaleFormatString,
             getScaleFormatStringArgs(series, resolution));
-    final ZarrGroup root = ZarrGroup.open(outputPath.resolve(pyramidName));
-    final ZarrArray zarr = root.openArray(pathName);
+    final ZarrArray zarr = ZarrArray.open(getRootPath().resolve(pathName));
     IFormatReader reader = readers.take();
+    boolean littleEndian = reader.isLittleEndian();
+    int bpp = FormatTools.getBytesPerPixel(reader.getPixelType());
     int[] offset;
     int[] zct;
     int[] shape;
@@ -1042,8 +1043,12 @@ public class Converter implements Callable<Void> {
       LOGGER.info("tile read complete {}/{}", nTile.get(), tileCount);
       t0.stop();
     }
-    ByteBuffer bb = ByteBuffer.wrap(chunkAsBytes.toByteArray());
-    writeBytes(zarr, shape, offset, bb);
+    ByteBuffer tileBuffer = ByteBuffer.wrap(chunkAsBytes.toByteArray());
+    if (resolution == 0 && bpp > 1) {
+      tileBuffer.order(
+        littleEndian ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN);
+    }
+    writeBytes(zarr, shape, offset, tileBuffer);
   }
 
   /**
