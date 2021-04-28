@@ -314,7 +314,8 @@ public class Converter implements Callable<Void> {
 
   @Option(
           names = "--no-ome-meta-export",
-          description = "Turn off OME metadata exporting"
+          description = "Turn off OME metadata exporting " +
+                        "[Will break compatibility with raw2ometiff]"
   )
   private volatile boolean noOMEMeta = false;
 
