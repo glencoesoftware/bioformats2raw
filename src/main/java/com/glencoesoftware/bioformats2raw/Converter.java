@@ -993,9 +993,8 @@ public class Converter implements Callable<Void> {
     writeBytes(zarr, shape, offset, tileBuffer);
   }
 
-  private void processChunk(
-      int series, int resolution, int plane, int xx, int yy, int zz,
-      int width, int height, int depth)
+  private void processChunk(int series, int resolution, int plane,
+      int[] offset, int[] shape)
         throws EnumerationException, FormatException, IOException,
           InterruptedException, InvalidRangeException
   {
@@ -1006,32 +1005,35 @@ public class Converter implements Callable<Void> {
     IFormatReader reader = readers.take();
     boolean littleEndian = reader.isLittleEndian();
     int bpp = FormatTools.getBytesPerPixel(reader.getPixelType());
-    int[] offset;
     int[] zct;
-    int[] shape;
     ByteArrayOutputStream chunkAsBytes = new ByteArrayOutputStream();
+    int zz;
     try {
-      offset = getOffset(
-          reader, xx, yy, plane);
-
-      shape = new int[] {1, 1, depth, height, width};
-
       LOGGER.info("requesting tile to write at {} to {}", offset, pathName);
       //Get coords of current series
       zct = reader.getZCTCoords(plane);
+      String o = new StringBuilder(
+          dimensionOrder != null? dimensionOrder.toString()
+          : reader.getDimensionOrder()).reverse().toString();
+      zz = offset[o.indexOf("Z")];
     }
     finally {
       readers.put(reader);
     }
     Slf4JStopWatch t0 = new Slf4JStopWatch("getChunk");
     try {
-      for (int z = zz; z < zz + depth; z++) {
+      for (int z = zz; z < zz + shape[2]; z++) {
         //Get plane index for current Z
         reader = readers.take();
-        int planeIndex = FormatTools.getIndex(reader, z, zct[1], zct[2]);
-        readers.put(reader);
+        int planeIndex;
+        try {
+          planeIndex = FormatTools.getIndex(reader, z, zct[1], zct[2]);
+        }
+        finally {
+          readers.put(reader);
+        }
         byte[] tileAsBytes = getTile(series, resolution, planeIndex,
-                                    xx, yy, width, height);
+                                    offset[4], offset[3], shape[4], shape[3]);
         if (tileAsBytes == null) {
           return;
         }
@@ -1080,13 +1082,10 @@ public class Converter implements Callable<Void> {
         else {
           int width = workingReader.getSizeX();
           int height = workingReader.getSizeY();
-          //int depth = workingReader.getSizeZ();
-          //while (width > MIN_SIZE || height > MIN_SIZE || depth > MIN_SIZE) {
           while (width > MIN_SIZE || height > MIN_SIZE) {
             resolutions++;
             width /= PYRAMID_SCALE;
             height /= PYRAMID_SCALE;
-            //depth /= PYRAMID_SCALE;
           }
         }
       }
@@ -1128,14 +1127,19 @@ public class Converter implements Callable<Void> {
       int scaledWidth = sizeX / scale;
       int scaledHeight = sizeY / scale;
       int scaledDepth = sizeZ;
+
       workingReader = readers.take();
-      if (workingReader.getResolutionCount() > 1) {
-        workingReader.setResolution(resCounter);
-        scaledWidth = workingReader.getSizeX();
-        scaledHeight = workingReader.getSizeY();
-        scaledDepth = workingReader.getSizeZ();
+      try {
+        if (workingReader.getResolutionCount() > 1) {
+          workingReader.setResolution(resCounter);
+          scaledWidth = workingReader.getSizeX();
+          scaledHeight = workingReader.getSizeY();
+          scaledDepth = workingReader.getSizeZ();
+        }
       }
-      readers.put(workingReader);
+      finally {
+        readers.put(workingReader);
+      }
 
       int activeTileWidth = tileWidth;
       int activeTileHeight = tileHeight;
@@ -1180,11 +1184,15 @@ public class Converter implements Callable<Void> {
         ctIndices[i] = new ArrayList<Integer>();
       }
       workingReader = readers.take();
-      for (int i=0; i<workingReader.getImageCount(); i++) {
-        int[] coords = workingReader.getZCTCoords(i);
-        ctIndices[coords[0]].add(i);
+      try {
+        for (int i=0; i<workingReader.getImageCount(); i++) {
+          int[] coords = workingReader.getZCTCoords(i);
+          ctIndices[coords[0]].add(i);
+        }
       }
-      readers.put(workingReader);
+      finally {
+        readers.put(workingReader);
+      }
       List<CompletableFuture<Void>> futures =
         new ArrayList<CompletableFuture<Void>>();
 
@@ -1224,8 +1232,20 @@ public class Converter implements Callable<Void> {
                 futures.add(future);
                 executor.execute(() -> {
                   try {
-                    processChunk(series, resolution, plane, xx, yy, zz,
-                                 width, height, depth);
+                    int[] shape = {1, 1, 1, height, width};
+                    int[] offset;
+                    IFormatReader reader = readers.take();
+                    try {
+                      String o = new StringBuilder(
+                          dimensionOrder != null? dimensionOrder.toString()
+                          : reader.getDimensionOrder()).reverse().toString();
+                      shape[o.indexOf("Z")] = depth;
+                      offset = getOffset(reader, xx, yy, plane);
+                    }
+                    finally {
+                      readers.put(reader);
+                    }
+                    processChunk(series, resolution, plane, offset, shape);
                     LOGGER.info(
                         "Successfully processed chunk; resolution={} plane={} "
                         + "xx={} yy={} zz={} width={} height={} depth={}",
