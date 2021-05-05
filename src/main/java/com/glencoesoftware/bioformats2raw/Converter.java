@@ -1007,7 +1007,8 @@ public class Converter implements Callable<Void> {
     int bpp = FormatTools.getBytesPerPixel(reader.getPixelType());
     int[] zct;
     ByteArrayOutputStream chunkAsBytes = new ByteArrayOutputStream();
-    int zz;
+    int zOffset;
+    int zShape;
     try {
       LOGGER.info("requesting tile to write at {} to {}", offset, pathName);
       //Get coords of current series
@@ -1015,14 +1016,15 @@ public class Converter implements Callable<Void> {
       String o = new StringBuilder(
           dimensionOrder != null? dimensionOrder.toString()
           : reader.getDimensionOrder()).reverse().toString();
-      zz = offset[o.indexOf("Z")];
+      zOffset = offset[o.indexOf("Z")];
+      zShape = shape[o.indexOf("Z")];
     }
     finally {
       readers.put(reader);
     }
     Slf4JStopWatch t0 = new Slf4JStopWatch("getChunk");
     try {
-      for (int z = zz; z < zz + shape[2]; z++) {
+      for (int z = zOffset; z < zOffset + zShape; z++) {
         //Get plane index for current Z
         reader = readers.take();
         int planeIndex;
@@ -1042,7 +1044,7 @@ public class Converter implements Callable<Void> {
     }
     finally {
       nTile.incrementAndGet();
-      LOGGER.info("tile read complete {}/{}", nTile.get(), tileCount);
+      LOGGER.info("chunk read complete {}/{}", nTile.get(), tileCount);
       t0.stop();
     }
     ByteBuffer tileBuffer = ByteBuffer.wrap(chunkAsBytes.toByteArray());
@@ -1072,7 +1074,10 @@ public class Converter implements Callable<Void> {
     int sizeX;
     int sizeY;
     int sizeZ;
+    int sizeT;
+    int sizeC;
     int imageCount;
+    String readerDimensionOrder;
     try {
       // calculate a reasonable pyramid depth if not specified as an argument
       if (pyramidResolutions == null) {
@@ -1096,8 +1101,10 @@ public class Converter implements Callable<Void> {
       sizeX = workingReader.getSizeX();
       sizeY = workingReader.getSizeY();
       sizeZ = workingReader.getSizeZ();
+      sizeT = workingReader.getSizeT();
+      sizeC = workingReader.getSizeC();
+      readerDimensionOrder = workingReader.getDimensionOrder();
       imageCount = workingReader.getImageCount();
-      imageCount /= sizeZ;
       pixelType = getRealType(workingReader.getPixelType());
     }
     finally {
@@ -1177,22 +1184,8 @@ public class Converter implements Callable<Void> {
       tileCount = (int) Math.ceil((double) scaledWidth / tileWidth)
           * (int) Math.ceil((double) scaledHeight / tileHeight)
           * (int) Math.ceil((double) scaledDepth / chunkDepth)
-          * imageCount;
+          * (imageCount / sizeZ);
 
-      ArrayList<Integer>[] ctIndices = new ArrayList[scaledDepth];
-      for (int i = 0; i < scaledDepth; i++) {
-        ctIndices[i] = new ArrayList<Integer>();
-      }
-      workingReader = readers.take();
-      try {
-        for (int i=0; i<workingReader.getImageCount(); i++) {
-          int[] coords = workingReader.getZCTCoords(i);
-          ctIndices[coords[0]].add(i);
-        }
-      }
-      finally {
-        readers.put(workingReader);
-      }
       List<CompletableFuture<Void>> futures =
         new ArrayList<CompletableFuture<Void>>();
 
@@ -1225,46 +1218,50 @@ public class Converter implements Callable<Void> {
             for (int l=0; l<scaledDepth; l+=chunkDepth) {
               final int zz = l;
               int depth = (int) Math.min(chunkDepth, scaledDepth - zz);
-              for (int i=0; i<ctIndices[l].size(); i++) {
-                final int plane = ctIndices[l].get(i);
+              for (int cc=0; cc<sizeC; cc++) {
+                for (int tt=0; tt<sizeT; tt++) {
+                  final int plane = FormatTools.getIndex(readerDimensionOrder,
+                      sizeZ, sizeC, sizeT, imageCount, zz, cc, tt);
 
-                CompletableFuture<Void> future = new CompletableFuture<Void>();
-                futures.add(future);
-                executor.execute(() -> {
-                  try {
-                    int[] shape = {1, 1, 1, height, width};
-                    int[] offset;
-                    IFormatReader reader = readers.take();
+                  CompletableFuture<Void> future =
+                       new CompletableFuture<Void>();
+                  futures.add(future);
+                  executor.execute(() -> {
                     try {
-                      String o = new StringBuilder(
-                          dimensionOrder != null? dimensionOrder.toString()
-                          : reader.getDimensionOrder()).reverse().toString();
-                      shape[o.indexOf("Z")] = depth;
-                      offset = getOffset(reader, xx, yy, plane);
+                      int[] shape = {1, 1, 1, height, width};
+                      int[] offset;
+                      IFormatReader reader = readers.take();
+                      try {
+                        String o = new StringBuilder(
+                            dimensionOrder != null? dimensionOrder.toString()
+                            : reader.getDimensionOrder()).reverse().toString();
+                        shape[o.indexOf("Z")] = depth;
+                        offset = getOffset(reader, xx, yy, plane);
+                      }
+                      finally {
+                        readers.put(reader);
+                      }
+                      processChunk(series, resolution, plane, offset, shape);
+                      LOGGER.info(
+                          "Successfully processed chunk; resolution={} plane={}"
+                          + " xx={} yy={} zz={} width={} height={} depth={}",
+                          resolution, plane, xx, yy, zz, width, height, depth);
+                      future.complete(null);
+                    }
+                    catch (Throwable t) {
+                      future.completeExceptionally(t);
+                      LOGGER.error(
+                        "Failure processing chunk; resolution={} plane={} " +
+                        "xx={} yy={} zz={} width={} height={} depth={}",
+                        resolution, plane, xx, yy, zz, width, height, depth, t);
                     }
                     finally {
-                      readers.put(reader);
+                      if (pb != null) {
+                        pb.step();
+                      }
                     }
-                    processChunk(series, resolution, plane, offset, shape);
-                    LOGGER.info(
-                        "Successfully processed chunk; resolution={} plane={} "
-                        + "xx={} yy={} zz={} width={} height={} depth={}",
-                        resolution, plane, xx, yy, zz, width, height, depth);
-                    future.complete(null);
-                  }
-                  catch (Throwable t) {
-                    future.completeExceptionally(t);
-                    LOGGER.error(
-                      "Failure processing chunk; resolution={} plane={} " +
-                      "xx={} yy={} zz={} width={} height={} depth={}",
-                      resolution, plane, xx, yy, zz, width, height, depth, t);
-                  }
-                  finally {
-                    if (pb != null) {
-                      pb.step();
-                    }
-                  }
-                });
+                  });
+                }
               }
             }
           }
