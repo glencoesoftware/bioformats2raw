@@ -150,7 +150,8 @@ public class Converter implements Callable<Void> {
 
   @Option(
     names = {"-z", "--chunk_depth"},
-    description = "Maximum chunk depth to read (default: ${DEFAULT-VALUE})"
+    description = "Maximum chunk depth to read (default: ${DEFAULT-VALUE}) "
+        + "[Will break compatibility with raw2ometiff]"
   )
   private volatile int chunkDepth = 1;
 
@@ -326,6 +327,13 @@ public class Converter implements Callable<Void> {
 
   )
   private volatile boolean noRootGroup = false;
+  
+  @Option(
+      names = "--use-existing-resolutions",
+      description = "Use existing sub resolutions from original input format"
+
+  )
+  private volatile boolean reuseExistingResolutions = false;
 
   /** Scaling implementation that will be used during downsampling. */
   private volatile IImageScaler scaler = new SimpleImageScaler();
@@ -865,7 +873,7 @@ public class Converter implements Callable<Void> {
   {
     IFormatReader reader = readers.take();
     try {
-      if (reader.getResolutionCount() > 1) {
+      if (reader.getResolutionCount() > 1 && reuseExistingResolutions) {
         reader.setResolution(resolution);
         return reader.openBytes(plane, xx, yy, width, height);
       }
@@ -1081,7 +1089,7 @@ public class Converter implements Callable<Void> {
     try {
       // calculate a reasonable pyramid depth if not specified as an argument
       if (pyramidResolutions == null) {
-        if (workingReader.getResolutionCount() > 1) {
+        if (workingReader.getResolutionCount() > 1 && reuseExistingResolutions) {
           resolutions = workingReader.getResolutionCount();
         }
         else {
@@ -1137,7 +1145,7 @@ public class Converter implements Callable<Void> {
 
       workingReader = readers.take();
       try {
-        if (workingReader.getResolutionCount() > 1) {
+        if (workingReader.getResolutionCount() > 1 && reuseExistingResolutions) {
           workingReader.setResolution(resCounter);
           scaledWidth = workingReader.getSizeX();
           scaledHeight = workingReader.getSizeY();
