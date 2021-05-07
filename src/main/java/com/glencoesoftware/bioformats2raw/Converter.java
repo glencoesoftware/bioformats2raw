@@ -1149,8 +1149,10 @@ public class Converter implements Callable<Void> {
 
   private void saveHCSMetadata(IMetadata meta) throws IOException {
     if (noHCS) {
+      LOGGER.debug("skipping HCS metadata");
       return;
     }
+    LOGGER.debug("saving HCS metadata");
 
     // assumes only one plate defined
     Path rootPath = getRootPath();
@@ -1295,10 +1297,13 @@ public class Converter implements Callable<Void> {
   private void setSeriesLevelMetadata(int series, int resolutions)
       throws IOException
   {
+    LOGGER.debug("setSeriesLevelMetadata({}, {})", series, resolutions);
     String resolutionString = String.format(
             scaleFormatString, getScaleFormatStringArgs(series, 0));
     String seriesString = resolutionString.substring(0,
             resolutionString.lastIndexOf('/'));
+    LOGGER.debug("  seriesString = {}", seriesString);
+    LOGGER.debug("  resolutionString = {}", resolutionString);
     List<Map<String, Object>> multiscales =
             new ArrayList<Map<String, Object>>();
     Map<String, Object> multiscale = new HashMap<String, Object>();
@@ -1327,10 +1332,13 @@ public class Converter implements Callable<Void> {
       datasets.add(Collections.singletonMap("path", lastPath));
     }
     multiscale.put("datasets", datasets);
-    ZarrGroup subGroup = ZarrGroup.create(getRootPath().resolve(seriesString));
+    Path subGroupPath = getRootPath().resolve(seriesString);
+    LOGGER.debug("  creating subgroup {}", subGroupPath);
+    ZarrGroup subGroup = ZarrGroup.create(subGroupPath);
     Map<String, Object> attributes = new HashMap<String, Object>();
     attributes.put("multiscales", multiscales);
     subGroup.writeAttributes(attributes);
+    LOGGER.debug("    finished writing subgroup attributes");
   }
 
   /**
