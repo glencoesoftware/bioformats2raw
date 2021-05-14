@@ -327,7 +327,7 @@ public class Converter implements Callable<Void> {
 
   )
   private volatile boolean noRootGroup = false;
-  
+
   @Option(
       names = "--use-existing-resolutions",
       description = "Use existing sub resolutions from original input format"
@@ -955,52 +955,6 @@ public class Converter implements Callable<Void> {
     return offset;
   }
 
-  private void processTile(
-      int series, int resolution, int plane, int xx, int yy,
-      int width, int height)
-        throws EnumerationException, FormatException, IOException,
-          InterruptedException, InvalidRangeException
-  {
-    String pathName =
-        String.format(scaleFormatString,
-            getScaleFormatStringArgs(series, resolution));
-    final ZarrArray zarr = ZarrArray.open(getRootPath().resolve(pathName));
-    IFormatReader reader = readers.take();
-    boolean littleEndian = reader.isLittleEndian();
-    int bpp = FormatTools.getBytesPerPixel(reader.getPixelType());
-    int[] offset;
-    try {
-      offset = getOffset(
-          reader, xx, yy, plane);
-    }
-    finally {
-      readers.put(reader);
-    }
-    int[] shape = new int[] {1, 1, 1, height, width};
-
-    Slf4JStopWatch t0 = new Slf4JStopWatch("getTile");
-    byte[] tileAsBytes;
-    try {
-      LOGGER.info("requesting tile to write at {} to {}", offset, pathName);
-      tileAsBytes = getTile(series, resolution, plane, xx, yy, width, height);
-      if (tileAsBytes == null) {
-        return;
-      }
-    }
-    finally {
-      nTile.incrementAndGet();
-      LOGGER.info("tile read complete {}/{}", nTile.get(), tileCount);
-      t0.stop();
-    }
-
-    ByteBuffer tileBuffer = ByteBuffer.wrap(tileAsBytes);
-    if (resolution == 0 && bpp > 1) {
-      tileBuffer.order(
-        littleEndian ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN);
-    }
-    writeBytes(zarr, shape, offset, tileBuffer);
-  }
-
   private void processChunk(int series, int resolution, int plane,
       int[] offset, int[] shape)
         throws EnumerationException, FormatException, IOException,
@@ -1089,7 +1043,8 @@ public class Converter implements Callable<Void> {
     try {
       // calculate a reasonable pyramid depth if not specified as an argument
       if (pyramidResolutions == null) {
-        if (workingReader.getResolutionCount() > 1 && reuseExistingResolutions) {
+        if (workingReader.getResolutionCount() > 1 
+            && reuseExistingResolutions) {
           resolutions = workingReader.getResolutionCount();
         }
         else {
@@ -1145,7 +1100,8 @@ public class Converter implements Callable<Void> {
 
       workingReader = readers.take();
       try {
-        if (workingReader.getResolutionCount() > 1 && reuseExistingResolutions) {
+        if (workingReader.getResolutionCount() > 1 
+            && reuseExistingResolutions) {
           workingReader.setResolution(resCounter);
           scaledWidth = workingReader.getSizeX();
           scaledHeight = workingReader.getSizeY();
