@@ -1043,8 +1043,9 @@ public class Converter implements Callable<Void> {
     try {
       // calculate a reasonable pyramid depth if not specified as an argument
       if (pyramidResolutions == null) {
-        if (workingReader.getResolutionCount() > 1 
-            && reuseExistingResolutions) {
+        if (workingReader.getResolutionCount() > 1
+            && reuseExistingResolutions)
+        {
           resolutions = workingReader.getResolutionCount();
         }
         else {
@@ -1100,8 +1101,9 @@ public class Converter implements Callable<Void> {
 
       workingReader = readers.take();
       try {
-        if (workingReader.getResolutionCount() > 1 
-            && reuseExistingResolutions) {
+        if (workingReader.getResolutionCount() > 1
+            && reuseExistingResolutions)
+        {
           workingReader.setResolution(resCounter);
           scaledWidth = workingReader.getSizeX();
           scaledHeight = workingReader.getSizeY();
