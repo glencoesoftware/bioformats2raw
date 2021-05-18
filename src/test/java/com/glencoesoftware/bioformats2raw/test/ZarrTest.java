@@ -611,6 +611,19 @@ public class ZarrTest {
   }
 
   /**
+   * @return an array of dimensions ordered XYZCT
+   * and the dimensionOrder to be used
+   */
+  static Stream<Arguments> getDimensions() {
+    return Stream.of(
+      Arguments.of(new int[]{512, 512, 64, 1, 1}, "XYZCT"),
+      Arguments.of(new int[]{512, 512, 32, 3, 100}, "XYZCT"),
+      Arguments.of(new int[]{512, 512, 16, 1, 1}, "XYCTZ"),
+      Arguments.of(new int[]{512, 512, 32, 3, 100}, "XYCTZ")
+    );
+  }
+
+  /**
    * Test that there are no edge effects when tiles do not divide evenly
    * and downsampling.
    */
@@ -1107,10 +1120,44 @@ public class ZarrTest {
   /**
    * Convert with the --chunk_depth option. Conversion should produce
    * chunk sizes matching the provided input
+   *
+   * @param xyzct array of dimensions to be used for the input file
+   * @param dimOrder the dimensionOrder to be used for the input file
+   */
+  @ParameterizedTest
+  @MethodSource("getDimensions")
+  public void testChunkWriting(int[] xyzct, String dimOrder) throws Exception {
+    int chunkDepth = 16;
+    input = fake("sizeX", ""+xyzct[0]+"", "sizeY", ""+xyzct[1]+"",
+        "sizeZ", ""+xyzct[2]+"", "sizeC", ""+xyzct[3]+"",
+        "sizeT", ""+xyzct[4]+"", "dimOrder", dimOrder);
+    assertTool("--chunk_depth", ""+chunkDepth+"");
+    ZarrGroup z = ZarrGroup.open(output.resolve("0").toString());
+    List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
+            z.getAttributes().get("multiscales");
+
+    Map<String, Object> multiscale = multiscales.get(0);
+    List<Map<String, Object>> datasets =
+              (List<Map<String, Object>>) multiscale.get("datasets");
+
+    for (int i = 0; i < datasets.size(); i++) {
+      String path = (String) datasets.get(i).get("path");
+      ZarrArray series = z.openArray(path);
+
+      assertArrayEquals(new int[] {1, 1, chunkDepth, xyzct[0], xyzct[1]},
+          series.getChunks());
+      xyzct[0] /= 2;
+      xyzct[1] /= 2;
+    }
+  }
+
+  /**
+   * Convert with the --chunk_depth option larger than sizeZ. Conversion
+   * should produce chunk sizes matching the sizeZ
    */
   @Test
-  public void testChunkedWriting() throws Exception {
-    int sizeZ = 64;
+  public void testChunkSizeToBig() throws Exception {
+    int sizeZ = 8;
     int chunkDepth = 16;
     int sizeX = 512;
     int sizeY = 512;
@@ -1129,7 +1176,7 @@ public class ZarrTest {
       String path = (String) datasets.get(i).get("path");
       ZarrArray series = z.openArray(path);
 
-      assertArrayEquals(new int[] {1, 1, chunkDepth, sizeX, sizeY},
+      assertArrayEquals(new int[] {1, 1, sizeZ, sizeX, sizeY},
           series.getChunks());
       sizeX /= 2;
       sizeY /= 2;
