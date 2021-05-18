@@ -151,7 +151,6 @@ public class Converter implements Callable<Void> {
   @Option(
     names = {"-z", "--chunk_depth"},
     description = "Maximum chunk depth to read (default: ${DEFAULT-VALUE}) "
-        + "[Will break compatibility with raw2ometiff]"
   )
   private volatile int chunkDepth = 1;
 
@@ -330,7 +329,8 @@ public class Converter implements Callable<Void> {
 
   @Option(
       names = "--use-existing-resolutions",
-      description = "Use existing sub resolutions from original input format"
+      description = "Use existing sub resolutions from original input format" +
+          "[Will break compatibility with raw2ometiff]"
 
   )
   private volatile boolean reuseExistingResolutions = false;
