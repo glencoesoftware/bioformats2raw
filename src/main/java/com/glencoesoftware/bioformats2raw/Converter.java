@@ -460,7 +460,7 @@ public class Converter implements Callable<Void> {
         memoizer.setMetadataOptions(options);
       }
 
-      memoizer.setOriginalMetadataPopulated(true);
+      memoizer.setOriginalMetadataPopulated(!noOMEMeta);
       memoizer.setFlattenedResolutions(false);
       memoizer.setMetadataFiltered(true);
       memoizer.setMetadataStore(createMetadata());
