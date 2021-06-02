@@ -109,8 +109,6 @@ public class MiraxReader extends FormatReader {
   private int yTiles;
   private int divPerSide;
 
-  private List<Long> firstLevelOffsets = new ArrayList<Long>();
-
   private int[] minColIndex;
   private int[] maxColIndex;
   private int[] minRowIndex;
@@ -257,11 +255,6 @@ public class MiraxReader extends FormatReader {
 
         TilePointer thisOffset = lookupTile(index, col, row, no / MAX_CHANNELS);
         if (thisOffset != null) {
-          int offsetIndex = firstLevelOffsets.indexOf(thisOffset.offset);
-          Long nextOffset =
-            offsetIndex < 0 || offsetIndex >= firstLevelOffsets.size() - 1 ?
-            -1L : firstLevelOffsets.get(offsetIndex + 1);
-
           int channel = no % MAX_CHANNELS;
           if (fluorescence && getSizeC() != 2) {
             channel = MAX_CHANNELS - channel - 1;
@@ -270,6 +263,7 @@ public class MiraxReader extends FormatReader {
           String file = files.get(thisOffset.fileIndex + 1);
           byte[] tileBuf = tileCache.getIfPresent(thisOffset);
           if (tileBuf == null) {
+            long nextOffset = thisOffset.offset + thisOffset.length;
             try {
               tileBuf = readTile(file, thisOffset.offset, nextOffset,
                 format.get(index), channel);
@@ -333,7 +327,6 @@ public class MiraxReader extends FormatReader {
       closeTileStream();
       tilePositions = null;
       pngReader.close();
-      firstLevelOffsets.clear();
       fluorescence = false;
     }
   }
@@ -499,8 +492,7 @@ public class MiraxReader extends FormatReader {
             List<TilePointer> resolutionOffsets =
               getOrCreateResolutionOffsets(key);
             resolutionOffsets.add(
-              new TilePointer(i, fileNumber, nextOffset, nextCounter));
-            firstLevelOffsets.add(nextOffset);
+              new TilePointer(i, fileNumber, nextOffset, nextCounter, length));
           }
           nextCounter = indexData.readInt();
           itemCounter++;
@@ -538,8 +530,8 @@ public class MiraxReader extends FormatReader {
               TilePointer key = new TilePointer(pyramidDepth, 0);
               List<TilePointer> resolutionOffsets =
                   getOrCreateResolutionOffsets(key);
-              resolutionOffsets.add(
-                new TilePointer(pyramidDepth, fileNumber, nextOffset, 0));
+              resolutionOffsets.add(new TilePointer(
+                pyramidDepth, fileNumber, nextOffset, 0, length));
 
               String section =
                 hierarchy.get("NONHIER_" + i + "_VAL_" + q + "_SECTION");
@@ -1209,6 +1201,7 @@ public class MiraxReader extends FormatReader {
     public final int fileIndex;
     public final long offset;
     public final int counter;
+    public final int length;
 
     /**
      * Tile pointer to a tile at a given logical offset at a given resolution.
@@ -1216,7 +1209,7 @@ public class MiraxReader extends FormatReader {
      * @param tileCounter logical offset of the tile
      */
     public TilePointer(int res, int tileCounter) {
-      this(res, 0, 0, tileCounter);
+      this(res, 0, 0, tileCounter, 0);
     }
 
     /**
@@ -1226,12 +1219,16 @@ public class MiraxReader extends FormatReader {
      * @param index physical index within the file
      * @param tileOffset physical offset within the file
      * @param tileCounter logical offset of the tile
+     * @param length number of valid bytes starting at tileOffset
      */
-    public TilePointer(int res, int index, long tileOffset, int tileCounter) {
+    public TilePointer(int res, int index, long tileOffset, int tileCounter,
+      int length)
+    {
       this.resolution = res;
       this.fileIndex = index;
       this.offset = tileOffset;
       this.counter = tileCounter;
+      this.length = length;
     }
 
     @Override
@@ -1248,7 +1245,10 @@ public class MiraxReader extends FormatReader {
       if (o.fileIndex != this.fileIndex) {
         return this.fileIndex - o.fileIndex;
       }
-      if (this.offset < o.offset) {
+      if (this.offset != o.offset) {
+        return this.offset < o.offset ? -1 : 1;
+      }
+      if (this.length < o.length) {
         return -1;
       }
       return 1;
@@ -1267,7 +1267,8 @@ public class MiraxReader extends FormatReader {
         return tilePointer.resolution == this.resolution
             && tilePointer.fileIndex == this.fileIndex
             && tilePointer.offset == this.offset
-            && tilePointer.counter == this.counter;
+            && tilePointer.counter == this.counter
+            && tilePointer.length == this.length;
       }
       return super.equals(obj);
     }

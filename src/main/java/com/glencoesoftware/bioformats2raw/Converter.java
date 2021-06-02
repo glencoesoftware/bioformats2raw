@@ -9,6 +9,7 @@ package com.glencoesoftware.bioformats2raw;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.Files;
@@ -146,6 +147,12 @@ public class Converter implements Callable<Void> {
     description = "Maximum tile height to read (default: ${DEFAULT-VALUE})"
   )
   private volatile int tileHeight = 1024;
+
+  @Option(
+    names = {"-z", "--chunk_depth"},
+    description = "Maximum chunk depth to read (default: ${DEFAULT-VALUE}) "
+  )
+  private volatile int chunkDepth = 1;
 
   @Option(
     names = {"--log-level", "--debug"},
@@ -326,6 +333,14 @@ public class Converter implements Callable<Void> {
 
   )
   private volatile boolean noRootGroup = false;
+
+  @Option(
+      names = "--use-existing-resolutions",
+      description = "Use existing sub resolutions from original input format" +
+          "[Will break compatibility with raw2ometiff]"
+
+  )
+  private volatile boolean reuseExistingResolutions = false;
 
   /** Scaling implementation that will be used during downsampling. */
   private volatile IImageScaler scaler = new SimpleImageScaler();
@@ -865,8 +880,18 @@ public class Converter implements Callable<Void> {
           throws FormatException, IOException, InterruptedException,
                  EnumerationException, InvalidRangeException
   {
+    IFormatReader reader = readers.take();
+    try {
+      if (reader.getResolutionCount() > 1 && reuseExistingResolutions) {
+        reader.setResolution(resolution);
+        return reader.openBytes(plane, xx, yy, width, height);
+      }
+    }
+    finally {
+      readers.put(reader);
+    }
     if (resolution == 0) {
-      IFormatReader reader = readers.take();
+      reader = readers.take();
       try {
         return changePixelType(
           reader.openBytes(plane, xx, yy, width, height),
@@ -894,11 +919,12 @@ public class Converter implements Callable<Void> {
    * @param reader initialized reader for the input file
    * @param scaledWidth size of the X dimension at the current resolution
    * @param scaledHeight size of the Y dimension at the current resolution
+   * @param scaledDepth size of the Z dimension at the current resolution
    * @return dimension array ready for use with Zarr
    * @throws EnumerationException
    */
   private int[] getDimensions(
-    IFormatReader reader, int scaledWidth, int scaledHeight)
+    IFormatReader reader, int scaledWidth, int scaledHeight, int scaledDepth)
       throws EnumerationException
   {
     int sizeZ = reader.getSizeZ();
@@ -907,7 +933,7 @@ public class Converter implements Callable<Void> {
     String o = new StringBuilder(
         dimensionOrder != null? dimensionOrder.toString()
         : reader.getDimensionOrder()).reverse().toString();
-    int[] dimensions = new int[] {0, 0, 0, scaledHeight, scaledWidth};
+    int[] dimensions = new int[] {0, 0, scaledDepth, scaledHeight, scaledWidth};
     dimensions[o.indexOf("Z")] = sizeZ;
     dimensions[o.indexOf("C")] = sizeC;
     dimensions[o.indexOf("T")] = sizeT;
@@ -938,9 +964,8 @@ public class Converter implements Callable<Void> {
     return offset;
   }
 
-  private void processTile(
-      int series, int resolution, int plane, int xx, int yy,
-      int width, int height)
+  private void processChunk(int series, int resolution, int plane,
+      int[] offset, int[] shape)
         throws EnumerationException, FormatException, IOException,
           InterruptedException, InvalidRangeException
   {
@@ -951,32 +976,49 @@ public class Converter implements Callable<Void> {
     IFormatReader reader = readers.take();
     boolean littleEndian = reader.isLittleEndian();
     int bpp = FormatTools.getBytesPerPixel(reader.getPixelType());
-    int[] offset;
+    int[] zct;
+    ByteArrayOutputStream chunkAsBytes = new ByteArrayOutputStream();
+    int zOffset;
+    int zShape;
     try {
-      offset = getOffset(
-          reader, xx, yy, plane);
+      LOGGER.info("requesting tile to write at {} to {}", offset, pathName);
+      //Get coords of current series
+      zct = reader.getZCTCoords(plane);
+      String o = new StringBuilder(
+          dimensionOrder != null? dimensionOrder.toString()
+          : reader.getDimensionOrder()).reverse().toString();
+      zOffset = offset[o.indexOf("Z")];
+      zShape = shape[o.indexOf("Z")];
     }
     finally {
       readers.put(reader);
     }
-    int[] shape = new int[] {1, 1, 1, height, width};
-
-    Slf4JStopWatch t0 = new Slf4JStopWatch("getTile");
-    byte[] tileAsBytes;
+    Slf4JStopWatch t0 = new Slf4JStopWatch("getChunk");
     try {
-      LOGGER.info("requesting tile to write at {} to {}", offset, pathName);
-      tileAsBytes = getTile(series, resolution, plane, xx, yy, width, height);
-      if (tileAsBytes == null) {
-        return;
+      for (int z = zOffset; z < zOffset + zShape; z++) {
+        //Get plane index for current Z
+        reader = readers.take();
+        int planeIndex;
+        try {
+          planeIndex = FormatTools.getIndex(reader, z, zct[1], zct[2]);
+        }
+        finally {
+          readers.put(reader);
+        }
+        byte[] tileAsBytes = getTile(series, resolution, planeIndex,
+                                    offset[4], offset[3], shape[4], shape[3]);
+        if (tileAsBytes == null) {
+          return;
+        }
+        chunkAsBytes.write(tileAsBytes);
       }
     }
     finally {
       nTile.incrementAndGet();
-      LOGGER.info("tile read complete {}/{}", nTile.get(), tileCount);
+      LOGGER.info("chunk read complete {}/{}", nTile.get(), tileCount);
       t0.stop();
     }
-
-    ByteBuffer tileBuffer = ByteBuffer.wrap(tileAsBytes);
+    ByteBuffer tileBuffer = ByteBuffer.wrap(chunkAsBytes.toByteArray());
     if (resolution == 0 && bpp > 1) {
       tileBuffer.order(
         littleEndian ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN);
@@ -1002,16 +1044,27 @@ public class Converter implements Callable<Void> {
     int resolutions = 1;
     int sizeX;
     int sizeY;
+    int sizeZ;
+    int sizeT;
+    int sizeC;
     int imageCount;
+    String readerDimensionOrder;
     try {
       // calculate a reasonable pyramid depth if not specified as an argument
       if (pyramidResolutions == null) {
-        int width = workingReader.getSizeX();
-        int height = workingReader.getSizeY();
-        while (width > MIN_SIZE || height > MIN_SIZE) {
-          resolutions++;
-          width /= PYRAMID_SCALE;
-          height /= PYRAMID_SCALE;
+        if (workingReader.getResolutionCount() > 1
+            && reuseExistingResolutions)
+        {
+          resolutions = workingReader.getResolutionCount();
+        }
+        else {
+          int width = workingReader.getSizeX();
+          int height = workingReader.getSizeY();
+          while (width > MIN_SIZE || height > MIN_SIZE) {
+            resolutions++;
+            width /= PYRAMID_SCALE;
+            height /= PYRAMID_SCALE;
+          }
         }
       }
       else {
@@ -1020,6 +1073,10 @@ public class Converter implements Callable<Void> {
       LOGGER.info("Using {} pyramid resolutions", resolutions);
       sizeX = workingReader.getSizeX();
       sizeY = workingReader.getSizeY();
+      sizeZ = workingReader.getSizeZ();
+      sizeT = workingReader.getSizeT();
+      sizeC = workingReader.getSizeC();
+      readerDimensionOrder = workingReader.getDimensionOrder();
       imageCount = workingReader.getImageCount();
       pixelType = getRealType(workingReader.getPixelType());
     }
@@ -1029,8 +1086,8 @@ public class Converter implements Callable<Void> {
 
     LOGGER.info(
       "Preparing to write pyramid sizeX {} (tileWidth: {}) " +
-      "sizeY {} (tileWidth: {}) imageCount {}",
-        sizeX, tileWidth, sizeY, tileHeight, imageCount
+      "sizeY {} (tileWidth: {}) sizeZ {} (tileDepth: {}) imageCount {}",
+        sizeX, tileWidth, sizeY, tileHeight, sizeZ, chunkDepth, imageCount
     );
 
     // fileset level metadata
@@ -1049,9 +1106,26 @@ public class Converter implements Callable<Void> {
       int scale = (int) Math.pow(PYRAMID_SCALE, resolution);
       int scaledWidth = sizeX / scale;
       int scaledHeight = sizeY / scale;
+      int scaledDepth = sizeZ;
+
+      workingReader = readers.take();
+      try {
+        if (workingReader.getResolutionCount() > 1
+            && reuseExistingResolutions)
+        {
+          workingReader.setResolution(resCounter);
+          scaledWidth = workingReader.getSizeX();
+          scaledHeight = workingReader.getSizeY();
+          scaledDepth = workingReader.getSizeZ();
+        }
+      }
+      finally {
+        readers.put(workingReader);
+      }
 
       int activeTileWidth = tileWidth;
       int activeTileHeight = tileHeight;
+      int activeChunkDepth = chunkDepth;
       if (scaledWidth < activeTileWidth) {
         LOGGER.info("Reducing active tileWidth to {}", scaledWidth);
         activeTileWidth = scaledWidth;
@@ -1062,13 +1136,19 @@ public class Converter implements Callable<Void> {
         activeTileHeight = scaledHeight;
       }
 
+      if (scaledDepth < activeChunkDepth) {
+        LOGGER.warn("Reducing active chunkDepth to {}", scaledDepth);
+        activeChunkDepth = scaledDepth;
+      }
+
       DataType dataType = getZarrType(pixelType);
       String resolutionString = String.format(
               scaleFormatString, getScaleFormatStringArgs(series, resolution));
       ArrayParams arrayParams = new ArrayParams()
           .shape(getDimensions(
-              workingReader, scaledWidth, scaledHeight))
-          .chunks(new int[] {1, 1, 1, activeTileHeight, activeTileWidth})
+              workingReader, scaledWidth, scaledHeight, scaledDepth))
+          .chunks(new int[] {1, 1, activeChunkDepth, activeTileHeight,
+            activeTileWidth})
           .dataType(dataType)
           .nested(nested)
           .compressor(CompressorFactory.create(
@@ -1078,7 +1158,9 @@ public class Converter implements Callable<Void> {
       nTile = new AtomicInteger(0);
       tileCount = (int) Math.ceil((double) scaledWidth / tileWidth)
           * (int) Math.ceil((double) scaledHeight / tileHeight)
-          * imageCount;
+          * (int) Math.ceil((double) scaledDepth / chunkDepth)
+          * (imageCount / sizeZ);
+
       List<CompletableFuture<Void>> futures =
         new ArrayList<CompletableFuture<Void>>();
 
@@ -1108,33 +1190,54 @@ public class Converter implements Callable<Void> {
           for (int k=0; k<scaledWidth; k+=tileWidth) {
             final int xx = k;
             int width = (int) Math.min(tileWidth, scaledWidth - xx);
-            for (int i=0; i<imageCount; i++) {
-              final int plane = i;
+            for (int l=0; l<scaledDepth; l+=chunkDepth) {
+              final int zz = l;
+              int depth = (int) Math.min(chunkDepth, scaledDepth - zz);
+              for (int cc=0; cc<sizeC; cc++) {
+                for (int tt=0; tt<sizeT; tt++) {
+                  final int plane = FormatTools.getIndex(readerDimensionOrder,
+                      sizeZ, sizeC, sizeT, imageCount, zz, cc, tt);
 
-              CompletableFuture<Void> future = new CompletableFuture<Void>();
-              futures.add(future);
-              executor.execute(() -> {
-                try {
-                  processTile(series, resolution, plane, xx, yy, width, height);
-                  LOGGER.info(
-                      "Successfully processed tile; resolution={} plane={} " +
-                      "xx={} yy={} width={} height={}",
-                      resolution, plane, xx, yy, width, height);
-                  future.complete(null);
+                  CompletableFuture<Void> future =
+                       new CompletableFuture<Void>();
+                  futures.add(future);
+                  executor.execute(() -> {
+                    try {
+                      int[] shape = {1, 1, 1, height, width};
+                      int[] offset;
+                      IFormatReader reader = readers.take();
+                      try {
+                        String o = new StringBuilder(
+                            dimensionOrder != null? dimensionOrder.toString()
+                            : reader.getDimensionOrder()).reverse().toString();
+                        shape[o.indexOf("Z")] = depth;
+                        offset = getOffset(reader, xx, yy, plane);
+                      }
+                      finally {
+                        readers.put(reader);
+                      }
+                      processChunk(series, resolution, plane, offset, shape);
+                      LOGGER.info(
+                          "Successfully processed chunk; resolution={} plane={}"
+                          + " xx={} yy={} zz={} width={} height={} depth={}",
+                          resolution, plane, xx, yy, zz, width, height, depth);
+                      future.complete(null);
+                    }
+                    catch (Throwable t) {
+                      future.completeExceptionally(t);
+                      LOGGER.error(
+                        "Failure processing chunk; resolution={} plane={} " +
+                        "xx={} yy={} zz={} width={} height={} depth={}",
+                        resolution, plane, xx, yy, zz, width, height, depth, t);
+                    }
+                    finally {
+                      if (pb != null) {
+                        pb.step();
+                      }
+                    }
+                  });
                 }
-                catch (Throwable t) {
-                  future.completeExceptionally(t);
-                  LOGGER.error(
-                    "Failure processing tile; resolution={} plane={} " +
-                    "xx={} yy={} width={} height={}",
-                    resolution, plane, xx, yy, width, height, t);
-                }
-                finally {
-                  if (pb != null) {
-                    pb.step();
-                  }
-                }
-              });
+              }
             }
           }
         }
@@ -1158,8 +1261,10 @@ public class Converter implements Callable<Void> {
 
   private void saveHCSMetadata(IMetadata meta) throws IOException {
     if (noHCS) {
+      LOGGER.debug("skipping HCS metadata");
       return;
     }
+    LOGGER.debug("saving HCS metadata");
 
     // assumes only one plate defined
     Path rootPath = getRootPath();
@@ -1304,10 +1409,13 @@ public class Converter implements Callable<Void> {
   private void setSeriesLevelMetadata(int series, int resolutions)
       throws IOException
   {
+    LOGGER.debug("setSeriesLevelMetadata({}, {})", series, resolutions);
     String resolutionString = String.format(
             scaleFormatString, getScaleFormatStringArgs(series, 0));
     String seriesString = resolutionString.substring(0,
             resolutionString.lastIndexOf('/'));
+    LOGGER.debug("  seriesString = {}", seriesString);
+    LOGGER.debug("  resolutionString = {}", resolutionString);
     List<Map<String, Object>> multiscales =
             new ArrayList<Map<String, Object>>();
     Map<String, Object> multiscale = new HashMap<String, Object>();
@@ -1336,10 +1444,13 @@ public class Converter implements Callable<Void> {
       datasets.add(Collections.singletonMap("path", lastPath));
     }
     multiscale.put("datasets", datasets);
-    ZarrGroup subGroup = ZarrGroup.create(getRootPath().resolve(seriesString));
+    Path subGroupPath = getRootPath().resolve(seriesString);
+    LOGGER.debug("  creating subgroup {}", subGroupPath);
+    ZarrGroup subGroup = ZarrGroup.create(subGroupPath);
     Map<String, Object> attributes = new HashMap<String, Object>();
     attributes.put("multiscales", multiscales);
     subGroup.writeAttributes(attributes);
+    LOGGER.debug("    finished writing subgroup attributes");
   }
 
   /**
