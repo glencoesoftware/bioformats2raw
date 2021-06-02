@@ -1074,6 +1074,7 @@ public class ZarrTest {
 
     assertTrue(!Files.exists(
       output.resolve("OME").resolve("METADATA.ome.xml")));
+  }
 
   /**
    * Convert with the --use-existing-resolutions option.  Conversion should
