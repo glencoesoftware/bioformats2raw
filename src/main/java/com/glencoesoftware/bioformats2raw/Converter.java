@@ -605,20 +605,8 @@ public class Converter implements Callable<Void> {
 
         // write the original OME-XML to a file
         Path metadataPath = getRootPath().resolve("OME");
-        boolean exists = false;
-        try {
-          exists = Files.exists(metadataPath);
-
-          if (!exists) {
-            Files.createDirectories(metadataPath);
-          }
-        }
-        catch (RuntimeException possibleS3){
-          // can't "createDirectories()" on s3. To not need
-          // a hard dependency on AmazonS3Exception, we will
-          // try to detect via reflection.
-          // FIXME: check for 403 forbidden which == "DNE"
-          throw possibleS3;
+        if (!Files.exists(metadataPath)) {
+          Files.createDirectories(metadataPath);
         }
 
         Path omexmlFile = metadataPath.resolve(METADATA_FILE);
