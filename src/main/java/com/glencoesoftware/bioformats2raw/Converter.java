@@ -36,7 +36,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
-import com.amazonaws.services.s3.model.AmazonS3Exception;
 import loci.common.Constants;
 import loci.common.DataTools;
 import loci.common.image.IImageScaler;
@@ -123,11 +122,25 @@ public class Converter implements Callable<Void> {
   @Parameters(
     index = "1",
     arity = "1",
-    description = "path or uri to the output pyramid directory"
+    description = "path to the output pyramid directory. " +
+      "The given path can also be a URI (containing ://) " +
+      "which will activate **experimental** support for " +
+      "Filesystems. For example, if the output path given " +
+      "is 's3://my-bucket/some-path' *and* you have an "+
+      "S3FileSystem implementation in your classpath, then " +
+      "all files will be written to S3."
   )
   private volatile String outputLocation;
 
-  @Option(names = "--output-options", split = "\\|")
+  @Option(
+    names = "--output-options",
+    split = "\\|",
+    description = "|-separated list of key-value pairs " +
+      "to be used as an additional argument to Filesystem " +
+      "implementations if used. For example, " +
+      "--output-options=s3fs_path_style_access=true|... " +
+      "might be useful for connecting to minio."
+  )
   private Map<String, String> outputOptions;
 
   @Option(
@@ -374,6 +387,7 @@ public class Converter implements Callable<Void> {
 
   private List<HCSIndex> hcsIndexes = new ArrayList<HCSIndex>();
 
+  /** Calculated from outputLocation. */
   private volatile Path outputPath;
 
   @Override
@@ -399,7 +413,7 @@ public class Converter implements Callable<Void> {
 
     if (outputLocation.contains("://")) {
 
-      LOGGER.info("*** experimental remote support ***");
+      LOGGER.info("*** experimental remote filesystem support ***");
 
       URI uri = URI.create(outputLocation);
       URI endpoint = new URI(uri.getScheme(), uri.getUserInfo(), uri.getHost(),
@@ -417,8 +431,11 @@ public class Converter implements Callable<Void> {
       FileSystem fs = FileSystems.newFileSystem(endpoint, outputOptions);
       outputPath = fs.getPath(bucket, rest);
       if (Files.exists(outputPath)) {
+        if (overwrite) {
+          LOGGER.warn("overwriting on remote filesystem not yet supported");
+        }
         throw new IllegalArgumentException(
-                "Output path " + outputPath + " already exists");
+                "Output path " + outputPath + " already exists.");
       }
     }
     else {
@@ -596,10 +613,12 @@ public class Converter implements Callable<Void> {
             Files.createDirectories(metadataPath);
           }
         }
-        catch (AmazonS3Exception s3){
-          // can't "createDirectories()" on s3.
-          // FIXME: shouldn't need to catch explicit s3.
+        catch (RuntimeException possibleS3){
+          // can't "createDirectories()" on s3. To not need
+          // a hard dependency on AmazonS3Exception, we will
+          // try to detect via reflection.
           // FIXME: check for 403 forbidden which == "DNE"
+          throw possibleS3;
         }
 
         Path omexmlFile = metadataPath.resolve(METADATA_FILE);

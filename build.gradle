@@ -45,6 +45,7 @@ dependencies {
     // implementation 'org.carlspring.cloud.aws:s3fs-nio:1.0-SNAPSHOT'
     // implementation 'io.nextflow:nxf-s3fs:1.1.0'
     implementation 'org.lasersonlab:s3fs:2.2.3'
+    implementation 'javax.xml.bind:jaxb-api:2.3.0'
 
 
     implementation 'org.openpnp:opencv:3.4.2-1'
