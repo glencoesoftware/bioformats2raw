@@ -611,6 +611,19 @@ public class ZarrTest {
   }
 
   /**
+   * @return an array of dimensions ordered XYZCT
+   * and the dimensionOrder to be used
+   */
+  static Stream<Arguments> getDimensions() {
+    return Stream.of(
+      Arguments.of(new int[]{512, 512, 64, 1, 1}, "XYZCT"),
+      Arguments.of(new int[]{512, 512, 32, 3, 100}, "XYZCT"),
+      Arguments.of(new int[]{512, 512, 16, 1, 1}, "XYCTZ"),
+      Arguments.of(new int[]{512, 512, 32, 3, 100}, "XYCTZ")
+    );
+  }
+
+  /**
    * Test that there are no edge effects when tiles do not divide evenly
    * and downsampling.
    */
@@ -1038,6 +1051,136 @@ public class ZarrTest {
 
     assertTrue(!Files.exists(output.resolve(".zattrs")));
     assertTrue(!Files.exists(output.resolve(".zgroup")));
+  }
+
+  /**
+   * Convert with the --use-existing-resolutions option.  Conversion should
+   * produce multiscales matching the input resolution numbers and scale.
+   */
+  @Test
+  public void testUseExistingResolutions() throws Exception {
+    int resolutionCount = 3;
+    int resolutionScale = 4;
+    int sizeX = 2048;
+    int sizeY = 1024;
+    input = fake("sizeX", ""+sizeX+"", "sizeY", ""+sizeY+"",
+        "resolutions", ""+resolutionCount+"",
+        "resolutionScale", ""+resolutionScale+"");
+    assertTool("--use-existing-resolutions");
+    ZarrGroup z =
+        ZarrGroup.open(output.resolve("0").toString());
+    List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
+            z.getAttributes().get("multiscales");
+
+    Map<String, Object> multiscale = multiscales.get(0);
+    List<Map<String, Object>> datasets =
+              (List<Map<String, Object>>) multiscale.get("datasets");
+    assertEquals(resolutionCount, datasets.size());
+    for (int i = 0; i < resolutionCount; i++) {
+      String path = (String) datasets.get(i).get("path");
+      ZarrArray series = z.openArray(path);
+      assertArrayEquals(new int[] {1, 1, 1, sizeY, sizeX}, series.getShape());
+      sizeY /= resolutionScale;
+      sizeX /= resolutionScale;
+    }
+  }
+
+  /**
+   * Convert without the --use-existing-resolutions option.  Conversion should
+   * ignore the input resolution numbers and scale.
+   */
+  @Test
+  public void testIgnoreExistingResolutions() throws Exception {
+    int resolutionCount = 3;
+    int resolutionScale = 4;
+    int sizeX = 2048;
+    int sizeY = 1024;
+    input = fake("sizeX", ""+sizeX+"", "sizeY", ""+sizeY+"",
+        "resolutions", ""+resolutionCount+"",
+        "resolutionScale", ""+resolutionScale+"");
+    assertTool();
+    ZarrGroup z =
+        ZarrGroup.open(output.resolve("0").toString());
+    List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
+            z.getAttributes().get("multiscales");
+
+    Map<String, Object> multiscale = multiscales.get(0);
+    List<Map<String, Object>> datasets =
+              (List<Map<String, Object>>) multiscale.get("datasets");
+    assertEquals(4, datasets.size());
+    for (int i = 0; i < 4; i++) {
+      String path = (String) datasets.get(i).get("path");
+      ZarrArray series = z.openArray(path);
+      assertArrayEquals(new int[] {1, 1, 1, sizeY, sizeX}, series.getShape());
+      sizeY /= 2;
+      sizeX /= 2;
+    }
+  }
+
+  /**
+   * Convert with the --chunk_depth option. Conversion should produce
+   * chunk sizes matching the provided input
+   *
+   * @param xyzct array of dimensions to be used for the input file
+   * @param dimOrder the dimensionOrder to be used for the input file
+   */
+  @ParameterizedTest
+  @MethodSource("getDimensions")
+  public void testChunkWriting(int[] xyzct, String dimOrder) throws Exception {
+    int chunkDepth = 16;
+    input = fake("sizeX", ""+xyzct[0]+"", "sizeY", ""+xyzct[1]+"",
+        "sizeZ", ""+xyzct[2]+"", "sizeC", ""+xyzct[3]+"",
+        "sizeT", ""+xyzct[4]+"", "dimOrder", dimOrder);
+    assertTool("--chunk_depth", ""+chunkDepth+"");
+    ZarrGroup z = ZarrGroup.open(output.resolve("0").toString());
+    List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
+            z.getAttributes().get("multiscales");
+
+    Map<String, Object> multiscale = multiscales.get(0);
+    List<Map<String, Object>> datasets =
+              (List<Map<String, Object>>) multiscale.get("datasets");
+
+    for (int i = 0; i < datasets.size(); i++) {
+      String path = (String) datasets.get(i).get("path");
+      ZarrArray series = z.openArray(path);
+
+      assertArrayEquals(new int[] {1, 1, chunkDepth, xyzct[0], xyzct[1]},
+          series.getChunks());
+      xyzct[0] /= 2;
+      xyzct[1] /= 2;
+    }
+  }
+
+  /**
+   * Convert with the --chunk_depth option larger than sizeZ. Conversion
+   * should produce chunk sizes matching the sizeZ
+   */
+  @Test
+  public void testChunkSizeToBig() throws Exception {
+    int sizeZ = 8;
+    int chunkDepth = 16;
+    int sizeX = 512;
+    int sizeY = 512;
+    input = fake("sizeX", ""+sizeX+"", "sizeY", ""+sizeY+"",
+        "sizeZ", ""+sizeZ+"");
+    assertTool("--chunk_depth", ""+chunkDepth+"");
+    ZarrGroup z = ZarrGroup.open(output.resolve("0").toString());
+    List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
+            z.getAttributes().get("multiscales");
+
+    Map<String, Object> multiscale = multiscales.get(0);
+    List<Map<String, Object>> datasets =
+              (List<Map<String, Object>>) multiscale.get("datasets");
+
+    for (int i = 0; i < datasets.size(); i++) {
+      String path = (String) datasets.get(i).get("path");
+      ZarrArray series = z.openArray(path);
+
+      assertArrayEquals(new int[] {1, 1, sizeZ, sizeX, sizeY},
+          series.getChunks());
+      sizeX /= 2;
+      sizeY /= 2;
+    }
   }
 
   private void checkPlateGroupLayout(Path root, int rowCount, int colCount,
