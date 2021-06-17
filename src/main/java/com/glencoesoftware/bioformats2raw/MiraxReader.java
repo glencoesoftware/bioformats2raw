@@ -504,6 +504,8 @@ public class MiraxReader extends FormatReader {
 
     int nonHierCount = Integer.parseInt(hierarchy.get("NONHIER_COUNT"));
     int totalCount = 0;
+    int originX = 0;
+    int originY = 0;
     int metadataWidth = 0;
     int metadataHeight = 0;
     for (int i=0; i<nonHierCount; i++) {
@@ -598,12 +600,12 @@ public class MiraxReader extends FormatReader {
               }
             }
 
-            minX -= (minX % 256);
-            minY -= (minY % 256);
+            originX = minX - (minX % 256);
+            originY = minY - (minY % 256);
 
             for (int t=0; t<nTiles; t++) {
-              tilePositions[t][0] -= minX;
-              tilePositions[t][1] -= minY;
+              tilePositions[t][0] -= originX;
+              tilePositions[t][1] -= originY;
             }
 
             stream.close();
@@ -920,6 +922,9 @@ public class MiraxReader extends FormatReader {
           LOGGER.debug("Could not parse physical pixel size Y {}", sizeY);
         }
       }
+
+      store.setPlanePositionX(new Length(originX, UNITS.PIXEL), 0, 0);
+      store.setPlanePositionY(new Length(originY, UNITS.PIXEL), 0, 0);
 
       // parse channel data
 
