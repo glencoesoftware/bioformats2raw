@@ -137,13 +137,24 @@ public class MiraxReader extends FormatReader {
 
   /** Constructs a new Mirax reader. */
   public MiraxReader() {
-    super("Mirax", "mrxs");
+    super("Mirax", new String[] {"mrxs", "ini"});
     domains = new String[] {FormatTools.HISTOLOGY_DOMAIN};
-    datasetDescription = "One .vms file plus several .jpg files";
+    datasetDescription =
+      "A directory of .ini and .dat files, and an optional .mrxs file";
     suffixNecessary = true;
+    suffixSufficient = false;
   }
 
   // -- IFormatReader API methods --
+
+  /* @see loci.formats.IFormatReader#isThisType(String, boolean) */
+  @Override
+  public boolean isThisType(String name, boolean open) {
+    if (checkSuffix(name, "mrxs")) {
+      return true;
+    }
+    return new Location(name).getName().equals(SLIDE_DATA);
+  }
 
   /* @see loci.formats.IFormatReader#getOptimalTileWidth() */
   @Override
@@ -172,7 +183,9 @@ public class MiraxReader extends FormatReader {
 
     ArrayList<String> f = new ArrayList<String>();
     f.add(currentId);
-    f.add(iniPath);
+    if (!iniPath.equals(currentId)) {
+      f.add(iniPath);
+    }
     for (String file : files) {
       if (!checkSuffix(file, "dat") || !noPixels) {
         f.add(file);
@@ -366,13 +379,21 @@ public class MiraxReader extends FormatReader {
   protected void initFile(String id) throws FormatException, IOException {
     super.initFile(id);
 
+    Location slideDirectory = null;
+
+    if (checkSuffix(id, "mrxs")) {
+      slideDirectory = new Location(id.substring(0, id.lastIndexOf(".")));
+      Location slideData = new Location(slideDirectory, SLIDE_DATA);
+      iniPath = slideData.getAbsolutePath();
+    }
+    else {
+      slideDirectory = new Location(id).getParentFile();
+      iniPath = new Location(id).getAbsolutePath();
+    }
+
     offsets = new TreeMap<TilePointer, List<TilePointer>>();
 
-    Location dir = new Location(id.substring(0, id.lastIndexOf(".")));
-    Location slideData = new Location(dir, SLIDE_DATA);
-    iniPath = slideData.getAbsolutePath();
-
-    String ini = DataTools.readFile(slideData.getAbsolutePath());
+    String ini = DataTools.readFile(iniPath);
     ini = ini.substring(ini.indexOf("["));
     IniParser parser = new IniParser();
     IniList data = parser.parseINI(new BufferedReader(new StringReader(ini)));
@@ -394,7 +415,7 @@ public class MiraxReader extends FormatReader {
     }
 
     String indexFile = hierarchy.get("INDEXFILE");
-    Location index = new Location(dir, indexFile);
+    Location index = new Location(slideDirectory, indexFile);
     if (!index.exists()) {
       throw new IOException(
         "Index file " + index.getAbsolutePath() + " missing");
@@ -424,7 +445,7 @@ public class MiraxReader extends FormatReader {
     int nFiles = Integer.parseInt(fileTable.get("FILE_COUNT"));
 
     for (int i=0; i<nFiles; i++) {
-      Location f = new Location(dir, fileTable.get("FILE_" + i));
+      Location f = new Location(slideDirectory, fileTable.get("FILE_" + i));
       if (!f.exists()) {
         throw new IOException("Data file " + f.getAbsolutePath() + " missing");
       }
