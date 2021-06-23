@@ -91,8 +91,6 @@ public class ZarrTest {
     try {
       converter = new Converter();
       CommandLine.call(converter, args.toArray(new String[]{}));
-      assertTrue(Files.exists(
-        output.resolve("OME").resolve("METADATA.ome.xml")));
     }
     catch (RuntimeException rt) {
       throw rt;
@@ -1051,6 +1049,31 @@ public class ZarrTest {
 
     assertTrue(!Files.exists(output.resolve(".zattrs")));
     assertTrue(!Files.exists(output.resolve(".zgroup")));
+  }
+
+  /**
+   * Check that a OME metadata is exported.
+   */
+  @Test
+  public void testOmeMetaExportOption() throws Exception {
+    input = fake();
+    assertTool();
+
+    assertTrue(Files.exists(
+      output.resolve("OME").resolve("METADATA.ome.xml")));
+  }
+
+  /**
+   * Convert with the --no-ome-meta-export option.  Conversion should succeed,
+   * but no OME metadata should be exported.
+   */
+  @Test
+  public void testNoOmeMetaExportOption() throws Exception {
+    input = fake();
+    assertTool("--no-ome-meta-export");
+
+    assertTrue(!Files.exists(
+      output.resolve("OME").resolve("METADATA.ome.xml")));
   }
 
   /**

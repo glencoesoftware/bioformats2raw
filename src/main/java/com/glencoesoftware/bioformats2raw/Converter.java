@@ -320,6 +320,13 @@ public class Converter implements Callable<Void> {
   private volatile boolean noHCS = false;
 
   @Option(
+          names = "--no-ome-meta-export",
+          description = "Turn off OME metadata exporting " +
+                        "[Will break compatibility with raw2ometiff]"
+  )
+  private volatile boolean noOMEMeta = false;
+
+  @Option(
           names = "--no-root-group",
           description = "Turn off creation of root group and corresponding " +
                         "metadata [Will break compatibility with raw2ometiff]"
@@ -468,7 +475,7 @@ public class Converter implements Callable<Void> {
         memoizer.setMetadataOptions(options);
       }
 
-      memoizer.setOriginalMetadataPopulated(true);
+      memoizer.setOriginalMetadataPopulated(!noOMEMeta);
       memoizer.setFlattenedResolutions(false);
       memoizer.setMetadataFiltered(true);
       memoizer.setMetadataStore(createMetadata());
@@ -546,15 +553,17 @@ public class Converter implements Callable<Void> {
           }
         }
 
-        String xml = getService().getOMEXML(meta);
+        if (!noOMEMeta) {
+          String xml = getService().getOMEXML(meta);
 
-        // write the original OME-XML to a file
-        Path metadataPath = getRootPath().resolve("OME");
-        if (!Files.exists(metadataPath)) {
-          Files.createDirectories(metadataPath);
+          // write the original OME-XML to a file
+          Path metadataPath = getRootPath().resolve("OME");
+          if (!Files.exists(metadataPath)) {
+            Files.createDirectories(metadataPath);
+          }
+          Path omexmlFile = metadataPath.resolve(METADATA_FILE);
+          Files.write(omexmlFile, xml.getBytes(Constants.ENCODING));
         }
-        Path omexmlFile = metadataPath.resolve(METADATA_FILE);
-        Files.write(omexmlFile, xml.getBytes(Constants.ENCODING));
       }
       catch (ServiceException se) {
         LOGGER.error("Could not retrieve OME-XML", se);
