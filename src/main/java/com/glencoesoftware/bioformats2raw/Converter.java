@@ -1541,28 +1541,6 @@ public class Converter implements Callable<Void> {
     }
   }
 
-  /**
-   * Save the current series as a separate image (label/barcode, etc.).
-   *
-   * @param filename the relative path to the output file
-   */
-  public void saveExtraImage(String filename)
-    throws FormatException, IOException, InterruptedException
-  {
-    IFormatReader reader = readers.take();
-    try (ImageWriter writer = new ImageWriter()) {
-      IMetadata metadata = createMetadata();
-      MetadataTools.populateMetadata(metadata, 0, null,
-        reader.getCoreMetadataList().get(reader.getCoreIndex()));
-      writer.setMetadataRetrieve(metadata);
-      writer.setId(outputPath.resolve(filename).toString()); // FIXME: use Path?
-      writer.saveBytes(0, reader.openBytes(0));
-    }
-    finally {
-      readers.put(reader);
-    }
-  }
-
   private OMEXMLService getService() throws FormatException {
     try {
       ServiceFactory factory = new ServiceFactory();
