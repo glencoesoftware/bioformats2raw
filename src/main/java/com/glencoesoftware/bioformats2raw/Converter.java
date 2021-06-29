@@ -10,10 +10,14 @@ package com.glencoesoftware.bioformats2raw;
 import java.io.File;
 import java.io.IOException;
 import java.io.ByteArrayOutputStream;
+import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -45,9 +49,7 @@ import loci.formats.FormatException;
 import loci.formats.FormatTools;
 import loci.formats.IFormatReader;
 import loci.formats.ImageReader;
-import loci.formats.ImageWriter;
 import loci.formats.Memoizer;
-import loci.formats.MetadataTools;
 import loci.formats.MissingLibraryException;
 import loci.formats.in.DynamicMetadataOptions;
 import loci.formats.meta.IMetadata;
@@ -118,9 +120,26 @@ public class Converter implements Callable<Void> {
   @Parameters(
     index = "1",
     arity = "1",
-    description = "path to the output pyramid directory"
+    description = "path to the output pyramid directory. " +
+      "The given path can also be a URI (containing ://) " +
+      "which will activate **experimental** support for " +
+      "Filesystems. For example, if the output path given " +
+      "is 's3://my-bucket/some-path' *and* you have an "+
+      "S3FileSystem implementation in your classpath, then " +
+      "all files will be written to S3."
   )
-  private volatile Path outputPath;
+  private volatile String outputLocation;
+
+  @Option(
+    names = "--output-options",
+    split = "\\|",
+    description = "|-separated list of key-value pairs " +
+      "to be used as an additional argument to Filesystem " +
+      "implementations if used. For example, " +
+      "--output-options=s3fs_path_style_access=true|... " +
+      "might be useful for connecting to minio."
+  )
+  private Map<String, String> outputOptions;
 
   @Option(
     names = {"-r", "--resolutions"},
@@ -373,6 +392,9 @@ public class Converter implements Callable<Void> {
 
   private List<HCSIndex> hcsIndexes = new ArrayList<HCSIndex>();
 
+  /** Calculated from outputLocation. */
+  private volatile Path outputPath;
+
   @Override
   public Void call() throws Exception {
     if (printVersion) {
@@ -394,16 +416,47 @@ public class Converter implements Callable<Void> {
         LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
     root.setLevel(Level.toLevel(logLevel));
 
-    if (Files.exists(outputPath)) {
-      if (!overwrite) {
+    if (outputLocation.contains("://")) {
+
+      LOGGER.info("*** experimental remote filesystem support ***");
+
+      URI uri = URI.create(outputLocation);
+      URI endpoint = new URI(uri.getScheme(), uri.getUserInfo(), uri.getHost(),
+              uri.getPort(), "", "", "");
+      String path = uri.getRawPath().substring(1); // drop initial "/"
+      int first = path.indexOf("/");
+      String bucket = "/" + path.substring(0, first);
+      String rest = path.substring(first + 1);
+
+      LOGGER.debug("endpoint: {}", endpoint);
+      LOGGER.debug("bucket: {}", bucket);
+      LOGGER.debug("path: {}", rest);
+      LOGGER.debug("opts: {}", outputOptions);
+
+      FileSystem fs = FileSystems.newFileSystem(endpoint, outputOptions);
+      outputPath = fs.getPath(bucket, rest);
+      if (Files.exists(outputPath)) {
+        if (overwrite) {
+          LOGGER.warn("overwriting on remote filesystem not yet supported");
+        }
         throw new IllegalArgumentException(
-          "Output path " + outputPath + " already exists");
+                "Output path " + outputPath + " already exists.");
       }
-      LOGGER.warn("Overwriting output path {}", outputPath);
-      Files.walk(outputPath)
-          .sorted(Comparator.reverseOrder())
-          .map(Path::toFile)
-          .forEach(File::delete);
+    }
+    else {
+      outputPath = Paths.get(outputLocation);
+
+      if (Files.exists(outputPath)) {
+        if (!overwrite) {
+          throw new IllegalArgumentException(
+                  "Output path " + outputPath + " already exists");
+        }
+        LOGGER.warn("Overwriting output path {}", outputPath);
+        Files.walk(outputPath)
+                .sorted(Comparator.reverseOrder())
+                .map(Path::toFile)
+                .forEach(File::delete);
+      }
     }
 
     readers = new ArrayBlockingQueue<IFormatReader>(maxWorkers);
@@ -1483,28 +1536,6 @@ public class Converter implements Callable<Void> {
     }
     else {
       throw new RuntimeException(t);
-    }
-  }
-
-  /**
-   * Save the current series as a separate image (label/barcode, etc.).
-   *
-   * @param filename the relative path to the output file
-   */
-  public void saveExtraImage(String filename)
-    throws FormatException, IOException, InterruptedException
-  {
-    IFormatReader reader = readers.take();
-    try (ImageWriter writer = new ImageWriter()) {
-      IMetadata metadata = createMetadata();
-      MetadataTools.populateMetadata(metadata, 0, null,
-        reader.getCoreMetadataList().get(reader.getCoreIndex()));
-      writer.setMetadataRetrieve(metadata);
-      writer.setId(outputPath.resolve(filename).toString());
-      writer.saveBytes(0, reader.openBytes(0));
-    }
-    finally {
-      readers.put(reader);
     }
   }
 

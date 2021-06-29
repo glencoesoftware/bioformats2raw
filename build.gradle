@@ -28,7 +28,7 @@ repositories {
         url 'https://maven.scijava.org/content/groups/public'
     }
     maven {
-        url 'http://nexus.senbox.net/nexus/content/groups/public'
+        url 'https://nexus.senbox.net/nexus/content/groups/public'
     }
 }
 
@@ -39,9 +39,14 @@ configurations.all {
 
 dependencies {
     implementation 'ome:formats-gpl:6.5.1'
-    implementation 'info.picocli:picocli:4.2.0'
+    implementation 'info.picocli:picocli:4.6.1'
     implementation 'com.univocity:univocity-parsers:2.8.4'
     implementation 'com.bc.zarr:jzarr:0.3.3-gs-SNAPSHOT'
+    // implementation 'org.carlspring.cloud.aws:s3fs-nio:1.0-SNAPSHOT'
+    // implementation 'io.nextflow:nxf-s3fs:1.1.0'
+    implementation 'org.lasersonlab:s3fs:2.2.3'
+    implementation 'javax.xml.bind:jaxb-api:2.3.0'
+
 
     implementation 'org.openpnp:opencv:3.4.2-1'
     implementation 'me.tongfei:progressbar:0.9.0'
