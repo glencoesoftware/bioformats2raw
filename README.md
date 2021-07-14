@@ -13,7 +13,8 @@ Requirements
 libblosc (https://github.com/Blosc/c-blosc) version 1.9.0 or later must be installed separately.
 The native libraries are not packaged with any relevant jars.  See also note in jzarr readme (https://github.com/bcdev/jzarr/blob/master/README.md)
 
- * Mac OSX: `brew install c-blosc`
+ * Mac OSX: `brew install c-blosc` then add `export JAVA_OPTS='-Djna.library.path=/usr/local/Cellar/c-blosc/*/lib'` to `~/.zshrc`
+ * Windows: Install latest version of blosc (https://sites.imagej.net/N5/lib/win64/). Rename file to `blosc.dll` and place in a fixed location. Open CMD and run `set JAVA_OPTS="-Djna.library.path=C:\path\to\blosc\folder"`. (Note: make sure the path is to the folder containing `blosc.dll` and not path to `blosc.dll` itself)
  * Ubuntu 18.04+: `apt-get install libblosc1`
 
 Installation
