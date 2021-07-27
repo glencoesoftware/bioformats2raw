@@ -211,6 +211,17 @@ public class ZarrTest {
   }
 
   /**
+   * Test single directory scale format string.
+   */
+  @Test
+  public void testSingleDirectoryScaleFormat() throws Exception {
+    input = fake();
+    assertTool("--scale-format-string", "%2$d");
+    ZarrGroup series0 = ZarrGroup.open(output.toString());
+    series0.openArray("0");
+  }
+
+  /**
    * Test a fake file conversion and ensure the layout is set and that the
    * output is nested.
    */

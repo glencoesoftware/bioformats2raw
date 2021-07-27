@@ -1468,8 +1468,11 @@ public class Converter implements Callable<Void> {
     LOGGER.debug("setSeriesLevelMetadata({}, {})", series, resolutions);
     String resolutionString = String.format(
             scaleFormatString, getScaleFormatStringArgs(series, 0));
-    String seriesString = resolutionString.substring(0,
-            resolutionString.lastIndexOf('/'));
+    String seriesString = "";
+    if (resolutionString.indexOf('/') >= 0) {
+      seriesString = resolutionString.substring(0,
+          resolutionString.lastIndexOf('/'));
+    }
     LOGGER.debug("  seriesString = {}", seriesString);
     LOGGER.debug("  resolutionString = {}", resolutionString);
     List<Map<String, Object>> multiscales =
