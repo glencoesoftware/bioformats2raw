@@ -1141,6 +1141,38 @@ public class ZarrTest {
   }
 
   /**
+   * Convert with too many resolutions for the input XY size.
+   * The resolution count should automatically be reduced.
+   */
+  @Test
+  public void testTooManyResolutions() throws Exception {
+    int resolutionCount = 20;
+    int expectedResolutionCount = 6;
+    int sizeX = 8192;
+    int sizeY = 8192;
+    input = fake("sizeX", String.valueOf(sizeX),
+      "sizeY", String.valueOf(sizeY));
+    assertTool("--resolutions", String.valueOf(resolutionCount));
+
+    ZarrGroup z =
+        ZarrGroup.open(output.resolve("0").toString());
+    List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
+            z.getAttributes().get("multiscales");
+
+    Map<String, Object> multiscale = multiscales.get(0);
+    List<Map<String, Object>> datasets =
+              (List<Map<String, Object>>) multiscale.get("datasets");
+    assertEquals(expectedResolutionCount, datasets.size());
+    for (int i = 0; i < datasets.size(); i++) {
+      String path = (String) datasets.get(i).get("path");
+      ZarrArray series = z.openArray(path);
+      assertArrayEquals(new int[] {1, 1, 1, sizeY, sizeX}, series.getShape());
+      sizeY /= 2;
+      sizeX /= 2;
+    }
+  }
+
+  /**
    * Convert with the --chunk_depth option. Conversion should produce
    * chunk sizes matching the provided input
    *
