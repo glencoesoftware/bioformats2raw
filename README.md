@@ -85,32 +85,30 @@ Output Formatting Options
 Using any combination of these options will result in a Zarr dataset that is not compatible with raw2ometiff,
 but may be suitable for other applications.
 
-`--pyramid-name`
-----------------
+#### --pyramid-name
 
 Specifies a subdirectory of the output directory where Zarr data should be written.
 Using this option will insert another level into the output hierarchy, for example:
 
-		$ bin/bioformats2raw --pyramid-name pyramid-test "test&sizeX=4096&sizeY&=4096&sizeZ=3.fake" example1
-		$ tree example1
-		example1/
-		└── pyramid-test
-				├── 0
-				│   ├── 0
-							 ...
-				│   ├── 1
-							 ...
-				│   ├── 2
-							 ...
-				│   ├── 3
-							 ...
-				│   └── 4
-							 ...
-				└── OME
-						└── METADATA.ome.xml
+    $ bin/bioformats2raw --pyramid-name pyramid-test "test&sizeX=4096&sizeY&=4096&sizeZ=3.fake" example1
+    $ tree example1
+    example1/
+    └── pyramid-test
+        ├── 0
+        │   ├── 0
+               ...
+        │   ├── 1
+               ...
+        │   ├── 2
+               ...
+        │   ├── 3
+               ...
+        │   └── 4
+               ...
+        └── OME
+            └── METADATA.ome.xml
 
-`--scale-format-string`
------------------------
+#### --scale-format-string
 
 A [Java format string](https://docs.oracle.com/javase/8/docs/api/java/util/Formatter.html#syntax) that defines
 how series and resolutions should be described in the output directory hierarchy.
@@ -121,24 +119,23 @@ An example of removing the series index from the hierarchy altogether:
 
     $ bin/bioformats2raw --scale-format-string '%2$d/' "test&sizeX=4096&sizeY&=4096&sizeZ=3.fake" example2
     $ tree example2
-		example2/
-		├── 0
-			 ...
-		├── 1
-			 ...
-		├── 2
-			 ...
-		├── 3
-			 ...
-		├── 4
-		└── OME
-				└── METADATA.ome.xml
+    example2/
+    ├── 0
+       ...
+    ├── 1
+       ...
+    ├── 2
+       ...
+    ├── 3
+       ...
+    ├── 4
+    └── OME
+        └── METADATA.ome.xml
 
 Note the trailing `/` and quotes around the `--scale-format-string` argument.
 Omitting the trailing `/` may cause an error, and single quotes are often necessary to prevent shell expansion.
 
-`--additional-scale-format-string-args`
----------------------------------------
+#### --additional-scale-format-string-args
 
 Specify a .csv file that contains additional information which can be used by `--scale-format-string`.
 The .csv must contain one row per series, and must not contain a header row.
@@ -152,32 +149,31 @@ An example .csv that defines a unique ID, acquisition date, and username for a s
 which can then be used to create a hierarchy by date, username, and ID:
 
     $ bin/bioformats2raw --additional-scale-format-string-args example3.csv --scale-format-string '%4$s/%5$s/%3$s/%1$d/%2$d' "test&sizeX=4096&size&=4096&sizeZ=3.fake" example3
-		example3
-		├── 2021-07-21
-		│   └── user_xyz
-		│       └── 12345
-		│           └── 0
-		│               ├── 0
-											 ...
-		│               ├── 1
-											 ...
-		│               ├── 2
-											 ...
-		│               ├── 3
-											 ...
-		│               └── 4
-											 ...
-		└── OME
-				└── METADATA.ome.xml
+    $ tree example3
+    example3/
+    ├── 2021-07-21
+    │   └── user_xyz
+    │       └── 12345
+    │           └── 0
+    │               ├── 0
+                       ...
+    │               ├── 1
+                       ...
+    │               ├── 2
+                       ...
+    │               ├── 3
+                       ...
+    │               └── 4
+                       ...
+    └── OME
+        └── METADATA.ome.xml
 
-`--no-ome-meta-export`
-----------------------
+#### --no-ome-meta-export
 
 Prevents the input file's OME-XML metadata from being saved.  There will no longer be an `OME` directory
 under the top-level output directory.
 
-`--no-root-group`
------------------
+#### --no-root-group
 
 By default, a Zarr group (`.zgroup` file) is written in the top-level output directory.
 Adding the `--no-root-group` option prevents this group from being written.
