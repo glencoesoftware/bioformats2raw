@@ -1206,6 +1206,29 @@ public class ZarrTest {
     }
   }
 
+  /**
+   * Convert an image with the --min-size option.
+   */
+  @Test
+  public void testMinSizeOption() throws Exception {
+    input = fake();
+    assertTool("--min-size", "32");
+
+    ZarrGroup z = ZarrGroup.open(output.resolve("0").toString());
+    List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
+            z.getAttributes().get("multiscales");
+
+    Map<String, Object> multiscale = multiscales.get(0);
+    List<Map<String, Object>> datasets =
+              (List<Map<String, Object>>) multiscale.get("datasets");
+
+    String last_path = (String) datasets.get(datasets.size()  - 1).get("path");
+    ZarrArray last_array = z.openArray(last_path);
+
+    assert last_array.getShape()[0] < 32;
+    assert last_array.getShape()[1] < 32;
+  }
+
   private void checkPlateGroupLayout(Path root, int rowCount, int colCount,
     int fieldCount, int x, int y)
     throws IOException
