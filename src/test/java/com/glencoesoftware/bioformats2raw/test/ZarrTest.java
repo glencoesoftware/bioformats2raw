@@ -1207,7 +1207,7 @@ public class ZarrTest {
   }
 
   /**
-   * Convert an image to produce smaller resolution of XY dimensions 32x32.
+   * Convert an image to produce  a smallest resolution of dimensions 32x32.
    */
   @Test
   public void testMinSizeExact() throws Exception {
@@ -1230,7 +1230,7 @@ public class ZarrTest {
   }
 
   /**
-   * Convert an image to produce smaller resolution of XY dimensions 16x16.
+   * Convert an image to produce a smallest resolution of dimensions 16x16.
    */
   @Test
   public void testMinSizeThreshold() throws Exception {
@@ -1250,6 +1250,52 @@ public class ZarrTest {
     assertArrayEquals(new int[] {1, 1, 1, 512, 512}, array.getShape());
     array = z.openArray("5");
     assertArrayEquals(new int[] {1, 1, 1, 16, 16}, array.getShape());
+  }
+
+  /**
+   * Convert an image to produce a smallest resolution of dimensions 32x16.
+   */
+  @Test
+  public void testMinSizeAsymmetricExact() throws Exception {
+    input = fake("sizeX", "1024");
+    assertTool("--min-size", "32");
+
+    ZarrGroup z = ZarrGroup.open(output.resolve("0").toString());
+    List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
+            z.getAttributes().get("multiscales");
+
+    Map<String, Object> multiscale = multiscales.get(0);
+    List<Map<String, Object>> datasets =
+              (List<Map<String, Object>>) multiscale.get("datasets");
+    assertEquals(datasets.size(), 6);
+
+    ZarrArray array = z.openArray("0");
+    assertArrayEquals(new int[] {1, 1, 1, 512, 1024}, array.getShape());
+    array = z.openArray("5");
+    assertArrayEquals(new int[] {1, 1, 1, 16, 32}, array.getShape());
+  }
+
+  /**
+   * Convert an image to produce a smallest resolution of dimensions 8x16.
+   */
+  @Test
+  public void testMinSizeAsymmetricThreshold() throws Exception {
+    input = fake("sizeY", "1024");
+    assertTool("--min-size", "30");
+
+    ZarrGroup z = ZarrGroup.open(output.resolve("0").toString());
+    List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
+            z.getAttributes().get("multiscales");
+
+    Map<String, Object> multiscale = multiscales.get(0);
+    List<Map<String, Object>> datasets =
+              (List<Map<String, Object>>) multiscale.get("datasets");
+    assertEquals(datasets.size(), 7);
+
+    ZarrArray array = z.openArray("0");
+    assertArrayEquals(new int[] {1, 1, 1, 1024, 512}, array.getShape());
+    array = z.openArray("6");
+    assertArrayEquals(new int[] {1, 1, 1, 16, 8}, array.getShape());
   }
 
   private void checkPlateGroupLayout(Path root, int rowCount, int colCount,
