@@ -1207,10 +1207,10 @@ public class ZarrTest {
   }
 
   /**
-   * Convert an image with the --min-size option.
+   * Convert an image to produce smaller resolution of XY dimensions 32x32
    */
   @Test
-  public void testMinSizeOption() throws Exception {
+  public void testMinSizeExact() throws Exception {
     input = fake();
     assertTool("--min-size", "32");
 
@@ -1227,6 +1227,29 @@ public class ZarrTest {
     assertArrayEquals(new int[] {1, 1, 1, 512, 512}, array.getShape());
     array = z.openArray("4");
     assertArrayEquals(new int[] {1, 1, 1, 32, 32}, array.getShape());
+  }
+
+  /**
+   * Convert an image to produce smaller resolution of XY dimensions 16x16
+   */
+  @Test
+  public void testMinSizeThreshold() throws Exception {
+    input = fake();
+    assertTool("--min-size", "30");
+
+    ZarrGroup z = ZarrGroup.open(output.resolve("0").toString());
+    List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
+            z.getAttributes().get("multiscales");
+
+    Map<String, Object> multiscale = multiscales.get(0);
+    List<Map<String, Object>> datasets =
+              (List<Map<String, Object>>) multiscale.get("datasets");
+    assertEquals(datasets.size(), 6);
+
+    ZarrArray array = z.openArray("0");
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, array.getShape());
+    array = z.openArray("5");
+    assertArrayEquals(new int[] {1, 1, 1, 16, 16}, array.getShape());
   }
 
   private void checkPlateGroupLayout(Path root, int rowCount, int colCount,
