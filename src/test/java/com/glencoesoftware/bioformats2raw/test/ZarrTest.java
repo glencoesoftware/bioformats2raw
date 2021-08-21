@@ -1207,7 +1207,7 @@ public class ZarrTest {
   }
 
   /**
-   * Convert an image to produce smaller resolution of XY dimensions 32x32
+   * Convert an image to produce smaller resolution of XY dimensions 32x32.
    */
   @Test
   public void testMinSizeExact() throws Exception {
@@ -1230,7 +1230,7 @@ public class ZarrTest {
   }
 
   /**
-   * Convert an image to produce smaller resolution of XY dimensions 16x16
+   * Convert an image to produce smaller resolution of XY dimensions 16x16.
    */
   @Test
   public void testMinSizeThreshold() throws Exception {
