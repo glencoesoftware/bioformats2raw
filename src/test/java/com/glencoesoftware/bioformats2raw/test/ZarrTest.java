@@ -1221,12 +1221,12 @@ public class ZarrTest {
     Map<String, Object> multiscale = multiscales.get(0);
     List<Map<String, Object>> datasets =
               (List<Map<String, Object>>) multiscale.get("datasets");
+    assertEquals(datasets.size(), 5);
 
-    String lastPath = (String) datasets.get(datasets.size()  - 1).get("path");
-    ZarrArray lastArray = z.openArray(lastPath);
-
-    assert lastArray.getShape()[0] < 32;
-    assert lastArray.getShape()[1] < 32;
+    ZarrArray array = z.openArray("0");
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, array.getShape());
+    array = z.openArray("4");
+    assertArrayEquals(new int[] {1, 1, 1, 32, 32}, array.getShape());
   }
 
   private void checkPlateGroupLayout(Path root, int rowCount, int colCount,
