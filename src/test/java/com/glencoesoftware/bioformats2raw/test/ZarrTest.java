@@ -1212,7 +1212,7 @@ public class ZarrTest {
   @Test
   public void testMinSizeExact() throws Exception {
     input = fake();
-    assertTool("--min-size", "32");
+    assertTool("--target-min-size", "32");
 
     ZarrGroup z = ZarrGroup.open(output.resolve("0").toString());
     List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
@@ -1235,7 +1235,7 @@ public class ZarrTest {
   @Test
   public void testMinSizeThreshold() throws Exception {
     input = fake();
-    assertTool("--min-size", "30");
+    assertTool("--target-min-size", "30");
 
     ZarrGroup z = ZarrGroup.open(output.resolve("0").toString());
     List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
@@ -1258,7 +1258,7 @@ public class ZarrTest {
   @Test
   public void testMinSizeAsymmetricExact() throws Exception {
     input = fake("sizeX", "1024");
-    assertTool("--min-size", "32");
+    assertTool("--target-min-size", "32");
 
     ZarrGroup z = ZarrGroup.open(output.resolve("0").toString());
     List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
@@ -1281,7 +1281,7 @@ public class ZarrTest {
   @Test
   public void testMinSizeAsymmetricThreshold() throws Exception {
     input = fake("sizeY", "1024");
-    assertTool("--min-size", "30");
+    assertTool("--target-min-size", "30");
 
     ZarrGroup z = ZarrGroup.open(output.resolve("0").toString());
     List<Map<String, Object>> multiscales = (List<Map<String, Object>>)

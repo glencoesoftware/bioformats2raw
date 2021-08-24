@@ -362,10 +362,12 @@ public class Converter implements Callable<Void> {
   private volatile boolean reuseExistingResolutions = false;
 
   @Option(
-      names = "--min-size",
-      description = "Minimum size of the largest XY dimension in the" +
-          "smallest resolution, when calculating the number of resolutions" +
-          " generate."
+      names = "--target-min-size",
+      description = "Specifies the desired size for the largest XY dimension " +
+          "of the smallest resolution, when calculating the number " +
+          "of resolutions generate. If the target size cannot be matched " +
+          "exactly, the largest XY dimension of the smallest resolution " +
+          "should be smaller than the target size."
   )
   private volatile int minSize = MIN_SIZE;
 
