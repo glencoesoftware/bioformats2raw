@@ -550,7 +550,7 @@ public class Converter implements Callable<Void> {
         ((OMEXMLMetadata) meta).resolveReferences();
 
         if (!noHCS) {
-          noHCS = meta.getPlateCount() == 0;
+          noHCS = !hasValidPlate(meta);
         }
         else {
           ((OMEXMLMetadata) meta).resolveReferences();
@@ -1742,6 +1742,31 @@ public class Converter implements Callable<Void> {
     finally {
       imageReader.close();
     }
+  }
+
+  /**
+   * Check if the given metadata object contains at least one plate
+   * with at least one well that links to an image.
+   *
+   * @param meta metadata object
+   * @return true if a valid plate exists, false otherwise
+   */
+  private boolean hasValidPlate(IMetadata meta) {
+    List<String> images = new ArrayList<String>();
+    for (int i=0; i<meta.getImageCount(); i++) {
+      images.add(meta.getImageID(i));
+    }
+    for (int p=0; p<meta.getPlateCount(); p++) {
+      for (int w=0; w<meta.getWellCount(p); w++) {
+        for (int ws=0; ws<meta.getWellSampleCount(p, w); ws++) {
+          if (images.contains(meta.getWellSampleImageRef(p, w, ws))) {
+            return true;
+          }
+        }
+      }
+      LOGGER.warn("Encountered invalid plate #{}", p);
+    }
+    return false;
   }
 
   private static Slf4JStopWatch stopWatch() {
