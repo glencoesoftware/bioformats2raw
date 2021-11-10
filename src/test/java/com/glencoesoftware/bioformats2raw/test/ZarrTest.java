@@ -869,6 +869,27 @@ public class ZarrTest {
   }
 
   /**
+   * Plate defined with no linked images.
+   */
+  @Test
+  public void testEmptyPlate() throws Exception {
+    input = getTestFile("empty-plate.ome.xml");
+    assertTool();
+
+    ZarrGroup z = ZarrGroup.open(output);
+
+    // Check dimensions and block size for consistency
+    // with non-HCS layout
+    ZarrArray series0 = z.openArray("0/0");
+    assertArrayEquals(new int[] {1, 1, 1, 4, 6}, series0.getShape());
+    assertArrayEquals(new int[] {1, 1, 1, 4, 6}, series0.getChunks());
+
+    // Check OME metadata to make sure the empty plate was preserved
+    OME ome = getOMEMetadata();
+    assertEquals(1, ome.sizeOfPlateList());
+  }
+
+  /**
    * 96 well plate with only well E6.
    */
   @Test
