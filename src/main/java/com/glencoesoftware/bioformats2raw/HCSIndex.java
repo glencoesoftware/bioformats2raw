@@ -135,10 +135,24 @@ public class HCSIndex {
   }
 
   /**
+   * @return row path relative to the plate group
+   */
+  public String getRowPath() {
+    return String.format("%d", getWellRowIndex());
+  }
+
+  /**
+   * @return column path relative to the row group
+   */
+  public String getColumnPath() {
+    return String.format("%d", getWellColumnIndex());
+  }
+
+  /**
    * @return well path relative to the plate group
    */
   public String getWellPath() {
-    return String.format("%d/%d", getWellRowIndex(), getWellColumnIndex());
+    return String.format("%s/%s", getRowPath(), getColumnPath());
   }
 
   @Override

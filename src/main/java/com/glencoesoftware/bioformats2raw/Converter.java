@@ -1338,7 +1338,6 @@ public class Converter implements Callable<Void> {
         String rowName = String.valueOf(r);
         row.put("name", rowName);
         rows.add(row);
-        root.createSubGroup(rowName);
       }
     }
     catch (NullPointerException e) {
@@ -1363,7 +1362,9 @@ public class Converter implements Callable<Void> {
       acquisition.put("id", String.valueOf(pa));
       acquisitions.add(acquisition);
     }
-    plateMap.put("acquisitions", acquisitions);
+    if (acquisitions.size() > 0) {
+      plateMap.put("acquisitions", acquisitions);
+    }
 
     List<Map<String, Object>> wells = new ArrayList<Map<String, Object>>();
     int maxField = Integer.MIN_VALUE;
@@ -1377,7 +1378,10 @@ public class Converter implements Callable<Void> {
 
           List<Map<String, Object>> imageList =
             new ArrayList<Map<String, Object>>();
-          ZarrGroup wellGroup = root.createSubGroup(wellPath);
+          String rowPath = index.getRowPath();
+          ZarrGroup rowGroup = root.createSubGroup(rowPath);
+          String columnPath = index.getColumnPath();
+          ZarrGroup columnGroup = rowGroup.createSubGroup(columnPath);
           for (HCSIndex field : hcsIndexes) {
             if (field.getPlateIndex() == index.getPlateIndex() &&
               field.getWellRowIndex() == index.getWellRowIndex() &&
@@ -1393,9 +1397,9 @@ public class Converter implements Callable<Void> {
 
           Map<String, Object> wellMap = new HashMap<String, Object>();
           wellMap.put("images", imageList);
-          Map<String, Object> attributes = wellGroup.getAttributes();
+          Map<String, Object> attributes = columnGroup.getAttributes();
           attributes.put("well", wellMap);
-          wellGroup.writeAttributes(attributes);
+          columnGroup.writeAttributes(attributes);
 
           // make sure the row/column indexes are added to the plate attributes
           // this is necessary when Plate.Rows or Plate.Columns is not set
