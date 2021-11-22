@@ -42,6 +42,7 @@ import picocli.CommandLine.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -869,6 +870,65 @@ public class ZarrTest {
   }
 
   /**
+   * Convert a plate with default options.
+   * The output should be compliant with OME Zarr HCS.
+   */
+  @Test
+  public void testHCSMetadataNoAcquisitions() throws Exception {
+    input = getTestFile("C4-H2-only-no-acqs.xml");
+    assertTool();
+
+    ZarrGroup z = ZarrGroup.open(output);
+
+    int rowCount = 8;
+    int colCount = 12;
+    int fieldCount = 1;
+
+    // Only two rows are filled out with one column each (two Wells total)
+    checkPlateGroupLayout(output, 2, 1, fieldCount, 2, 2);
+
+    // check plate/well level metadata
+    Map<String, Object> plate =
+        (Map<String, Object>) z.getAttributes().get("plate");
+    assertEquals(fieldCount, ((Number) plate.get("field_count")).intValue());
+
+    List<Map<String, Object>> rows =
+      (List<Map<String, Object>>) plate.get("rows");
+    List<Map<String, Object>> columns =
+      (List<Map<String, Object>>) plate.get("columns");
+    List<Map<String, Object>> wells =
+      (List<Map<String, Object>>) plate.get("wells");
+
+    assertFalse(plate.containsKey("acquisitions"));
+
+    checkDimension(rows, rowCount);
+    checkDimension(columns, colCount);
+
+    assertEquals(rows.size() * columns.size(), wells.size());
+    for (int row=0; row<rows.size(); row++) {
+      for (int col=0; col<columns.size(); col++) {
+        int well = row * columns.size() + col;
+        assertEquals(row + "/" + col, wells.get(well).get("path"));
+      }
+    }
+
+    // check well metadata
+    for (Map<String, Object> row : rows) {
+      String rowName = (String) row.get("name");
+      for (Map<String, Object> column : columns) {
+        String columnName = (String) column.get("name");
+        ZarrGroup wellGroup = ZarrGroup.open(
+            output.resolve(rowName).resolve(columnName));
+        checkWell(wellGroup, fieldCount);
+      }
+    }
+
+    // check OME metadata
+    OME ome = getOMEMetadata();
+    assertEquals(1, ome.sizeOfPlateList());
+  }
+
+  /**
    * 96 well plate with only well E6.
    */
   @Test
@@ -1211,7 +1271,7 @@ public class ZarrTest {
     throws IOException
   {
     // check valid group layout
-    // OME (OME-XML metadata), .zattrs (Plate), .zgroup (Plate) and rows
+    // OME (OME-XML metadata) folder, .zattrs (Plate), .zgroup (Plate) and rows
     assertEquals(rowCount + 3, Files.list(root).toArray().length);
     for (int row=0; row<rowCount; row++) {
       Path rowPath = root.resolve(Integer.toString(row));
