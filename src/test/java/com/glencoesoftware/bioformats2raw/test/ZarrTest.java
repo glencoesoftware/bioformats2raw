@@ -823,7 +823,11 @@ public class ZarrTest {
     int rowCount = 2;
     int colCount = 3;
     int fieldCount = 2;
-    checkPlateGroupLayout(output, rowCount, colCount, fieldCount, 512, 512);
+    Map<String, List<String>> plateMap = new HashMap<String, List<String>>();
+    plateMap.put("0", Arrays.asList("0", "1", "2"));
+    plateMap.put("1", Arrays.asList("0", "1", "2"));
+    checkPlateGroupLayout(output, rowCount, colCount,
+      plateMap, fieldCount, 512, 512);
 
     // check plate/well level metadata
     Map<String, Object> plate =
@@ -875,7 +879,7 @@ public class ZarrTest {
    */
   @Test
   public void testHCSMetadataNoAcquisitions() throws Exception {
-    input = getTestFile("C4-H2-only-no-acqs.xml");
+    input = getTestFile("A1-B1-only-no-acqs.xml");
     assertTool();
 
     ZarrGroup z = ZarrGroup.open(output);
@@ -885,7 +889,11 @@ public class ZarrTest {
     int fieldCount = 1;
 
     // Only two rows are filled out with one column each (two Wells total)
-    checkPlateGroupLayout(output, 2, 1, fieldCount, 2, 2);
+    Map<String, List<String>> plateMap = new HashMap<String, List<String>>();
+    plateMap.put("0", Arrays.asList("0"));
+    plateMap.put("1", Arrays.asList("0"));
+    checkPlateGroupLayout(output, rowCount, colCount,
+      plateMap, fieldCount, 2, 2);
 
     // check plate/well level metadata
     Map<String, Object> plate =
@@ -904,23 +912,16 @@ public class ZarrTest {
     checkDimension(rows, rowCount);
     checkDimension(columns, colCount);
 
-    assertEquals(rows.size() * columns.size(), wells.size());
-    for (int row=0; row<rows.size(); row++) {
-      for (int col=0; col<columns.size(); col++) {
-        int well = row * columns.size() + col;
-        assertEquals(row + "/" + col, wells.get(well).get("path"));
-      }
-    }
+    assertEquals(2, wells.size());
+    for (Map<String, Object> well : wells) {
+      int row = ((Number) well.get("row_index")).intValue();
+      int col = ((Number) well.get("column_index")).intValue();
 
-    // check well metadata
-    for (Map<String, Object> row : rows) {
-      String rowName = (String) row.get("name");
-      for (Map<String, Object> column : columns) {
-        String columnName = (String) column.get("name");
-        ZarrGroup wellGroup = ZarrGroup.open(
-            output.resolve(rowName).resolve(columnName));
-        checkWell(wellGroup, fieldCount);
-      }
+      String wellPath = well.get("path").toString();
+      assertEquals(row + "/" + col, wellPath);
+
+      ZarrGroup wellGroup = ZarrGroup.open(output.resolve(wellPath));
+      checkWell(wellGroup, fieldCount, -1);
     }
 
     // check OME metadata
@@ -941,6 +942,12 @@ public class ZarrTest {
     int rowCount = 8;
     int colCount = 12;
     int fieldCount = 1;
+
+    Map<String, List<String>> plateMap = new HashMap<String, List<String>>();
+    plateMap.put("4", Arrays.asList("5"));
+
+    checkPlateGroupLayout(output, rowCount, colCount,
+      plateMap, fieldCount, 2, 2);
 
     // check plate/well level metadata
     Map<String, Object> plate =
@@ -987,6 +994,12 @@ public class ZarrTest {
     int rowCount = 8;
     int colCount = 12;
     int fieldCount = 1;
+
+    Map<String, List<String>> plateMap = new HashMap<String, List<String>>();
+    plateMap.put("2", Arrays.asList("3"));
+    plateMap.put("7", Arrays.asList("1"));
+    checkPlateGroupLayout(output, rowCount, colCount,
+      plateMap, fieldCount, 2, 2);
 
     // check plate/well level metadata
     Map<String, Object> plate =
@@ -1039,6 +1052,12 @@ public class ZarrTest {
     int rowCount = 8;
     int colCount = 12;
     int fieldCount = 1;
+
+    Map<String, List<String>> plateMap = new HashMap<String, List<String>>();
+    plateMap.put("5", Arrays.asList(
+      "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"));
+    checkPlateGroupLayout(output, rowCount, colCount,
+      plateMap, fieldCount, 2, 2);
 
     // check plate/well level metadata
     Map<String, Object> plate =
@@ -1266,28 +1285,59 @@ public class ZarrTest {
     }
   }
 
+  /**
+   * @param root dataset root path
+   * @param rowCount total rows the plate could contain
+   * @param colCount total columns the plate could contain
+   * @param validPaths array of row/column paths containing data
+   * @param fieldCount number of fields per well
+   * @param x image width
+   * @param y image height
+   */
   private void checkPlateGroupLayout(Path root, int rowCount, int colCount,
-    int fieldCount, int x, int y)
+    Map<String, List<String>> validPaths, int fieldCount, int x, int y)
     throws IOException
   {
     // check valid group layout
     // OME (OME-XML metadata) folder, .zattrs (Plate), .zgroup (Plate) and rows
-    assertEquals(rowCount + 3, Files.list(root).toArray().length);
+    assertEquals(validPaths.size() + 3, Files.list(root).toArray().length);
+
+    // for every row in the overall plate,
+    // if there are any wells with data in the row, the row path must exist
+    // if there are no wells with data in the row, the row path cannot exist
     for (int row=0; row<rowCount; row++) {
-      Path rowPath = root.resolve(Integer.toString(row));
-      // .zgroup (Row) and columns
-      assertEquals(colCount + 1, Files.list(rowPath).toArray().length);
-      for (int col=0; col<colCount; col++) {
-        Path colPath = rowPath.resolve(Integer.toString(col));
-        ZarrGroup colGroup = ZarrGroup.open(colPath);
-        // .zattrs (Column/Image), .zgroup (Column/Image) and fields
-        assertEquals(fieldCount + 2, Files.list(colPath).toArray().length);
-        for (int field=0; field<fieldCount; field++) {
-          // append resolution index
-          ZarrArray series0 = colGroup.openArray(field + "/0");
-          assertArrayEquals(new int[] {1, 1, 1, y, x}, series0.getShape());
-          assertArrayEquals(new int[] {1, 1, 1, y, x}, series0.getChunks());
+      String rowString = Integer.toString(row);
+      if (validPaths.containsKey(rowString)) {
+        Path rowPath = root.resolve(rowString);
+        // .zgroup (Row) and columns
+        List<String> validColumns = validPaths.get(rowString);
+        assertEquals(validColumns.size() + 1,
+          Files.list(rowPath).toArray().length);
+
+        // for every column in the overall plate,
+        // if this row/column is a well with data, the column path must exist
+        // otherwise, the column path cannot exist
+        for (int col=0; col<colCount; col++) {
+          String colString = Integer.toString(col);
+          if (validColumns.contains(colString)) {
+            Path colPath = rowPath.resolve(colString);
+            ZarrGroup colGroup = ZarrGroup.open(colPath);
+            // .zattrs (Column/Image), .zgroup (Column/Image) and fields
+            assertEquals(fieldCount + 2, Files.list(colPath).toArray().length);
+            for (int field=0; field<fieldCount; field++) {
+              // append resolution index
+              ZarrArray series0 = colGroup.openArray(field + "/0");
+              assertArrayEquals(new int[] {1, 1, 1, y, x}, series0.getShape());
+              assertArrayEquals(new int[] {1, 1, 1, y, x}, series0.getChunks());
+            }
+          }
+          else {
+            assertFalse(rowPath.resolve(colString).toFile().exists());
+          }
         }
+      }
+      else {
+        assertFalse(root.resolve(rowString).toFile().exists());
       }
     }
   }
@@ -1304,6 +1354,13 @@ public class ZarrTest {
   private void checkWell(ZarrGroup wellGroup, int fieldCount)
     throws IOException
   {
+    checkWell(wellGroup, fieldCount, 0);
+  }
+
+
+  private void checkWell(ZarrGroup wellGroup, int fieldCount, int acquisition)
+    throws IOException
+  {
     Map<String, Object> well =
         (Map<String, Object>) wellGroup.getAttributes().get("well");
     List<Map<String, Object>> images =
@@ -1313,7 +1370,7 @@ public class ZarrTest {
     for (int i=0; i<fieldCount; i++) {
       Map<String, Object> field = images.get(i);
       assertEquals(field.get("path"), String.valueOf(i));
-      assertEquals(0, field.get("acquisition"));
+      assertEquals(acquisition, field.get("acquisition"));
     }
   }
 
