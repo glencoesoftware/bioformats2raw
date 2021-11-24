@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <OME xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Creator="OME Bio-Formats 6.6.1-SNAPSHOT" xsi:schemaLocation="http://www.openmicroscopy.org/Schemas/OME/2016-06 http://www.openmicroscopy.org/Schemas/OME/2016-06/ome.xsd">
-<Plate ColumnNamingConvention="number" Columns="12" ExternalIdentifier="External Identifier" ID="Plate:0" Name="Plate Name 0" RowNamingConvention="letter" Rows="8" Status="Plate status" WellOriginX="0.0" WellOriginXUnit="µm" WellOriginY="1.0" WellOriginYUnit="µm">
+<Plate ColumnNamingConvention="number" ExternalIdentifier="External Identifier" ID="Plate:0" Name="Plate Name 0" RowNamingConvention="letter" Rows="8" Status="Plate status" WellOriginX="0.0" WellOriginXUnit="µm" WellOriginY="1.0" WellOriginYUnit="µm">
 <Description>Plate 0 of 1</Description>
-<Well Color="255" Column="3" ExternalDescription="External Description" ExternalIdentifier="External Identifier" ID="Well:0_0_0_0" Row="2" Type="Transfection: done">
+<Well Color="255" Column="11" ExternalDescription="External Description" ExternalIdentifier="External Identifier" ID="Well:0_0_0_0" Row="2" Type="Transfection: done">
 <WellSample ID="WellSample:0_0_0_0_0_0" Index="0" PositionX="0.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" Timepoint="2006-05-04T18:13:51">
 <ImageRef ID="Image:0"></ImageRef></WellSample></Well>
 <Well Color="255" Column="1" ExternalDescription="External Description" ExternalIdentifier="External Identifier" ID="Well:0_0_1_0" Row="7" Type="Transfection: done">

@@ -984,9 +984,14 @@ public class ZarrTest {
   /**
    * 96 well plate with only wells C4 and H2 with, and without the "Rows"
    * attribute populated on the plate.
+   * @param resourceName parameterized XML file to use for the test case
    */
   @ParameterizedTest
-  @ValueSource(strings = {"C4-H2-only.ome.xml", "C4-H2-only-no-rows.ome.xml"})
+  @ValueSource(strings = {
+    "C12-H2-only.ome.xml",
+    "C12-H2-only-no-rows.ome.xml",
+    "C12-H2-only-no-columns.ome.xml"
+  })
   public void testTwoWells(String resourceName) throws IOException {
     input = getTestFile(resourceName);
     assertTool();
@@ -998,7 +1003,7 @@ public class ZarrTest {
     int fieldCount = 1;
 
     Map<String, List<String>> plateMap = new HashMap<String, List<String>>();
-    plateMap.put("2", Arrays.asList("3"));
+    plateMap.put("2", Arrays.asList("11"));
     plateMap.put("7", Arrays.asList("1"));
     checkPlateGroupLayout(output, rowCount, colCount,
       plateMap, fieldCount, 2, 2);
@@ -1026,9 +1031,9 @@ public class ZarrTest {
     assertEquals(2, wells.size());
     Map<String, Object> well = wells.get(0);
     String wellPath = (String) well.get("path");
-    assertEquals("2/3", wellPath);
+    assertEquals("2/11", wellPath);
     assertEquals(2, ((Number) well.get("row_index")).intValue());
-    assertEquals(3, ((Number) well.get("column_index")).intValue());
+    assertEquals(11, ((Number) well.get("column_index")).intValue());
     ZarrGroup wellGroup = ZarrGroup.open(output.resolve(wellPath));
     checkWell(wellGroup, fieldCount);
 
