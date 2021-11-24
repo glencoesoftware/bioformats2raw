@@ -1331,17 +1331,21 @@ public class Converter implements Callable<Void> {
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
 
     // try to set plate dimensions based upon Plate.Rows/Plate.Columns
-    // if not possible, use well data later on
-    try {
-      for (int r=0; r<meta.getPlateRows(plate).getValue(); r++) {
-        Map<String, Object> row = new HashMap<String, Object>();
-        String rowName = String.valueOf(r);
-        row.put("name", rowName);
-        rows.add(row);
+    // if not possible, use well data
+    PositiveInteger plateRows =  meta.getPlateRows(plate);
+    if (plateRows == null) {
+      plateRows = new PositiveInteger(1);
+      for (int wellIndex=0; wellIndex<meta.getWellCount(plate); wellIndex++) {
+        plateRows = new PositiveInteger(Math.max(
+            meta.getWellRow(plate, wellIndex).getNumberValue().intValue(),
+            plateRows.getNumberValue().intValue()));
       }
     }
-    catch (NullPointerException e) {
-      // expected when Plate.Rows not set
+    for (int r=0; r<plateRows.getValue(); r++) {
+      Map<String, Object> row = new HashMap<String, Object>();
+      String rowName = String.valueOf(r);
+      row.put("name", rowName);
+      rows.add(row);
     }
     try {
       for (int c=0; c<meta.getPlateColumns(plate).getValue(); c++) {
