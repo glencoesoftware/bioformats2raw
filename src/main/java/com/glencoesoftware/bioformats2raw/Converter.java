@@ -1347,16 +1347,20 @@ public class Converter implements Callable<Void> {
       row.put("name", rowName);
       rows.add(row);
     }
-    try {
-      for (int c=0; c<meta.getPlateColumns(plate).getValue(); c++) {
-        Map<String, Object> column = new HashMap<String, Object>();
-        String columnName = String.valueOf(c);
-        column.put("name", columnName);
-        columns.add(column);
+    PositiveInteger plateColumns = meta.getPlateColumns(plate);
+    if (plateColumns == null) {
+      plateColumns = new PositiveInteger(1);
+      for (int wellIndex=0; wellIndex<meta.getWellCount(plate); wellIndex++) {
+        plateColumns = new PositiveInteger(Math.max(
+            meta.getWellColumn(plate, wellIndex).getNumberValue().intValue(),
+            plateColumns.getNumberValue().intValue()));
       }
     }
-    catch (NullPointerException e) {
-      // expected when Plate.Columns not set
+    for (int c=0; c<plateColumns.getValue(); c++) {
+      Map<String, Object> column = new HashMap<String, Object>();
+      String columnName = String.valueOf(c);
+      column.put("name", columnName);
+      columns.add(column);
     }
 
     List<Map<String, Object>> acquisitions =
