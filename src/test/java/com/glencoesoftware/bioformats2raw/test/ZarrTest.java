@@ -982,7 +982,8 @@ public class ZarrTest {
   }
 
   /**
-   * 96 well plate with only wells C4 and H2 with, and without the "Rows"
+   * 96 well plate with only wells C4 and H2 with and without the "Rows"
+   * attribute populated on the plate, as well as with and without the "Columns"
    * attribute populated on the plate.
    * @param resourceName parameterized XML file to use for the test case
    */
