@@ -1300,7 +1300,7 @@ public class ZarrTest {
   {
     // check valid group layout
     // OME (OME-XML metadata) folder, .zattrs (Plate), .zgroup (Plate) and rows
-    assertEquals(validPaths.size() + 3, Files.list(root).toArray().length);
+    assertEquals(validPaths.size() + 3, Files.list(root).count());
 
     // for every row in the overall plate,
     // if there are any wells with data in the row, the row path must exist
@@ -1311,8 +1311,7 @@ public class ZarrTest {
         Path rowPath = root.resolve(rowString);
         // .zgroup (Row) and columns
         List<String> validColumns = validPaths.get(rowString);
-        assertEquals(validColumns.size() + 1,
-          Files.list(rowPath).toArray().length);
+        assertEquals(validColumns.size() + 1, Files.list(rowPath).count());
 
         // for every column in the overall plate,
         // if this row/column is a well with data, the column path must exist
@@ -1323,7 +1322,7 @@ public class ZarrTest {
             Path colPath = rowPath.resolve(colString);
             ZarrGroup colGroup = ZarrGroup.open(colPath);
             // .zattrs (Column/Image), .zgroup (Column/Image) and fields
-            assertEquals(fieldCount + 2, Files.list(colPath).toArray().length);
+            assertEquals(fieldCount + 2, Files.list(colPath).count());
             for (int field=0; field<fieldCount; field++) {
               // append resolution index
               ZarrArray series0 = colGroup.openArray(field + "/0");
