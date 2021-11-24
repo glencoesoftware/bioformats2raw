@@ -864,7 +864,7 @@ public class ZarrTest {
         String columnName = (String) column.get("name");
         ZarrGroup wellGroup = ZarrGroup.open(
             output.resolve(rowName).resolve(columnName));
-        checkWell(wellGroup, fieldCount);
+        checkWell(wellGroup, fieldCount, 0);
       }
     }
 
@@ -921,7 +921,7 @@ public class ZarrTest {
       assertEquals(row + "/" + col, wellPath);
 
       ZarrGroup wellGroup = ZarrGroup.open(output.resolve(wellPath));
-      checkWell(wellGroup, fieldCount, -1);
+      checkWell(wellGroup, fieldCount, null);
     }
 
     // check OME metadata
@@ -978,7 +978,7 @@ public class ZarrTest {
 
     // check well metadata
     ZarrGroup wellGroup = ZarrGroup.open(output.resolve(wellPath));
-    checkWell(wellGroup, fieldCount);
+    checkWell(wellGroup, fieldCount, 0);
   }
 
   /**
@@ -1036,7 +1036,7 @@ public class ZarrTest {
     assertEquals(2, ((Number) well.get("row_index")).intValue());
     assertEquals(11, ((Number) well.get("column_index")).intValue());
     ZarrGroup wellGroup = ZarrGroup.open(output.resolve(wellPath));
-    checkWell(wellGroup, fieldCount);
+    checkWell(wellGroup, fieldCount, 0);
 
     well = wells.get(1);
     wellPath = (String) well.get("path");
@@ -1044,7 +1044,7 @@ public class ZarrTest {
     assertEquals(7, ((Number) well.get("row_index")).intValue());
     assertEquals(1, ((Number) well.get("column_index")).intValue());
     wellGroup = ZarrGroup.open(output.resolve(wellPath));
-    checkWell(wellGroup, fieldCount);
+    checkWell(wellGroup, fieldCount, 0);
   }
 
   /**
@@ -1095,7 +1095,7 @@ public class ZarrTest {
       assertEquals(5, ((Number) well.get("row_index")).intValue());
       assertEquals(col, ((Number) well.get("column_index")).intValue());
       ZarrGroup wellGroup = ZarrGroup.open(output.resolve(wellPath));
-      checkWell(wellGroup, fieldCount);
+      checkWell(wellGroup, fieldCount, 0);
     }
   }
 
@@ -1358,15 +1358,9 @@ public class ZarrTest {
     }
   }
 
-  private void checkWell(ZarrGroup wellGroup, int fieldCount)
-    throws IOException
-  {
-    checkWell(wellGroup, fieldCount, 0);
-  }
-
-
-  private void checkWell(ZarrGroup wellGroup, int fieldCount, int acquisition)
-    throws IOException
+  private void checkWell(
+      ZarrGroup wellGroup, int fieldCount, Integer acquisition)
+          throws IOException
   {
     Map<String, Object> well =
         (Map<String, Object>) wellGroup.getAttributes().get("well");
@@ -1377,7 +1371,12 @@ public class ZarrTest {
     for (int i=0; i<fieldCount; i++) {
       Map<String, Object> field = images.get(i);
       assertEquals(field.get("path"), String.valueOf(i));
-      assertEquals(acquisition, field.get("acquisition"));
+      if (acquisition == null) {
+        assertFalse(field.containsKey("acquisition"));
+      }
+      else {
+        assertEquals(acquisition, field.get("acquisition"));
+      }
     }
   }
 

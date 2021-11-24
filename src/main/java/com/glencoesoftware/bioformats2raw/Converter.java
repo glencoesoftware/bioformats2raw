@@ -1396,8 +1396,10 @@ public class Converter implements Callable<Void> {
               field.getWellColumnIndex() == index.getWellColumnIndex())
             {
               Map<String, Object> image = new HashMap<String, Object>();
-              int plateAcq = field.getPlateAcquisitionIndex();
-              image.put("acquisition", plateAcq);
+              Integer plateAcq = field.getPlateAcquisitionIndex();
+              if (plateAcq != null) {
+                image.put("acquisition", plateAcq);
+              }
               image.put("path", String.valueOf(field.getFieldIndex()));
               imageList.add(image);
             }
