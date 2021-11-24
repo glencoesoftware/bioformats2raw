@@ -982,11 +982,13 @@ public class ZarrTest {
   }
 
   /**
-   * 96 well plate with only wells C4 and H2.
+   * 96 well plate with only wells C4 and H2 with, and without the "Rows"
+   * attribute populated on the plate.
    */
-  @Test
-  public void testTwoWells() throws IOException {
-    input = getTestFile("C4-H2-only.ome.xml");
+  @ParameterizedTest
+  @ValueSource(strings = {"C4-H2-only.ome.xml", "C4-H2-only-no-rows.ome.xml"})
+  public void testTwoWells(String resourceName) throws IOException {
+    input = getTestFile(resourceName);
     assertTool();
 
     ZarrGroup z = ZarrGroup.open(output);
