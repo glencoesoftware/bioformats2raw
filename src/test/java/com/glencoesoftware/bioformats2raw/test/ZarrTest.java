@@ -1289,7 +1289,7 @@ public class ZarrTest {
    * @param root dataset root path
    * @param rowCount total rows the plate could contain
    * @param colCount total columns the plate could contain
-   * @param validPaths array of row/column paths containing data
+   * @param validPaths map of row paths vs. list of column paths containing data
    * @param fieldCount number of fields per well
    * @param x image width
    * @param y image height
