@@ -914,8 +914,8 @@ public class ZarrTest {
 
     assertEquals(2, wells.size());
     for (Map<String, Object> well : wells) {
-      int row = ((Number) well.get("row_index")).intValue();
-      int col = ((Number) well.get("column_index")).intValue();
+      int row = ((Number) well.get("rowIndex")).intValue();
+      int col = ((Number) well.get("columnIndex")).intValue();
 
       String wellPath = well.get("path").toString();
       assertEquals(row + "/" + col, wellPath);
@@ -973,8 +973,8 @@ public class ZarrTest {
     Map<String, Object> well = wells.get(0);
     String wellPath = (String) well.get("path");
     assertEquals("4/5", wellPath);
-    assertEquals(4, ((Number) well.get("row_index")).intValue());
-    assertEquals(5, ((Number) well.get("column_index")).intValue());
+    assertEquals(4, ((Number) well.get("rowIndex")).intValue());
+    assertEquals(5, ((Number) well.get("columnIndex")).intValue());
 
     // check well metadata
     ZarrGroup wellGroup = ZarrGroup.open(output.resolve(wellPath));
@@ -1033,16 +1033,16 @@ public class ZarrTest {
     Map<String, Object> well = wells.get(0);
     String wellPath = (String) well.get("path");
     assertEquals("2/11", wellPath);
-    assertEquals(2, ((Number) well.get("row_index")).intValue());
-    assertEquals(11, ((Number) well.get("column_index")).intValue());
+    assertEquals(2, ((Number) well.get("rowIndex")).intValue());
+    assertEquals(11, ((Number) well.get("columnIndex")).intValue());
     ZarrGroup wellGroup = ZarrGroup.open(output.resolve(wellPath));
     checkWell(wellGroup, fieldCount, 0);
 
     well = wells.get(1);
     wellPath = (String) well.get("path");
     assertEquals("7/1", wellPath);
-    assertEquals(7, ((Number) well.get("row_index")).intValue());
-    assertEquals(1, ((Number) well.get("column_index")).intValue());
+    assertEquals(7, ((Number) well.get("rowIndex")).intValue());
+    assertEquals(1, ((Number) well.get("columnIndex")).intValue());
     wellGroup = ZarrGroup.open(output.resolve(wellPath));
     checkWell(wellGroup, fieldCount, 0);
   }
@@ -1092,8 +1092,8 @@ public class ZarrTest {
       Map<String, Object> well = wells.get(col);
       String wellPath = (String) well.get("path");
       assertEquals("5/" + col, wellPath);
-      assertEquals(5, ((Number) well.get("row_index")).intValue());
-      assertEquals(col, ((Number) well.get("column_index")).intValue());
+      assertEquals(5, ((Number) well.get("rowIndex")).intValue());
+      assertEquals(col, ((Number) well.get("columnIndex")).intValue());
       ZarrGroup wellGroup = ZarrGroup.open(output.resolve(wellPath));
       checkWell(wellGroup, fieldCount, 0);
     }

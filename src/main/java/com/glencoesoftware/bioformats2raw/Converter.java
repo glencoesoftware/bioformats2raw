@@ -1444,8 +1444,8 @@ public class Converter implements Callable<Void> {
             rows.add(rowMap);
           }
 
-          well.put("row_index", rowIndex);
-          well.put("column_index", columnIndex);
+          well.put("rowIndex", rowIndex);
+          well.put("columnIndex", columnIndex);
           wells.add(well);
         }
 
