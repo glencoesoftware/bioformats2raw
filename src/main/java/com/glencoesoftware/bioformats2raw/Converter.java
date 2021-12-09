@@ -627,7 +627,7 @@ public class Converter implements Callable<Void> {
       }
 
       if (!noHCS) {
-        scaleFormatString = "%d/%d/%d/%d";
+        scaleFormatString = "%s/%s/%d/%d";
       }
 
       for (Integer index : seriesList) {
@@ -711,8 +711,8 @@ public class Converter implements Callable<Void> {
     List<Object> args = new ArrayList<Object>();
     if (!noHCS) {
       HCSIndex index = hcsIndexes.get(series);
-      args.add(index.getWellRowIndex());
-      args.add(index.getWellColumnIndex());
+      args.add(index.getRowPath());
+      args.add(index.getColumnPath());
       args.add(index.getFieldIndex());
       args.add(resolution);
     }
@@ -1343,7 +1343,7 @@ public class Converter implements Callable<Void> {
     }
     for (int r=0; r<plateRows.getValue(); r++) {
       Map<String, Object> row = new HashMap<String, Object>();
-      String rowName = String.valueOf(r);
+      String rowName = HCSIndex.getRowName(r);
       row.put("name", rowName);
       rows.add(row);
     }
@@ -1358,7 +1358,7 @@ public class Converter implements Callable<Void> {
     }
     for (int c=0; c<plateColumns.getValue(); c++) {
       Map<String, Object> column = new HashMap<String, Object>();
-      String columnName = String.valueOf(c);
+      String columnName = HCSIndex.getColumnName(c);
       column.put("name", columnName);
       columns.add(column);
     }
@@ -1413,33 +1413,33 @@ public class Converter implements Callable<Void> {
 
           // make sure the row/column indexes are added to the plate attributes
           // this is necessary when Plate.Rows or Plate.Columns is not set
-          int column = index.getWellColumnIndex();
-          int row = index.getWellRowIndex();
+          String column = index.getColumnPath();
+          String row = index.getRowPath();
 
           int columnIndex = -1;
           for (int c=0; c<columns.size(); c++) {
-            if (columns.get(c).get("name").equals(String.valueOf(column))) {
+            if (columns.get(c).get("name").equals(column)) {
               columnIndex = c;
               break;
             }
           }
           if (columnIndex < 0) {
             Map<String, Object> colMap = new HashMap<String, Object>();
-            colMap.put("name", String.valueOf(column));
+            colMap.put("name", column);
             columnIndex = columns.size();
             columns.add(colMap);
           }
 
           int rowIndex = -1;
           for (int r=0; r<rows.size(); r++) {
-            if (rows.get(r).get("name").equals(String.valueOf(row))) {
+            if (rows.get(r).get("name").equals(row)) {
               rowIndex = r;
               break;
             }
           }
           if (rowIndex < 0) {
             Map<String, Object> rowMap = new HashMap<String, Object>();
-            rowMap.put("name", String.valueOf(row));
+            rowMap.put("name", row);
             rowIndex = rows.size();
             rows.add(rowMap);
           }

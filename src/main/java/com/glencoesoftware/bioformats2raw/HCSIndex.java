@@ -98,14 +98,14 @@ public class HCSIndex {
    * @return row path relative to the plate group
    */
   public String getRowPath() {
-    return String.format("%d", getWellRowIndex());
+    return getRowName(getWellRowIndex());
   }
 
   /**
    * @return column path relative to the row group
    */
   public String getColumnPath() {
-    return String.format("%d", getWellColumnIndex());
+    return getColumnName(getWellColumnIndex());
   }
 
   /**
@@ -123,6 +123,35 @@ public class HCSIndex {
       getWellRowIndex(),
       getWellColumnIndex(),
       getFieldIndex());
+  }
+
+  /**
+   * Get a row name for the specified 0-based row index.
+   * The name is a single upper-case letter starting with A
+   * if the row index is less than 26, and two upper-case letters
+   * starting with AA for indexes greater than or equal to 26.
+   *
+   * @param rowIndex row index
+   * @return row name
+   */
+  public static String getRowName(int rowIndex) {
+    String name = String.valueOf((char) ('A' + (rowIndex % 26)));
+    if (rowIndex >= 26) {
+      name = (char) ('A' + ((rowIndex / 26) - 1)) + name;
+    }
+    return name;
+  }
+
+  /**
+   * Get a column name for the specified 0-based column index.
+   * The name is a string representation of the corresponding
+   * 1-based index.
+   *
+   * @param colIndex column index
+   * @return column name
+   */
+  public static String getColumnName(int colIndex) {
+    return String.format("%d", colIndex + 1);
   }
 
 }

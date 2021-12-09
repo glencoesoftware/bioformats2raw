@@ -824,8 +824,8 @@ public class ZarrTest {
     int colCount = 3;
     int fieldCount = 2;
     Map<String, List<String>> plateMap = new HashMap<String, List<String>>();
-    plateMap.put("0", Arrays.asList("0", "1", "2"));
-    plateMap.put("1", Arrays.asList("0", "1", "2"));
+    plateMap.put("A", Arrays.asList("1", "2", "3"));
+    plateMap.put("B", Arrays.asList("1", "2", "3"));
     checkPlateGroupLayout(output, rowCount, colCount,
       plateMap, fieldCount, 512, 512);
 
@@ -846,14 +846,16 @@ public class ZarrTest {
     assertEquals(1, acquisitions.size());
     assertEquals("0", acquisitions.get(0).get("id"));
 
-    checkDimension(rows, rowCount);
-    checkDimension(columns, colCount);
+    assertEquals(rows.size(), rowCount);
+    assertEquals(columns.size(), colCount);
 
     assertEquals(rows.size() * columns.size(), wells.size());
     for (int row=0; row<rows.size(); row++) {
       for (int col=0; col<columns.size(); col++) {
         int well = row * columns.size() + col;
-        assertEquals(row + "/" + col, wells.get(well).get("path"));
+        String rowName = rows.get(row).get("name").toString();
+        String colName = columns.get(col).get("name").toString();
+        assertEquals(rowName + "/" + colName, wells.get(well).get("path"));
       }
     }
 
@@ -890,8 +892,8 @@ public class ZarrTest {
 
     // Only two rows are filled out with one column each (two Wells total)
     Map<String, List<String>> plateMap = new HashMap<String, List<String>>();
-    plateMap.put("0", Arrays.asList("0"));
-    plateMap.put("1", Arrays.asList("0"));
+    plateMap.put("A", Arrays.asList("1"));
+    plateMap.put("B", Arrays.asList("1"));
     checkPlateGroupLayout(output, rowCount, colCount,
       plateMap, fieldCount, 2, 2);
 
@@ -909,16 +911,18 @@ public class ZarrTest {
 
     assertFalse(plate.containsKey("acquisitions"));
 
-    checkDimension(rows, rowCount);
-    checkDimension(columns, colCount);
+    assertEquals(rows.size(), rowCount);
+    assertEquals(columns.size(), colCount);
 
     assertEquals(2, wells.size());
     for (Map<String, Object> well : wells) {
       int row = ((Number) well.get("rowIndex")).intValue();
       int col = ((Number) well.get("columnIndex")).intValue();
+      String rowName = rows.get(row).get("name").toString();
+      String colName = columns.get(col).get("name").toString();
 
       String wellPath = well.get("path").toString();
-      assertEquals(row + "/" + col, wellPath);
+      assertEquals(rowName + "/" + colName, wellPath);
 
       ZarrGroup wellGroup = ZarrGroup.open(output.resolve(wellPath));
       checkWell(wellGroup, fieldCount, null);
@@ -944,7 +948,7 @@ public class ZarrTest {
     int fieldCount = 1;
 
     Map<String, List<String>> plateMap = new HashMap<String, List<String>>();
-    plateMap.put("4", Arrays.asList("5"));
+    plateMap.put("E", Arrays.asList("6"));
 
     checkPlateGroupLayout(output, rowCount, colCount,
       plateMap, fieldCount, 2, 2);
@@ -966,13 +970,13 @@ public class ZarrTest {
     assertEquals(1, acquisitions.size());
     assertEquals("0", acquisitions.get(0).get("id"));
 
-    checkDimension(rows, rowCount);
-    checkDimension(columns, colCount);
+    assertEquals(rows.size(), rowCount);
+    assertEquals(columns.size(), colCount);
 
     assertEquals(1, wells.size());
     Map<String, Object> well = wells.get(0);
     String wellPath = (String) well.get("path");
-    assertEquals("4/5", wellPath);
+    assertEquals("E/6", wellPath);
     assertEquals(4, ((Number) well.get("rowIndex")).intValue());
     assertEquals(5, ((Number) well.get("columnIndex")).intValue());
 
@@ -1004,8 +1008,8 @@ public class ZarrTest {
     int fieldCount = 1;
 
     Map<String, List<String>> plateMap = new HashMap<String, List<String>>();
-    plateMap.put("2", Arrays.asList("11"));
-    plateMap.put("7", Arrays.asList("1"));
+    plateMap.put("C", Arrays.asList("12"));
+    plateMap.put("H", Arrays.asList("2"));
     checkPlateGroupLayout(output, rowCount, colCount,
       plateMap, fieldCount, 2, 2);
 
@@ -1026,13 +1030,13 @@ public class ZarrTest {
     assertEquals(1, acquisitions.size());
     assertEquals("0", acquisitions.get(0).get("id"));
 
-    checkDimension(rows, rowCount);
-    checkDimension(columns, colCount);
+    assertEquals(rows.size(), rowCount);
+    assertEquals(columns.size(), colCount);
 
     assertEquals(2, wells.size());
     Map<String, Object> well = wells.get(0);
     String wellPath = (String) well.get("path");
-    assertEquals("2/11", wellPath);
+    assertEquals("C/12", wellPath);
     assertEquals(2, ((Number) well.get("rowIndex")).intValue());
     assertEquals(11, ((Number) well.get("columnIndex")).intValue());
     ZarrGroup wellGroup = ZarrGroup.open(output.resolve(wellPath));
@@ -1040,7 +1044,7 @@ public class ZarrTest {
 
     well = wells.get(1);
     wellPath = (String) well.get("path");
-    assertEquals("7/1", wellPath);
+    assertEquals("H/2", wellPath);
     assertEquals(7, ((Number) well.get("rowIndex")).intValue());
     assertEquals(1, ((Number) well.get("columnIndex")).intValue());
     wellGroup = ZarrGroup.open(output.resolve(wellPath));
@@ -1062,8 +1066,8 @@ public class ZarrTest {
     int fieldCount = 1;
 
     Map<String, List<String>> plateMap = new HashMap<String, List<String>>();
-    plateMap.put("5", Arrays.asList(
-      "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"));
+    plateMap.put("F", Arrays.asList(
+      "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"));
     checkPlateGroupLayout(output, rowCount, colCount,
       plateMap, fieldCount, 2, 2);
 
@@ -1084,14 +1088,15 @@ public class ZarrTest {
     assertEquals(1, acquisitions.size());
     assertEquals("0", acquisitions.get(0).get("id"));
 
-    checkDimension(rows, rowCount);
-    checkDimension(columns, colCount);
+    assertEquals(rows.size(), rowCount);
+    assertEquals(columns.size(), colCount);
 
     assertEquals(colCount, wells.size());
     for (int col=0; col<wells.size(); col++) {
       Map<String, Object> well = wells.get(col);
       String wellPath = (String) well.get("path");
-      assertEquals("5/" + col, wellPath);
+      String colName = columns.get(col).get("name").toString();
+      assertEquals("F/" + colName, wellPath);
       assertEquals(5, ((Number) well.get("rowIndex")).intValue());
       assertEquals(col, ((Number) well.get("columnIndex")).intValue());
       ZarrGroup wellGroup = ZarrGroup.open(output.resolve(wellPath));
@@ -1314,7 +1319,7 @@ public class ZarrTest {
     // if there are any wells with data in the row, the row path must exist
     // if there are no wells with data in the row, the row path cannot exist
     for (int row=0; row<rowCount; row++) {
-      String rowString = Integer.toString(row);
+      String rowString = String.format("%s", 'A' + row);
       if (validPaths.containsKey(rowString)) {
         Path rowPath = root.resolve(rowString);
         // .zgroup (Row) and columns
@@ -1325,7 +1330,7 @@ public class ZarrTest {
         // if this row/column is a well with data, the column path must exist
         // otherwise, the column path cannot exist
         for (int col=0; col<colCount; col++) {
-          String colString = Integer.toString(col);
+          String colString = Integer.toString(col + 1);
           if (validColumns.contains(colString)) {
             Path colPath = rowPath.resolve(colString);
             ZarrGroup colGroup = ZarrGroup.open(colPath);
@@ -1346,15 +1351,6 @@ public class ZarrTest {
       else {
         assertFalse(root.resolve(rowString).toFile().exists());
       }
-    }
-  }
-
-  private void checkDimension(List<Map<String, Object>> dims, int dimCount)
-    throws IOException
-  {
-    assertEquals(dimCount, dims.size());
-    for (int dim=0; dim<dims.size(); dim++) {
-      assertEquals(String.valueOf(dim), dims.get(dim).get("name"));
     }
   }
 
