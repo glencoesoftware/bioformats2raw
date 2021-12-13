@@ -1206,7 +1206,8 @@ public class Converter implements Callable<Void> {
           .nested(nested)
           .compressor(CompressorFactory.create(
               compressionType.toString(), compressionProperties));
-      ZarrArray.create(getRootPath().resolve(resolutionString), arrayParams);
+      ZarrArray.create(getRootPath().resolve(resolutionString),
+        arrayParams, getArrayAttributes());
 
       nTile = new AtomicInteger(0);
       tileCount = (int) Math.ceil((double) scaledWidth / tileWidth)
@@ -1497,6 +1498,27 @@ public class Converter implements Callable<Void> {
       datasets.add(Collections.singletonMap("path", lastPath));
     }
     multiscale.put("datasets", datasets);
+
+    if (dimensionOrder != null) {
+      List<Map<String, String>> axes = new ArrayList<Map<String, String>>();
+      String axisOrder = dimensionOrder.toString();
+      for (int i=axisOrder.length()-1; i>=0; i--) {
+        String axis = axisOrder.substring(i, i + 1).toLowerCase();
+        String type = "space";
+        if (axis.equals("t")) {
+          type = "time";
+        }
+        else if (axis.equals("c")) {
+          type = "channel";
+        }
+        Map<String, String> thisAxis = new HashMap<String, String>();
+        thisAxis.put("name", axis);
+        thisAxis.put("type", type);
+        axes.add(thisAxis);
+      }
+      multiscale.put("axes", axes);
+    }
+
     Path subGroupPath = getRootPath().resolve(seriesString);
     LOGGER.debug("  creating subgroup {}", subGroupPath);
     ZarrGroup subGroup = ZarrGroup.create(subGroupPath);
@@ -1742,6 +1764,16 @@ public class Converter implements Callable<Void> {
     finally {
       imageReader.close();
     }
+  }
+
+  private Map<String, Object> getArrayAttributes() {
+    Map<String, Object> attrs = new HashMap<String, Object>();
+    if (dimensionOrder != null) {
+      String order = dimensionOrder.toString().toLowerCase();
+      String[] axes = new StringBuilder(order).reverse().toString().split("");
+      attrs.put("_ARRAY_DIMENSIONS", axes);
+    }
+    return attrs;
   }
 
   private static Slf4JStopWatch stopWatch() {
