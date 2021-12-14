@@ -239,7 +239,7 @@ public class Converter implements Callable<Void> {
                   "(default: ${DEFAULT-VALUE})"
   )
   private volatile Class<?>[] extraReaders = new Class[] {
-    PyramidTiffReader.class, MiraxReader.class
+    PyramidTiffReader.class, MiraxReader.class, BioTekReader.class
   };
 
   @Option(
