@@ -239,7 +239,7 @@ public class Converter implements Callable<Void> {
                   "(default: ${DEFAULT-VALUE})"
   )
   private volatile Class<?>[] extraReaders = new Class[] {
-    PyramidTiffReader.class, MiraxReader.class
+    PyramidTiffReader.class, MiraxReader.class, BioTekReader.class
   };
 
   @Option(
@@ -1115,6 +1115,8 @@ public class Converter implements Callable<Void> {
     String readerDimensionOrder;
     try {
       // calculate a reasonable pyramid depth if not specified as an argument
+      sizeX = workingReader.getSizeX();
+      sizeY = workingReader.getSizeY();
       if (pyramidResolutions == null) {
         if (workingReader.getResolutionCount() > 1
             && reuseExistingResolutions)
@@ -1122,21 +1124,22 @@ public class Converter implements Callable<Void> {
           resolutions = workingReader.getResolutionCount();
         }
         else {
-          int width = workingReader.getSizeX();
-          int height = workingReader.getSizeY();
-          while (width > minSize || height > minSize) {
-            resolutions++;
-            width /= PYRAMID_SCALE;
-            height /= PYRAMID_SCALE;
-          }
+          resolutions = calculateResolutions(sizeX, sizeY);
         }
       }
       else {
         resolutions = pyramidResolutions;
+
+        // check to make sure too many resolutions aren't being used
+        if ((int) (sizeX / Math.pow(PYRAMID_SCALE, resolutions)) == 0 ||
+          (int) (sizeY / Math.pow(PYRAMID_SCALE, resolutions)) == 0)
+        {
+          resolutions = calculateResolutions(sizeX, sizeY);
+          LOGGER.warn("Too many resolutions specified; reducing to {}",
+            resolutions);
+        }
       }
       LOGGER.info("Using {} pyramid resolutions", resolutions);
-      sizeX = workingReader.getSizeX();
-      sizeY = workingReader.getSizeY();
       sizeZ = workingReader.getSizeZ();
       sizeT = workingReader.getSizeT();
       sizeC = workingReader.getSizeC();
@@ -1476,8 +1479,11 @@ public class Converter implements Callable<Void> {
     LOGGER.debug("setSeriesLevelMetadata({}, {})", series, resolutions);
     String resolutionString = String.format(
             scaleFormatString, getScaleFormatStringArgs(series, 0));
-    String seriesString = resolutionString.substring(0,
-            resolutionString.lastIndexOf('/'));
+    String seriesString = "";
+    if (resolutionString.indexOf('/') >= 0) {
+      seriesString = resolutionString.substring(0,
+          resolutionString.lastIndexOf('/'));
+    }
     LOGGER.debug("  seriesString = {}", seriesString);
     LOGGER.debug("  resolutionString = {}", resolutionString);
     List<Map<String, Object>> multiscales =
@@ -1753,6 +1759,16 @@ public class Converter implements Callable<Void> {
     finally {
       imageReader.close();
     }
+  }
+
+  private int calculateResolutions(int width, int height) {
+    int resolutions = 1;
+    while (width > minSize || height > minSize) {
+      resolutions++;
+      width /= PYRAMID_SCALE;
+      height /= PYRAMID_SCALE;
+    }
+    return resolutions;
   }
 
   private static Slf4JStopWatch stopWatch() {
