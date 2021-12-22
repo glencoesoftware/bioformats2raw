@@ -361,6 +361,17 @@ public class Converter implements Callable<Void> {
   )
   private volatile boolean reuseExistingResolutions = false;
 
+  @Option(
+      names = "--target-min-size",
+      description = "Specifies the desired size for the largest XY dimension " +
+          "of the smallest resolution, when calculating the number " +
+          "of resolutions generate. If the target size cannot be matched " +
+          "exactly, the largest XY dimension of the smallest resolution " +
+          "should be smaller than the target size."
+  )
+  private volatile int minSize = MIN_SIZE;
+
+
   /** Scaling implementation that will be used during downsampling. */
   private volatile IImageScaler scaler = new SimpleImageScaler();
 
@@ -1752,7 +1763,7 @@ public class Converter implements Callable<Void> {
 
   private int calculateResolutions(int width, int height) {
     int resolutions = 1;
-    while (width > MIN_SIZE || height > MIN_SIZE) {
+    while (width > minSize || height > minSize) {
       resolutions++;
       width /= PYRAMID_SCALE;
       height /= PYRAMID_SCALE;
