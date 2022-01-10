@@ -16,7 +16,7 @@ ARG BUILD_IMAGE=gradle:6.9-jdk8
 #
 FROM ${BUILD_IMAGE} as build
 USER root
-RUN apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libzeroc-ice3.7-java libblosc1
+RUN apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libblosc1
 RUN mkdir /bioformats2raw && chown 1000:1000 /bioformats2raw
 
 # Build all
@@ -32,7 +32,7 @@ FROM openjdk:8 as final
 
 RUN DEBIAN_FRONTEND=noninteractive \
     apt-get update -y -q \
- && apt-get install -y --no-install-recommends -q libzeroc-ice3.7-java libblosc1 \
+ && apt-get install -y --no-install-recommends -q libblosc1 \
  && apt-get autoremove -y && apt-get clean -y && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 
