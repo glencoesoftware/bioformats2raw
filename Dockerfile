@@ -42,4 +42,4 @@ ENV PATH="/opt/bioformats2raw/bin:${PATH}"
 
 USER 1000
 WORKDIR /opt/bioformats2raw
-CMD ["bioformats2raw"]
+ENTRYPOINT ["/opt/bioformats2raw/bin/bioformats2raw"]
