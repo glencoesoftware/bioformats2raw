@@ -911,8 +911,14 @@ public class MiraxReader extends FormatReader {
       store.setObjectiveSettingsID(objective, 0);
 
       if (creationDate != null) {
-        store.setImageAcquisitionDate(new Timestamp(
-          DateTools.formatDate(creationDate, "dd/MM/yyyy HH:mm:ss")), 0);
+        String formattedDate =
+          DateTools.formatDate(creationDate, "dd/MM/yyyy HH:mm:ss");
+        if (formattedDate != null) {
+          store.setImageAcquisitionDate(new Timestamp(formattedDate), 0);
+        }
+        else {
+          LOGGER.warn("Could not parse acquisition date: {}", creationDate);
+        }
       }
 
       String section = hierarchy.get("HIER_0_VAL_0_SECTION");
