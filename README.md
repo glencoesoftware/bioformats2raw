@@ -1,3 +1,6 @@
+[![Actions Status](https://github.com/glencoesoftware/bioformats2raw/workflows/Gradle/badge.svg)](https://github.com/glencoesoftware/bioformats2raw/actions)
+
+
 bioformats2raw converter
 ========================
 
