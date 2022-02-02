@@ -1473,9 +1473,10 @@ public class Converter implements Callable<Void> {
    * @param resolutions Total number of resolutions from which
    *                    names will be generated.
    * @throws IOException
+   * @throws InterruptedException
    */
   private void setSeriesLevelMetadata(int series, int resolutions)
-      throws IOException
+      throws IOException, InterruptedException
   {
     LOGGER.debug("setSeriesLevelMetadata({}, {})", series, resolutions);
     String resolutionString = String.format(
@@ -1516,25 +1517,35 @@ public class Converter implements Callable<Void> {
     }
     multiscale.put("datasets", datasets);
 
+    String axisOrder = null;
     if (dimensionOrder != null) {
-      List<Map<String, String>> axes = new ArrayList<Map<String, String>>();
-      String axisOrder = dimensionOrder.toString();
-      for (int i=axisOrder.length()-1; i>=0; i--) {
-        String axis = axisOrder.substring(i, i + 1).toLowerCase();
-        String type = "space";
-        if (axis.equals("t")) {
-          type = "time";
-        }
-        else if (axis.equals("c")) {
-          type = "channel";
-        }
-        Map<String, String> thisAxis = new HashMap<String, String>();
-        thisAxis.put("name", axis);
-        thisAxis.put("type", type);
-        axes.add(thisAxis);
-      }
-      multiscale.put("axes", axes);
+      axisOrder = dimensionOrder.toString();
     }
+    else {
+      IFormatReader reader = readers.take();
+      try {
+        axisOrder = reader.getDimensionOrder();
+      }
+      finally {
+        readers.put(reader);
+      }
+    }
+    List<Map<String, String>> axes = new ArrayList<Map<String, String>>();
+    for (int i=axisOrder.length()-1; i>=0; i--) {
+      String axis = axisOrder.substring(i, i + 1).toLowerCase();
+      String type = "space";
+      if (axis.equals("t")) {
+        type = "time";
+      }
+      else if (axis.equals("c")) {
+        type = "channel";
+      }
+      Map<String, String> thisAxis = new HashMap<String, String>();
+      thisAxis.put("name", axis);
+      thisAxis.put("type", type);
+      axes.add(thisAxis);
+    }
+    multiscale.put("axes", axes);
 
     Path subGroupPath = getRootPath().resolve(seriesString);
     LOGGER.debug("  creating subgroup {}", subGroupPath);
@@ -1783,13 +1794,25 @@ public class Converter implements Callable<Void> {
     }
   }
 
-  private Map<String, Object> getArrayAttributes() {
+  private Map<String, Object> getArrayAttributes() throws InterruptedException {
     Map<String, Object> attrs = new HashMap<String, Object>();
+    String order = null;
     if (dimensionOrder != null) {
-      String order = dimensionOrder.toString().toLowerCase();
-      String[] axes = new StringBuilder(order).reverse().toString().split("");
-      attrs.put("_ARRAY_DIMENSIONS", axes);
+      order = dimensionOrder.toString();
     }
+    else {
+      IFormatReader reader = readers.take();
+      try {
+        order = reader.getDimensionOrder();
+      }
+      finally {
+        readers.put(reader);
+      }
+    }
+
+    String[] axes =
+      new StringBuilder(order.toLowerCase()).reverse().toString().split("");
+    attrs.put("_ARRAY_DIMENSIONS", axes);
     return attrs;
   }
 
