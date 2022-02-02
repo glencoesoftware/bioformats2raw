@@ -11,11 +11,10 @@ jobs:
   build:
     strategy:
       matrix:
-        java: [1.8, 11]
+        java: [1.8, 11, 17]
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     env:
-      gradle_version: 6.6.1  # set to empty to build with most recent version
       gradle_commands: --stacktrace build
     steps:
       - uses: actions/checkout@v2
@@ -32,12 +31,6 @@ jobs:
           path: ~/.gradle/caches
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle') }}
           restore-keys: ${{ runner.os }}-gradle
-      - name: Wrap with specified version
-        run: gradle wrapper --gradle-version=${{ env.gradle_version }}
-        if: ${{ env.gradle_version != '' }}
-      - name: Wrap without version
-        run: gradle wrapper
-        if: ${{ env.gradle_version == '' }}
       - name: Run commands
         run: |
           ./gradlew ${{ env.gradle_commands }}
