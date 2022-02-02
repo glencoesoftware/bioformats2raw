@@ -28,6 +28,9 @@ repositories {
         url 'https://artifacts.glencoesoftware.com/artifactory/ome.external'
     }
     maven {
+        url 'https://artifacts.glencoesoftware.com/artifactory/scijava-thirdparty'
+    }
+    maven {
         url 'https://nexus.senbox.net/nexus/content/groups/public'
     }
 }
