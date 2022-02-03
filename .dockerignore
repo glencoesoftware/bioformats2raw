@@ -1,0 +1,6 @@
+build
+*.class
+.git
+.gitignore
+.gradle
+.*.swp
