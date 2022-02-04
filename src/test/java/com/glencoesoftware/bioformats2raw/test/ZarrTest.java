@@ -309,6 +309,15 @@ public class ZarrTest {
     ZarrGroup z = ZarrGroup.open(output.toString());
     ZarrArray array = z.openArray("0/0");
     assertArrayEquals(new int[] {1, 1, 2, 512, 512}, array.getShape());
+
+    z = ZarrGroup.open(output.resolve("0").toString());
+    List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
+            z.getAttributes().get("multiscales");
+    assertEquals(1, multiscales.size());
+    Map<String, Object> multiscale = multiscales.get(0);
+    List<Map<String, Object>> axes =
+      (List<Map<String, Object>>) multiscale.get("axes");
+    checkAxes(axes, "TZCYX");
   }
 
   /**
