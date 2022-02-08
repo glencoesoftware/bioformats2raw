@@ -321,6 +321,44 @@ public class ZarrTest {
   }
 
   /**
+   * Test that physical sizes are saved in axes/transformations metadata.
+   */
+  @Test
+  public void testPhysicalSizes() throws Exception {
+    input = fake("physicalSizeX", "1.0mm",
+      "physicalSizeY", "0.5mm",
+      "physicalSizeZ", "2cm");
+    assertTool();
+
+    ZarrGroup z = ZarrGroup.open(output.resolve("0").toString());
+    List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
+            z.getAttributes().get("multiscales");
+    assertEquals(1, multiscales.size());
+    Map<String, Object> multiscale = multiscales.get(0);
+    List<Map<String, Object>> axes =
+      (List<Map<String, Object>>) multiscale.get("axes");
+    checkAxes(axes, "TCZYX");
+
+    List<Map<String, Object>> datasets =
+      (List<Map<String, Object>>) multiscale.get("datasets");
+    assertEquals(2, datasets.size());
+
+    for (Map<String, Object> dataset : datasets) {
+      List<Map<String, Object>> transforms =
+        (List<Map<String, Object>>) dataset.get("transformations");
+      assertEquals(1, transforms.size());
+      Map<String, Object> scale = transforms.get(0);
+      assertEquals("scale", scale.get("type"));
+      List<Integer> axisIndices = (List<Integer>) scale.get("axisIndices");
+      List<Double> axisValues = (List<Double>) scale.get("scale");
+
+      assertEquals(axisIndices.size(), axisValues.size());
+      assertEquals(axisIndices, Arrays.asList(new Integer[] {2, 3, 4}));
+      assertEquals(axisValues, Arrays.asList(new Double[] {2.0, 0.5, 1.0}));
+    }
+  }
+
+  /**
    * Test using a different tile size from the default (1024).
    */
   @Test

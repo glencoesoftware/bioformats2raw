@@ -19,7 +19,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -56,6 +55,7 @@ import loci.formats.meta.IMetadata;
 import loci.formats.ome.OMEXMLMetadata;
 import loci.formats.services.OMEXMLService;
 import loci.formats.services.OMEXMLServiceImpl;
+import ome.units.quantity.Quantity;
 import ome.xml.meta.OMEXMLMetadataRoot;
 import ome.xml.model.enums.DimensionOrder;
 import ome.xml.model.enums.EnumerationException;
@@ -1506,33 +1506,63 @@ public class Converter implements Callable<Void> {
     multiscale.put("metadata", metadata);
     multiscale.put("version", nested ? "0.2" : "0.1");
     multiscales.add(multiscale);
-    List<Map<String, String>> datasets = new ArrayList<Map<String, String>>();
+
+    IFormatReader v = null;
+    IMetadata meta = null;
+    String axisOrder = null;
+    try {
+      v = readers.take();
+      meta = (IMetadata) v.getMetadataStore();
+
+      if (dimensionOrder != null) {
+        axisOrder = dimensionOrder.toString();
+      }
+      else {
+        axisOrder = v.getDimensionOrder();
+      }
+    }
+    finally {
+      readers.put(v);
+    }
+
+    List<Map<String, Object>> datasets = new ArrayList<Map<String, Object>>();
     for (int r = 0; r < resolutions; r++) {
       resolutionString = String.format(
               scaleFormatString, getScaleFormatStringArgs(series, r));
       String lastPath = resolutionString.substring(
               resolutionString.lastIndexOf('/') + 1);
-      datasets.add(Collections.singletonMap("path", lastPath));
+
+      List<Map<String, Object>> transforms =
+        new ArrayList<Map<String, Object>>();
+      Map<String, Object> scale = new HashMap<String, Object>();
+      scale.put("type", "scale");
+      List<Double> axisValues = new ArrayList<Double>();
+      List<Integer> axisIndices = new ArrayList<Integer>();
+      for (int i=axisOrder.length()-1; i>=0; i--) {
+        Quantity axisScale = getScale(meta, series, axisOrder, i);
+        if (axisScale != null) {
+          // TODO: does this need to be recalculated for r > 0?
+          axisValues.add(axisScale.value().doubleValue());
+          axisIndices.add(axisOrder.length() - i - 1);
+        }
+      }
+      scale.put("scale", axisValues);
+      scale.put("axisIndices", axisIndices);
+
+      transforms.add(scale);
+
+      Map<String, Object> dataset = new HashMap<String, Object>();
+      dataset.put("path", lastPath);
+      dataset.put("transformations", transforms);
+      datasets.add(dataset);
     }
     multiscale.put("datasets", datasets);
 
-    String axisOrder = null;
-    if (dimensionOrder != null) {
-      axisOrder = dimensionOrder.toString();
-    }
-    else {
-      IFormatReader reader = readers.take();
-      try {
-        axisOrder = reader.getDimensionOrder();
-      }
-      finally {
-        readers.put(reader);
-      }
-    }
     List<Map<String, String>> axes = new ArrayList<Map<String, String>>();
     for (int i=axisOrder.length()-1; i>=0; i--) {
       String axis = axisOrder.substring(i, i + 1).toLowerCase();
       String type = "space";
+      Quantity scale = getScale(meta, series, axisOrder, i);
       if (axis.equals("t")) {
         type = "time";
       }
@@ -1542,6 +1572,9 @@ public class Converter implements Callable<Void> {
       Map<String, String> thisAxis = new HashMap<String, String>();
       thisAxis.put("name", axis);
       thisAxis.put("type", type);
+      if (scale != null) {
+        thisAxis.put("unit", scale.unit().getSymbol());
+      }
       axes.add(thisAxis);
     }
     multiscale.put("axes", axes);
@@ -1553,6 +1586,33 @@ public class Converter implements Callable<Void> {
     attributes.put("multiscales", multiscales);
     subGroup.writeAttributes(attributes);
     LOGGER.debug("    finished writing subgroup attributes");
+  }
+
+  private Quantity getScale(
+    IMetadata meta, int series, String axisOrder, int axis)
+  {
+    if (meta == null) {
+      return null;
+    }
+    int seriesIndex = seriesList.indexOf(series);
+
+    if (seriesIndex < 0 || seriesIndex >= meta.getImageCount()) {
+      return null;
+    }
+
+    String axisChar = axisOrder.substring(axis, axis + 1).toLowerCase();
+    switch (axisChar.charAt(0)) {
+      case 'x':
+        return meta.getPixelsPhysicalSizeX(seriesIndex);
+      case 'y':
+        return meta.getPixelsPhysicalSizeY(seriesIndex);
+      case 'z':
+        return meta.getPixelsPhysicalSizeZ(seriesIndex);
+      case 't':
+        return meta.getPixelsTimeIncrement(seriesIndex);
+      default:
+        return null;
+    }
   }
 
   /**
