@@ -1220,8 +1220,7 @@ public class Converter implements Callable<Void> {
           .nested(nested)
           .compressor(CompressorFactory.create(
               compressionType.toString(), compressionProperties));
-      ZarrArray.create(getRootPath().resolve(resolutionString),
-        arrayParams, getArrayAttributes());
+      ZarrArray.create(getRootPath().resolve(resolutionString), arrayParams);
 
       nTile = new AtomicInteger(0);
       tileCount = (int) Math.ceil((double) scaledWidth / tileWidth)
@@ -1792,28 +1791,6 @@ public class Converter implements Callable<Void> {
     finally {
       imageReader.close();
     }
-  }
-
-  private Map<String, Object> getArrayAttributes() throws InterruptedException {
-    Map<String, Object> attrs = new HashMap<String, Object>();
-    String order = null;
-    if (dimensionOrder != null) {
-      order = dimensionOrder.toString();
-    }
-    else {
-      IFormatReader reader = readers.take();
-      try {
-        order = reader.getDimensionOrder();
-      }
-      finally {
-        readers.put(reader);
-      }
-    }
-
-    String[] axes =
-      new StringBuilder(order.toLowerCase()).reverse().toString().split("");
-    attrs.put("_ARRAY_DIMENSIONS", axes);
-    return attrs;
   }
 
   /**
