@@ -219,6 +219,9 @@ public class ZarrTest {
     assertTool("--scale-format-string", "%2$d");
     ZarrGroup series0 = ZarrGroup.open(output.toString());
     series0.openArray("0");
+    List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
+            series0.getAttributes().get("multiscales");
+    assertEquals(1, multiscales.size());
   }
 
   /**
