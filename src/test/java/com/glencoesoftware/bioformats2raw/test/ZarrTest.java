@@ -212,11 +212,14 @@ public class ZarrTest {
 
   /**
    * Test single directory scale format string.
+   *
+   * @param format scale format string
    */
-  @Test
-  public void testSingleDirectoryScaleFormat() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"%2$d", "%2$d/"})
+  public void testSingleDirectoryScaleFormat(String format) throws Exception {
     input = fake();
-    assertTool("--scale-format-string", "%2$d");
+    assertTool("--scale-format-string", format);
     ZarrGroup series0 = ZarrGroup.open(output.toString());
     series0.openArray("0");
     List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
