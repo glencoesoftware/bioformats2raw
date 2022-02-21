@@ -1479,6 +1479,10 @@ public class Converter implements Callable<Void> {
     LOGGER.debug("setSeriesLevelMetadata({}, {})", series, resolutions);
     String resolutionString = String.format(
             scaleFormatString, getScaleFormatStringArgs(series, 0));
+    if (resolutionString.endsWith("/")) {
+      resolutionString = resolutionString.substring(
+        0, resolutionString.length() - 1);
+    }
     String seriesString = "";
     if (resolutionString.indexOf('/') >= 0) {
       seriesString = resolutionString.substring(0,
