@@ -13,6 +13,8 @@ Bio-Formats 5.9.x ("Faas") or Bio-Formats 6.x (true OME-TIFF) pyramid.
 Requirements
 ============
 
+Java 8 or later is required.
+
 libblosc (https://github.com/Blosc/c-blosc) version 1.9.0 or later must be installed separately.
 The native libraries are not packaged with any relevant jars.  See also note in jzarr readme (https://github.com/bcdev/jzarr/blob/master/README.md)
 
