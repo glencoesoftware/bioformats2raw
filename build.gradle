@@ -6,7 +6,7 @@ plugins {
 }
 
 group = 'com.glencoesoftware'
-version = '0.3.1-SNAPSHOT'
+version = '0.4.1-SNAPSHOT'
 
 mainClassName = 'com.glencoesoftware.bioformats2raw.Converter'
 sourceCompatibility = 1.8
@@ -14,7 +14,7 @@ targetCompatibility = 1.8
 
 repositories {
     mavenLocal()
-    jcenter()
+    mavenCentral()
     maven {
         url 'https://artifacts.glencoesoftware.com/artifactory/ome.releases'
     }
@@ -25,7 +25,10 @@ repositories {
         url 'https://repo.glencoesoftware.com/repository/jzarr-snapshots'
     }
     maven {
-        url 'https://maven.scijava.org/content/groups/public'
+        url 'https://artifacts.glencoesoftware.com/artifactory/ome.external'
+    }
+    maven {
+        url 'https://artifacts.glencoesoftware.com/artifactory/scijava-thirdparty'
     }
     maven {
         url 'https://nexus.senbox.net/nexus/content/groups/public'
@@ -38,7 +41,7 @@ configurations.all {
 }
 
 dependencies {
-    implementation 'ome:formats-gpl:6.5.1'
+    implementation 'ome:formats-gpl:6.8.0'
     implementation 'info.picocli:picocli:4.6.1'
     implementation 'com.univocity:univocity-parsers:2.8.4'
     implementation 'com.bc.zarr:jzarr:0.3.3-gs-SNAPSHOT'
@@ -67,7 +70,7 @@ jar {
     manifest {
         attributes(
             "Main-Class": mainClassName,
-            "Implementation-Version": version
+            "Implementation-Version": archiveVersion
         )
     }
 }

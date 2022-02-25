@@ -1,3 +1,6 @@
+[![Actions Status](https://github.com/glencoesoftware/bioformats2raw/workflows/Gradle/badge.svg)](https://github.com/glencoesoftware/bioformats2raw/actions)
+
+
 bioformats2raw converter
 ========================
 
@@ -9,6 +12,8 @@ Bio-Formats 5.9.x ("Faas") or Bio-Formats 6.x (true OME-TIFF) pyramid.
 
 Requirements
 ============
+
+Java 8 or later is required.
 
 libblosc (https://github.com/Blosc/c-blosc) version 1.9.0 or later must be installed separately.
 The native libraries are not packaged with any relevant jars.  See also note in jzarr readme (https://github.com/bcdev/jzarr/blob/master/README.md)
@@ -60,10 +65,12 @@ If the input file has multiple series, a subset of the series can be converted b
 
     bioformats2raw /path/to/file.scn /path/to/zarr-pyramid --series 0,2,3,4
 
-By default, two additional readers (MiraxReader and PyramidTiffReader) are added to the beginning of Bio-Formats' list of reader classes.
-Either or both of these readers can be excluded with the `--extra-readers` option:
+By default, three additional readers (MiraxReader, PyramidTiffReader, and BioTekReader) are added to the beginning of Bio-Formats' list of reader classes.
+These readers are considered to be experimental and as a result only a limited range of input data is supported.
 
-    # only include the reader for .mrxs, exclude the reader for Faas pyramids
+Any of these readers can be excluded with the `--extra-readers` option:
+
+    # only include the reader for .mrxs
     bioformats2raw /path/to/file.tiff /path/to/zarr-pyramid --extra-readers com.glencoesoftware.bioformats2raw.MiraxReader
     # don't add any additional readers, just use the ones provided by Bio-Formats
     bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --extra-readers
@@ -78,6 +85,105 @@ removed in order for new options to take effect.  This file will be e.g. `/path/
 The output in `/path/to/zarr-pyramid` can be passed to `raw2ometiff` to produce
 an OME-TIFF that can be opened in ImageJ, imported into OMERO, etc. See
 https://github.com/glencoesoftware/raw2ometiff for more information.
+
+Output Formatting Options
+=========================
+
+Using any combination of these options will result in a Zarr dataset that is not compatible with raw2ometiff,
+but may be suitable for other applications.
+
+#### --pyramid-name
+
+Specifies a subdirectory of the output directory where Zarr data should be written.
+Using this option will insert another level into the output hierarchy, for example:
+
+    $ bin/bioformats2raw --pyramid-name pyramid-test "test&sizeX=4096&sizeY&=4096&sizeZ=3.fake" example1
+    $ tree example1
+    example1/
+    └── pyramid-test
+        ├── 0
+        │   ├── 0
+               ...
+        │   ├── 1
+               ...
+        │   ├── 2
+               ...
+        │   ├── 3
+               ...
+        │   └── 4
+               ...
+        └── OME
+            └── METADATA.ome.xml
+
+#### --scale-format-string
+
+A [Java format string](https://docs.oracle.com/javase/8/docs/api/java/util/Formatter.html#syntax) that defines
+how series and resolutions should be described in the output directory hierarchy.
+The default value is `%d/%d`; the first argument supplied to the format string is the series index (from 0)
+and the second argument is the resolution index (also from 0).
+
+An example of removing the series index from the hierarchy altogether:
+
+    $ bin/bioformats2raw --scale-format-string '%2$d/' "test&sizeX=4096&sizeY&=4096&sizeZ=3.fake" example2
+    $ tree example2
+    example2/
+    ├── 0
+       ...
+    ├── 1
+       ...
+    ├── 2
+       ...
+    ├── 3
+       ...
+    ├── 4
+    └── OME
+        └── METADATA.ome.xml
+
+Note the trailing `/` and quotes around the `--scale-format-string` argument.
+Omitting the trailing `/` may cause an error, and single quotes are often necessary to prevent shell expansion.
+
+#### --additional-scale-format-string-args
+
+Specify a .csv file that contains additional information which can be used by `--scale-format-string`.
+The .csv must contain one row per series, and must not contain a header row.
+Each column will be passed as an additional argument when formatting the `--scale-format-string` argument.
+
+An example .csv that defines a unique ID, acquisition date, and username for a series:
+
+    $ cat example3.csv
+    12345,2021-07-21,user_xyz
+
+which can then be used to create a hierarchy by date, username, and ID:
+
+    $ bin/bioformats2raw --additional-scale-format-string-args example3.csv --scale-format-string '%4$s/%5$s/%3$s/%1$d/%2$d' "test&sizeX=4096&size&=4096&sizeZ=3.fake" example3
+    $ tree example3
+    example3/
+    ├── 2021-07-21
+    │   └── user_xyz
+    │       └── 12345
+    │           └── 0
+    │               ├── 0
+                       ...
+    │               ├── 1
+                       ...
+    │               ├── 2
+                       ...
+    │               ├── 3
+                       ...
+    │               └── 4
+                       ...
+    └── OME
+        └── METADATA.ome.xml
+
+#### --no-ome-meta-export
+
+Prevents the input file's OME-XML metadata from being saved.  There will no longer be an `OME` directory
+under the top-level output directory.
+
+#### --no-root-group
+
+By default, a Zarr group (`.zgroup` file) is written in the top-level output directory.
+Adding the `--no-root-group` option prevents this group from being written.
 
 Usage Changes
 =============
