@@ -11,11 +11,11 @@ import loci.formats.meta.IMetadata;
 
 public class HCSIndex {
 
-  private int plate = -1;
-  private int plateAcquisition = -1;
-  private int wellRow = -1;
-  private int wellColumn = -1;
-  private int field = -1;
+  private final int plate;
+  private final Integer plateAcquisition;
+  private final int wellRow;
+  private final int wellColumn;
+  private final int field;
 
   /**
    * Construct an HCSIndex object representing an Image/series,
@@ -25,6 +25,7 @@ public class HCSIndex {
    * @param series OME Image/Bio-Formats series index
    */
   public HCSIndex(IMetadata meta, int series) {
+    Integer thePlateAcquisition = null;
     for (int p=0; p<meta.getPlateCount(); p++) {
       for (int w=0; w<meta.getWellCount(p); w++) {
         for (int ws=0; ws<meta.getWellSampleCount(p, w); ws++) {
@@ -39,19 +40,22 @@ public class HCSIndex {
               for (int s=0; s<meta.getWellSampleRefCount(p, pa); s++) {
                 String refID = meta.getPlateAcquisitionWellSampleRef(p, pa, s);
                 if (id.equals(refID)) {
-                  plateAcquisition = pa;
+                  thePlateAcquisition = pa;
                   break;
                 }
               }
-              if (plateAcquisition >= 0) {
+              if (thePlateAcquisition >= 0) {
                 break;
               }
             }
+            plateAcquisition = thePlateAcquisition;
             return;
           }
         }
       }
     }
+    throw new IllegalArgumentException(
+        "Series " + series + " not present in metadata!");
   }
 
   /**
@@ -62,28 +66,11 @@ public class HCSIndex {
   }
 
   /**
-   * Set plate index.
-   *
-   * @param plateIndex plate index
+   * @return plate acquisition index or <code>null</code> if no related plate
+   * acquisition can be found
    */
-  public void setPlateIndex(int plateIndex) {
-    this.plate = plateIndex;
-  }
-
-  /**
-   * @return plate acquisition index
-   */
-  public int getPlateAcquisitionIndex() {
+  public Integer getPlateAcquisitionIndex() {
     return plateAcquisition;
-  }
-
-  /**
-   * Set plate acquisition index.
-   *
-   * @param plateAcquisitionIndex plate acquisition index
-   */
-  public void setPlateAcquisitionIndex(int plateAcquisitionIndex) {
-    this.plateAcquisition = plateAcquisitionIndex;
   }
 
   /**
@@ -94,28 +81,10 @@ public class HCSIndex {
   }
 
   /**
-   * Set well row index.
-   *
-   * @param wellRowIndex well row index
-   */
-  public void setWellRowIndex(int wellRowIndex) {
-    this.wellRow = wellRowIndex;
-  }
-
-  /**
    * @return well column index
    */
   public int getWellColumnIndex() {
     return wellColumn;
-  }
-
-  /**
-   * Set well column index.
-   *
-   * @param wellColumnIndex well column index
-   */
-  public void setWellColumnIndex(int wellColumnIndex) {
-    this.wellColumn = wellColumnIndex;
   }
 
   /**
@@ -126,19 +95,24 @@ public class HCSIndex {
   }
 
   /**
-   * Set field (well sample) index.
-   *
-   * @param fieldIndex field index
+   * @return row path relative to the plate group
    */
-  public void setFieldIndex(int fieldIndex) {
-    this.field = fieldIndex;
+  public String getRowPath() {
+    return getRowName(getWellRowIndex());
+  }
+
+  /**
+   * @return column path relative to the row group
+   */
+  public String getColumnPath() {
+    return getColumnName(getWellColumnIndex());
   }
 
   /**
    * @return well path relative to the plate group
    */
   public String getWellPath() {
-    return String.format("%d/%d", getWellRowIndex(), getWellColumnIndex());
+    return String.format("%s/%s", getRowPath(), getColumnPath());
   }
 
   @Override
@@ -149,6 +123,35 @@ public class HCSIndex {
       getWellRowIndex(),
       getWellColumnIndex(),
       getFieldIndex());
+  }
+
+  /**
+   * Get a row name for the specified 0-based row index.
+   * The name is a single upper-case letter starting with A
+   * if the row index is less than 26, and two upper-case letters
+   * starting with AA for indexes greater than or equal to 26.
+   *
+   * @param rowIndex row index
+   * @return row name
+   */
+  public static String getRowName(int rowIndex) {
+    String name = String.valueOf((char) ('A' + (rowIndex % 26)));
+    if (rowIndex >= 26) {
+      name = (char) ('A' + ((rowIndex / 26) - 1)) + name;
+    }
+    return name;
+  }
+
+  /**
+   * Get a column name for the specified 0-based column index.
+   * The name is a string representation of the corresponding
+   * 1-based index.
+   *
+   * @param colIndex column index
+   * @return column name
+   */
+  public static String getColumnName(int colIndex) {
+    return String.format("%d", colIndex + 1);
   }
 
 }

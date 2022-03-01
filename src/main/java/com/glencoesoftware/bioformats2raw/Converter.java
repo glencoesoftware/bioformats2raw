@@ -638,7 +638,7 @@ public class Converter implements Callable<Void> {
       }
 
       if (!noHCS) {
-        scaleFormatString = "%d/%d/%d/%d";
+        scaleFormatString = "%s/%s/%d/%d";
       }
 
       for (Integer index : seriesList) {
@@ -722,8 +722,8 @@ public class Converter implements Callable<Void> {
     List<Object> args = new ArrayList<Object>();
     if (!noHCS) {
       HCSIndex index = hcsIndexes.get(series);
-      args.add(index.getWellRowIndex());
-      args.add(index.getWellColumnIndex());
+      args.add(index.getRowPath());
+      args.add(index.getColumnPath());
       args.add(index.getFieldIndex());
       args.add(resolution);
     }
@@ -1345,29 +1345,36 @@ public class Converter implements Callable<Void> {
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
 
     // try to set plate dimensions based upon Plate.Rows/Plate.Columns
-    // if not possible, use well data later on
-    try {
-      for (int r=0; r<meta.getPlateRows(plate).getValue(); r++) {
-        Map<String, Object> row = new HashMap<String, Object>();
-        String rowName = String.valueOf(r);
-        row.put("name", rowName);
-        rows.add(row);
-        root.createSubGroup(rowName);
+    // if not possible, use well data
+    PositiveInteger plateRows =  meta.getPlateRows(plate);
+    if (plateRows == null) {
+      plateRows = new PositiveInteger(1);
+      for (int wellIndex=0; wellIndex<meta.getWellCount(plate); wellIndex++) {
+        plateRows = new PositiveInteger(Math.max(
+            meta.getWellRow(plate, wellIndex).getNumberValue().intValue(),
+            plateRows.getNumberValue().intValue()));
       }
     }
-    catch (NullPointerException e) {
-      // expected when Plate.Rows not set
+    for (int r=0; r<plateRows.getValue(); r++) {
+      Map<String, Object> row = new HashMap<String, Object>();
+      String rowName = HCSIndex.getRowName(r);
+      row.put("name", rowName);
+      rows.add(row);
     }
-    try {
-      for (int c=0; c<meta.getPlateColumns(plate).getValue(); c++) {
-        Map<String, Object> column = new HashMap<String, Object>();
-        String columnName = String.valueOf(c);
-        column.put("name", columnName);
-        columns.add(column);
+    PositiveInteger plateColumns = meta.getPlateColumns(plate);
+    if (plateColumns == null) {
+      plateColumns = new PositiveInteger(1);
+      for (int wellIndex=0; wellIndex<meta.getWellCount(plate); wellIndex++) {
+        plateColumns = new PositiveInteger(Math.max(
+            meta.getWellColumn(plate, wellIndex).getNumberValue().intValue(),
+            plateColumns.getNumberValue().intValue()));
       }
     }
-    catch (NullPointerException e) {
-      // expected when Plate.Columns not set
+    for (int c=0; c<plateColumns.getValue(); c++) {
+      Map<String, Object> column = new HashMap<String, Object>();
+      String columnName = HCSIndex.getColumnName(c);
+      column.put("name", columnName);
+      columns.add(column);
     }
 
     List<Map<String, Object>> acquisitions =
@@ -1377,7 +1384,9 @@ public class Converter implements Callable<Void> {
       acquisition.put("id", String.valueOf(pa));
       acquisitions.add(acquisition);
     }
-    plateMap.put("acquisitions", acquisitions);
+    if (acquisitions.size() > 0) {
+      plateMap.put("acquisitions", acquisitions);
+    }
 
     List<Map<String, Object>> wells = new ArrayList<Map<String, Object>>();
     int maxField = Integer.MIN_VALUE;
@@ -1391,15 +1400,20 @@ public class Converter implements Callable<Void> {
 
           List<Map<String, Object>> imageList =
             new ArrayList<Map<String, Object>>();
-          ZarrGroup wellGroup = root.createSubGroup(wellPath);
+          String rowPath = index.getRowPath();
+          ZarrGroup rowGroup = root.createSubGroup(rowPath);
+          String columnPath = index.getColumnPath();
+          ZarrGroup columnGroup = rowGroup.createSubGroup(columnPath);
           for (HCSIndex field : hcsIndexes) {
             if (field.getPlateIndex() == index.getPlateIndex() &&
               field.getWellRowIndex() == index.getWellRowIndex() &&
               field.getWellColumnIndex() == index.getWellColumnIndex())
             {
               Map<String, Object> image = new HashMap<String, Object>();
-              int plateAcq = field.getPlateAcquisitionIndex();
-              image.put("acquisition", plateAcq);
+              Integer plateAcq = field.getPlateAcquisitionIndex();
+              if (plateAcq != null) {
+                image.put("acquisition", plateAcq);
+              }
               image.put("path", String.valueOf(field.getFieldIndex()));
               imageList.add(image);
             }
@@ -1407,45 +1421,45 @@ public class Converter implements Callable<Void> {
 
           Map<String, Object> wellMap = new HashMap<String, Object>();
           wellMap.put("images", imageList);
-          Map<String, Object> attributes = wellGroup.getAttributes();
+          Map<String, Object> attributes = columnGroup.getAttributes();
           attributes.put("well", wellMap);
-          wellGroup.writeAttributes(attributes);
+          columnGroup.writeAttributes(attributes);
 
           // make sure the row/column indexes are added to the plate attributes
           // this is necessary when Plate.Rows or Plate.Columns is not set
-          int column = index.getWellColumnIndex();
-          int row = index.getWellRowIndex();
+          String column = index.getColumnPath();
+          String row = index.getRowPath();
 
           int columnIndex = -1;
           for (int c=0; c<columns.size(); c++) {
-            if (columns.get(c).get("name").equals(String.valueOf(column))) {
+            if (columns.get(c).get("name").equals(column)) {
               columnIndex = c;
               break;
             }
           }
           if (columnIndex < 0) {
             Map<String, Object> colMap = new HashMap<String, Object>();
-            colMap.put("name", String.valueOf(column));
+            colMap.put("name", column);
             columnIndex = columns.size();
             columns.add(colMap);
           }
 
           int rowIndex = -1;
           for (int r=0; r<rows.size(); r++) {
-            if (rows.get(r).get("name").equals(String.valueOf(row))) {
+            if (rows.get(r).get("name").equals(row)) {
               rowIndex = r;
               break;
             }
           }
           if (rowIndex < 0) {
             Map<String, Object> rowMap = new HashMap<String, Object>();
-            rowMap.put("name", String.valueOf(row));
+            rowMap.put("name", row);
             rowIndex = rows.size();
             rows.add(rowMap);
           }
 
-          well.put("row_index", rowIndex);
-          well.put("column_index", columnIndex);
+          well.put("rowIndex", rowIndex);
+          well.put("columnIndex", columnIndex);
           wells.add(well);
         }
 
