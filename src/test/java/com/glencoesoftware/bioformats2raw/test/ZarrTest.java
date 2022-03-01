@@ -267,6 +267,10 @@ public class ZarrTest {
             (List<Map<String, Object>>) multiscale.get("datasets");
     assertTrue(datasets.size() > 0);
     assertEquals("0", datasets.get(0).get("path"));
+
+    List<Map<String, Object>> axes =
+      (List<Map<String, Object>>) multiscale.get("axes");
+    checkAxes(axes, "TCZYX");
   }
 
   /**
@@ -291,6 +295,15 @@ public class ZarrTest {
     ZarrGroup z = ZarrGroup.open(output.toString());
     ZarrArray array = z.openArray("0/0");
     assertArrayEquals(new int[] {1, 1, 2, 512, 512}, array.getShape());
+
+    z = ZarrGroup.open(output.resolve("0").toString());
+    List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
+            z.getAttributes().get("multiscales");
+    assertEquals(1, multiscales.size());
+    Map<String, Object> multiscale = multiscales.get(0);
+    List<Map<String, Object>> axes =
+      (List<Map<String, Object>>) multiscale.get("axes");
+    checkAxes(axes, "TZCYX");
   }
 
   /**
@@ -303,6 +316,15 @@ public class ZarrTest {
     ZarrGroup z = ZarrGroup.open(output.toString());
     ZarrArray array = z.openArray("0/0");
     assertArrayEquals(new int[] {1, 1, 2, 512, 512}, array.getShape());
+
+    z = ZarrGroup.open(output.resolve("0").toString());
+    List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
+            z.getAttributes().get("multiscales");
+    assertEquals(1, multiscales.size());
+    Map<String, Object> multiscale = multiscales.get(0);
+    List<Map<String, Object>> axes =
+      (List<Map<String, Object>>) multiscale.get("axes");
+    checkAxes(axes, "TZCYX");
   }
 
   /**
@@ -1535,6 +1557,15 @@ public class ZarrTest {
       else {
         assertEquals(acquisition, field.get("acquisition"));
       }
+    }
+  }
+
+  private void checkAxes(List<Map<String, Object>> axes, String order) {
+    assertEquals(axes.size(), order.length());
+    for (int i=0; i<axes.size(); i++) {
+      String name = axes.get(i).get("name").toString();
+      assertEquals(name, order.toLowerCase().substring(i, i + 1));
+      assertTrue(axes.get(i).containsKey("type"));
     }
   }
 

@@ -1486,9 +1486,10 @@ public class Converter implements Callable<Void> {
    * @param resolutions Total number of resolutions from which
    *                    names will be generated.
    * @throws IOException
+   * @throws InterruptedException
    */
   private void setSeriesLevelMetadata(int series, int resolutions)
-      throws IOException
+      throws IOException, InterruptedException
   {
     LOGGER.debug("setSeriesLevelMetadata({}, {})", series, resolutions);
     String resolutionString = String.format(
@@ -1532,6 +1533,37 @@ public class Converter implements Callable<Void> {
       datasets.add(Collections.singletonMap("path", lastPath));
     }
     multiscale.put("datasets", datasets);
+
+    String axisOrder = null;
+    if (dimensionOrder != null) {
+      axisOrder = dimensionOrder.toString();
+    }
+    else {
+      IFormatReader reader = readers.take();
+      try {
+        axisOrder = reader.getDimensionOrder();
+      }
+      finally {
+        readers.put(reader);
+      }
+    }
+    List<Map<String, String>> axes = new ArrayList<Map<String, String>>();
+    for (int i=axisOrder.length()-1; i>=0; i--) {
+      String axis = axisOrder.substring(i, i + 1).toLowerCase();
+      String type = "space";
+      if (axis.equals("t")) {
+        type = "time";
+      }
+      else if (axis.equals("c")) {
+        type = "channel";
+      }
+      Map<String, String> thisAxis = new HashMap<String, String>();
+      thisAxis.put("name", axis);
+      thisAxis.put("type", type);
+      axes.add(thisAxis);
+    }
+    multiscale.put("axes", axes);
+
     Path subGroupPath = getRootPath().resolve(seriesString);
     LOGGER.debug("  creating subgroup {}", subGroupPath);
     ZarrGroup subGroup = ZarrGroup.create(subGroupPath);
