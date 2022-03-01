@@ -65,6 +65,10 @@ public class MiraxReader extends FormatReader {
   private static final Logger LOGGER =
     LoggerFactory.getLogger(MiraxReader.class);
 
+  private static final String[] DATE_FORMATS = new String[] {
+    "dd/MM/yyyy HH:mm:ss", "yyyy.MM.dd HH:mm:ss.SSS"
+  };
+
   private static final int MAX_TILE_SIZE = 256;
 
   private static final String SLIDE_DATA = "Slidedat.ini";
@@ -911,8 +915,19 @@ public class MiraxReader extends FormatReader {
       store.setObjectiveSettingsID(objective, 0);
 
       if (creationDate != null) {
-        store.setImageAcquisitionDate(new Timestamp(
-          DateTools.formatDate(creationDate, "dd/MM/yyyy HH:mm:ss")), 0);
+        String formattedDate = null;
+        for (String dateFormat : DATE_FORMATS) {
+          formattedDate = DateTools.formatDate(creationDate, dateFormat);
+          if (formattedDate != null) {
+            break;
+          }
+        }
+        if (formattedDate != null) {
+          store.setImageAcquisitionDate(new Timestamp(formattedDate), 0);
+        }
+        else {
+          LOGGER.warn("Could not parse acquisition date: {}", creationDate);
+        }
       }
 
       String section = hierarchy.get("HIER_0_VAL_0_SECTION");
