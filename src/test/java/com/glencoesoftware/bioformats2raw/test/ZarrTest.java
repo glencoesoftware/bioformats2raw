@@ -262,7 +262,7 @@ public class ZarrTest {
             z.getAttributes().get("multiscales");
     assertEquals(1, multiscales.size());
     Map<String, Object> multiscale = multiscales.get(0);
-    assertEquals("0.2", multiscale.get("version"));
+    assertEquals("0.3", multiscale.get("version"));
     List<Map<String, Object>> datasets =
             (List<Map<String, Object>>) multiscale.get("datasets");
     assertTrue(datasets.size() > 0);
@@ -787,7 +787,7 @@ public class ZarrTest {
           (List<Map<String, Object>>) z.getAttributes().get("multiscales");
     assertEquals(1, multiscales.size());
     Map<String, Object> multiscale = multiscales.get(0);
-    assertEquals("0.2", multiscale.get("version"));
+    assertEquals("0.3", multiscale.get("version"));
 
     Map<String, String> metadata =
       (Map<String, String>) multiscale.get("metadata");
