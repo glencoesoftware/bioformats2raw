@@ -1537,23 +1537,23 @@ public class Converter implements Callable<Void> {
       Map<String, Object> scale = new HashMap<String, Object>();
       scale.put("type", "scale");
       List<Double> axisValues = new ArrayList<Double>();
-      List<Integer> axisIndices = new ArrayList<Integer>();
+      double resolutionScale = Math.pow(PYRAMID_SCALE, r);
       for (int i=axisOrder.length()-1; i>=0; i--) {
         Quantity axisScale = getScale(meta, series, axisOrder, i);
         if (axisScale != null) {
-          // TODO: does this need to be recalculated for r > 0?
-          axisValues.add(axisScale.value().doubleValue());
-          axisIndices.add(axisOrder.length() - i - 1);
+          axisValues.add(axisScale.value().doubleValue() * resolutionScale);
+        }
+        else {
+          axisValues.add(1.0);
         }
       }
       scale.put("scale", axisValues);
-      scale.put("axisIndices", axisIndices);
 
       transforms.add(scale);
 
       Map<String, Object> dataset = new HashMap<String, Object>();
       dataset.put("path", lastPath);
-      dataset.put("transformations", transforms);
+      dataset.put("coordinateTransformations", transforms);
       datasets.add(dataset);
     }
     multiscale.put("datasets", datasets);

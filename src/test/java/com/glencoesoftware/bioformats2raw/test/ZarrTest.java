@@ -343,18 +343,19 @@ public class ZarrTest {
       (List<Map<String, Object>>) multiscale.get("datasets");
     assertEquals(2, datasets.size());
 
-    for (Map<String, Object> dataset : datasets) {
+    for (int r=0; r<datasets.size(); r++) {
+      Map<String, Object> dataset = datasets.get(r);
       List<Map<String, Object>> transforms =
-        (List<Map<String, Object>>) dataset.get("transformations");
+        (List<Map<String, Object>>) dataset.get("coordinateTransformations");
       assertEquals(1, transforms.size());
       Map<String, Object> scale = transforms.get(0);
       assertEquals("scale", scale.get("type"));
-      List<Integer> axisIndices = (List<Integer>) scale.get("axisIndices");
       List<Double> axisValues = (List<Double>) scale.get("scale");
 
-      assertEquals(axisIndices.size(), axisValues.size());
-      assertEquals(axisIndices, Arrays.asList(new Integer[] {2, 3, 4}));
-      assertEquals(axisValues, Arrays.asList(new Double[] {2.0, 0.5, 1.0}));
+      assertEquals(5, axisValues.size());
+      double factor = Math.pow(2, r);
+      assertEquals(axisValues, Arrays.asList(new Double[] {
+        1.0, 1.0, 2.0 * factor, 0.5 * factor, factor}));
     }
   }
 
