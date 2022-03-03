@@ -1522,7 +1522,7 @@ public class Converter implements Callable<Void> {
       multiscale.put("type", downsampling.getName());
     }
     multiscale.put("metadata", metadata);
-    multiscale.put("version", nested ? "0.3" : "0.1");
+    multiscale.put("version", nested ? "0.4" : "0.1");
     multiscales.add(multiscale);
     List<Map<String, String>> datasets = new ArrayList<Map<String, String>>();
     for (int r = 0; r < resolutions; r++) {
