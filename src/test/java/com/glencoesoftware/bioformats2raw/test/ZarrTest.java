@@ -264,6 +264,23 @@ public class ZarrTest {
     List<Map<String, Object>> axes =
       (List<Map<String, Object>>) multiscale.get("axes");
     checkAxes(axes, "TCZYX");
+
+    for (int r=0; r<datasets.size(); r++) {
+      Map<String, Object> dataset = datasets.get(r);
+      List<Map<String, Object>> transforms =
+        (List<Map<String, Object>>) dataset.get("coordinateTransformations");
+      assertEquals(1, transforms.size());
+      Map<String, Object> scale = transforms.get(0);
+      assertEquals("scale", scale.get("type"));
+      List<Double> axisValues = (List<Double>) scale.get("scale");
+
+      assertEquals(5, axisValues.size());
+      double factor = Math.pow(2, r);
+      // X and Y are the only dimensions that are downsampled,
+      // so the TCZ physical scales remain the same across all resolutions
+      assertEquals(axisValues, Arrays.asList(new Double[] {
+        1.0, 1.0, 1.0, factor, factor}));
+    }
   }
 
   /**
@@ -354,8 +371,10 @@ public class ZarrTest {
 
       assertEquals(5, axisValues.size());
       double factor = Math.pow(2, r);
+      // X and Y are the only dimensions that are downsampled,
+      // so the TCZ physical scales remain the same across all resolutions
       assertEquals(axisValues, Arrays.asList(new Double[] {
-        1.0, 1.0, 2.0 * factor, 0.5 * factor, factor}));
+        1.0, 1.0, 2.0, 0.5 * factor, factor}));
     }
   }
 

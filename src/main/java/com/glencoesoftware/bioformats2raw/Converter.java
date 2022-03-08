@@ -1540,11 +1540,30 @@ public class Converter implements Callable<Void> {
       double resolutionScale = Math.pow(PYRAMID_SCALE, r);
       for (int i=axisOrder.length()-1; i>=0; i--) {
         Quantity axisScale = getScale(meta, series, axisOrder, i);
+        String axisChar = axisOrder.substring(i, i + 1).toLowerCase();
+
         if (axisScale != null) {
-          axisValues.add(axisScale.value().doubleValue() * resolutionScale);
+          // if physical dimension information is defined,
+          // use it directly for dimensions that aren't scaled (Z and T)
+          // increase it according to the resolution number for dimensions that
+          // are scaled (X and Y)
+          if (axisChar.equals("x") || axisChar.equals("y")) {
+            axisValues.add(axisScale.value().doubleValue() * resolutionScale);
+          }
+          else {
+            axisValues.add(axisScale.value().doubleValue());
+          }
         }
         else {
-          axisValues.add(1.0);
+          // if physical dimension information is not defined,
+          // store the scale factor for the dimension in the current resolution,
+          // i.e. 1.0 for everything other than X and Y
+          if (axisChar.equals("x") || axisChar.equals("y")) {
+            axisValues.add(resolutionScale);
+          }
+          else {
+            axisValues.add(1.0);
+          }
         }
       }
       scale.put("scale", axisValues);
