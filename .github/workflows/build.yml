@@ -34,3 +34,9 @@ jobs:
       - name: Run commands
         run: |
           ./gradlew ${{ env.gradle_commands }}
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: bioformats2raw
+          path: build/distributions/*.zip
+          retention-days: 30
