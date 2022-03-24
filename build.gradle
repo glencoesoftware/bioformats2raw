@@ -33,6 +33,10 @@ repositories {
     maven {
         url 'https://artifacts.glencoesoftware.com/artifactory/jzarr-releases'
     }
+    maven {
+        name 'Unidata'
+        url 'https://artifacts.unidata.ucar.edu/content/repositories/unidata-releases'
+    }
 }
 
 configurations.all {
