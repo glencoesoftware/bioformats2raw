@@ -35,7 +35,7 @@ repositories {
     }
     maven {
         name 'Unidata'
-        url 'https://artifacts.unidata.ucar.edu/content/repositories/unidata-releases'
+        url 'https://artifacts.glencoesoftware.com/artifactory/unidata-releases'
     }
 }
 
