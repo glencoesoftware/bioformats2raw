@@ -1629,6 +1629,9 @@ public class ZarrTest {
       if (units != null) {
         assertEquals(axes.get(i).get("unit"), units[i]);
       }
+      else {
+        assertTrue(!axes.get(i).containsKey("unit"));
+      }
     }
   }
 
