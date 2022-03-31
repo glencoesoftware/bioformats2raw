@@ -32,6 +32,7 @@ import com.glencoesoftware.bioformats2raw.Downsampling;
 import loci.common.LogbackTools;
 import loci.common.services.ServiceFactory;
 import loci.formats.FormatTools;
+import loci.formats.Memoizer;
 import loci.formats.in.FakeReader;
 import loci.formats.ome.OMEXMLMetadata;
 import loci.formats.services.OMEXMLService;
@@ -1538,6 +1539,31 @@ public class ZarrTest {
     assertArrayEquals(new int[] {1, 1, 1, 1024, 512}, array.getShape());
     array = z.openArray("6");
     assertArrayEquals(new int[] {1, 1, 1, 16, 8}, array.getShape());
+  }
+
+  /**
+   * Check that --keep-memo-files works as expected.
+   */
+  //@Test
+  public void testMemoFiles() throws Exception {
+    // make sure a memo file is created
+    // by default the fake init time is too small
+    input = fake("sleepInitFile", "1000");
+    assertTool("--debug", "--keep-memo-files");
+
+    Memoizer m = new Memoizer();
+    File memoFile = m.getMemoFile(input.toString());
+    assertTrue(memoFile.exists());
+
+    // make sure the existing memo file is not deleted
+    assertTool();
+    assertTrue(memoFile.exists());
+
+    // now delete the memo file and make sure that
+    // a clean conversion doesn't leave a memo file around
+    memoFile.delete();
+    assertTool();
+    assertFalse(memoFile.exists());
   }
 
   /**
