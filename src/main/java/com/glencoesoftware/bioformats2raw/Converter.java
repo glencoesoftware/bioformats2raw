@@ -298,6 +298,12 @@ public class Converter implements Callable<Void> {
   private volatile File memoDirectory;
 
   @Option(
+          names = "--keep-memo-files",
+          description = "Do not delete .bfmemo files created during conversion"
+  )
+  private volatile boolean keepMemoFiles = false;
+
+  @Option(
           names = "--pixel-type",
           description = "Pixel type to write if input data is " +
                   " float or double (${COMPLETION-CANDIDATES})"
@@ -507,6 +513,7 @@ public class Converter implements Callable<Void> {
 
     // Now with our found type instantiate our queue of readers for use
     // during conversion
+    boolean savedMemoFile = false;
     for (int i=0; i < maxWorkers; i++) {
       IFormatReader reader;
       Memoizer memoizer;
@@ -515,13 +522,7 @@ public class Converter implements Callable<Void> {
         if (fillValue != null && reader instanceof MiraxReader) {
           ((MiraxReader) reader).setFillValue(fillValue.byteValue());
         }
-        if (memoDirectory == null) {
-          memoizer = new Memoizer(reader);
-        }
-        else {
-          memoizer = new Memoizer(
-            reader, Memoizer.DEFAULT_MINIMUM_ELAPSED, memoDirectory);
-        }
+        memoizer = createMemoizer(reader);
       }
       catch (Exception e) {
         LOGGER.error("Failed to instantiate reader: {}", readerClass, e);
@@ -550,6 +551,7 @@ public class Converter implements Callable<Void> {
         ((MiraxReader) reader).setTileCache(tileCache);
       }
       readers.add(separator);
+      savedMemoFile = savedMemoFile || memoizer.isSavedToMemo();
     }
 
     // Finally, perform conversion on all series
@@ -669,6 +671,14 @@ public class Converter implements Callable<Void> {
         }
       });
     }
+
+    // delete the memo file if it was saved and it's not explicitly kept
+    // this should mean that memo files which existed before conversion
+    // started will not be deleted
+    if (savedMemoFile && !keepMemoFiles) {
+      File memoFile = createMemoizer(null).getMemoFile(inputPath.toString());
+      memoFile.delete();
+    }
   }
 
   /**
@@ -689,6 +699,32 @@ public class Converter implements Callable<Void> {
       reader.setSeries(series);
     });
     saveResolutions(series);
+  }
+
+  /**
+   * Create a new Memoizer that wraps the given reader, based on the
+   * user-specified caching options. The supplied reader may be null.
+   *
+   * @param reader existing reader to wrap, or null
+   * @return new uninitialized Memoizer instance
+   */
+  private Memoizer createMemoizer(IFormatReader reader) {
+    if (memoDirectory == null) {
+      if (reader == null) {
+        return new Memoizer();
+      }
+      return new Memoizer(reader);
+    }
+    else {
+      if (reader == null) {
+        return new Memoizer(
+          Memoizer.DEFAULT_MINIMUM_ELAPSED, memoDirectory);
+      }
+      else {
+        return new Memoizer(
+          reader, Memoizer.DEFAULT_MINIMUM_ELAPSED, memoDirectory);
+      }
+    }
   }
 
   /**
