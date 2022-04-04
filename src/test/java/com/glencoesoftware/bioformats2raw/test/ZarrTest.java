@@ -349,7 +349,7 @@ public class ZarrTest {
    */
   @Test
   public void testPhysicalSizes() throws Exception {
-    input = fake("physicalSizeX", "1.0mm",
+    input = fake("physicalSizeX", "1.0Å",
       "physicalSizeY", "0.5mm",
       "physicalSizeZ", "2cm");
     assertTool();
@@ -362,7 +362,7 @@ public class ZarrTest {
     List<Map<String, Object>> axes =
       (List<Map<String, Object>>) multiscale.get("axes");
     checkAxes(axes, "TCZYX",
-      new String[] {null, null, "centimeter", "millimeter", "millimeter"});
+      new String[] {null, null, "centimeter", "millimeter", "angstrom"});
 
     List<Map<String, Object>> datasets =
       (List<Map<String, Object>>) multiscale.get("datasets");
