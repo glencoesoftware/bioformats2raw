@@ -361,7 +361,8 @@ public class ZarrTest {
     Map<String, Object> multiscale = multiscales.get(0);
     List<Map<String, Object>> axes =
       (List<Map<String, Object>>) multiscale.get("axes");
-    checkAxes(axes, "TCZYX", new String[] {null, null, "cm", "mm", "mm"});
+    checkAxes(axes, "TCZYX",
+      new String[] {null, null, "centimeter", "millimeter", "millimeter"});
 
     List<Map<String, Object>> datasets =
       (List<Map<String, Object>>) multiscale.get("datasets");
