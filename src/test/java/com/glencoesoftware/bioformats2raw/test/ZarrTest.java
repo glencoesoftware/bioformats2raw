@@ -1544,7 +1544,7 @@ public class ZarrTest {
   /**
    * Check that --keep-memo-files works as expected.
    */
-  //@Test
+  @Test
   public void testMemoFiles() throws Exception {
     // make sure a memo file is created
     // by default the fake init time is too small
@@ -1556,13 +1556,13 @@ public class ZarrTest {
     assertTrue(memoFile.exists());
 
     // make sure the existing memo file is not deleted
-    assertTool();
+    assertTool("--overwrite");
     assertTrue(memoFile.exists());
 
     // now delete the memo file and make sure that
     // a clean conversion doesn't leave a memo file around
     memoFile.delete();
-    assertTool();
+    assertTool("--overwrite");
     assertFalse(memoFile.exists());
   }
 
