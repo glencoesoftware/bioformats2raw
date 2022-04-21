@@ -1558,7 +1558,7 @@ public class Converter implements Callable<Void> {
       multiscale.put("type", downsampling.getName());
     }
     multiscale.put("metadata", metadata);
-    multiscale.put("version", nested ? "0.2" : "0.1");
+    multiscale.put("version", nested ? "0.4" : "0.1");
     multiscales.add(multiscale);
 
     IFormatReader v = null;
