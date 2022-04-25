@@ -48,7 +48,7 @@ dependencies {
     implementation 'ome:formats-gpl:6.9.1'
     implementation 'info.picocli:picocli:4.6.1'
     implementation 'com.univocity:univocity-parsers:2.8.4'
-    implementation 'com.bc.zarr:jzarr:0.3.3-gs-SNAPSHOT'
+    implementation 'com.bc.zarr:jzarr:0.3.5'
     // implementation 'org.carlspring.cloud.aws:s3fs-nio:1.0-SNAPSHOT'
     // implementation 'io.nextflow:nxf-s3fs:1.1.0'
     implementation 'org.lasersonlab:s3fs:2.2.3'

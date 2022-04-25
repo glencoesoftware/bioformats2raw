@@ -240,7 +240,12 @@ public class ZarrTest {
     Integer layout = (Integer)
         z.getAttributes().get("bioformats2raw.layout");
     ZarrArray series0 = ZarrGroup.open(output.resolve("0")).openArray("0");
-    assertTrue(series0.getNested());
+
+    // no getter for DimensionSeparator in ZarrArray
+    // check that the correct separator was used by checking
+    // that the expected first chunk file exists
+    assertTrue(output.resolve("0/0/0/0/0/0/0").toFile().exists());
+
     // Also ensure we're using the latest .zarray metadata
     ObjectMapper objectMapper = new ObjectMapper();
     JsonNode root = objectMapper.readTree(
@@ -878,6 +883,12 @@ public class ZarrTest {
   public void testNestedStorage(boolean nested) throws IOException {
     input = fake();
     assertTool(nested ? "--nested" : "--no-nested");
+    if (nested) {
+      assertTrue(output.resolve("0/0/0/0/0/0/0").toFile().exists());
+    }
+    else {
+      assertTrue(output.resolve("0/0/0.0.0.0.0").toFile().exists());
+    }
   }
 
   /**
