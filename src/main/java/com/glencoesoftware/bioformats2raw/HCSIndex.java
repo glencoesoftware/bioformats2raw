@@ -44,7 +44,7 @@ public class HCSIndex {
                   break;
                 }
               }
-              if (thePlateAcquisition >= 0) {
+              if (thePlateAcquisition != null) {
                 break;
               }
             }
