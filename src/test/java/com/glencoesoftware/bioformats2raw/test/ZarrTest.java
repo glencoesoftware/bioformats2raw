@@ -1245,7 +1245,7 @@ public class ZarrTest {
 
     int rowCount = 8;
     int colCount = 12;
-    int fieldCount = 2;
+    int fieldCount = 3;
 
     Map<String, List<String>> plateMap = new HashMap<String, List<String>>();
     plateMap.put("E", Arrays.asList("6"));
@@ -1286,6 +1286,7 @@ public class ZarrTest {
     Map<Integer, Integer> wellAcquisitions = new HashMap<Integer, Integer>();
     wellAcquisitions.put(0, 0);
     wellAcquisitions.put(1, 1);
+    wellAcquisitions.put(2, null);
     checkWell(wellGroup, fieldCount, wellAcquisitions);
   }
 
