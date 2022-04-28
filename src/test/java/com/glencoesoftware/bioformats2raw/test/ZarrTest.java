@@ -1234,6 +1234,62 @@ public class ZarrTest {
   }
 
   /**
+   * 96 well plate with only well E6 with two acquisitions.
+   */
+  @Test
+  public void testSingleWellTwoAcquisitions() throws IOException {
+    input = getTestFile("E6-only-two-acqs.xml");
+    assertTool();
+
+    ZarrGroup z = ZarrGroup.open(output);
+
+    int rowCount = 8;
+    int colCount = 12;
+    int fieldCount = 2;
+
+    Map<String, List<String>> plateMap = new HashMap<String, List<String>>();
+    plateMap.put("E", Arrays.asList("6"));
+
+    checkPlateGroupLayout(output, rowCount, colCount,
+      plateMap, fieldCount, 2, 2);
+
+    // check plate/well level metadata
+    Map<String, Object> plate =
+        (Map<String, Object>) z.getAttributes().get("plate");
+    assertEquals(fieldCount, ((Number) plate.get("field_count")).intValue());
+
+    List<Map<String, Object>> acquisitions =
+      (List<Map<String, Object>>) plate.get("acquisitions");
+    List<Map<String, Object>> rows =
+      (List<Map<String, Object>>) plate.get("rows");
+    List<Map<String, Object>> columns =
+      (List<Map<String, Object>>) plate.get("columns");
+    List<Map<String, Object>> wells =
+      (List<Map<String, Object>>) plate.get("wells");
+
+    assertEquals(2, acquisitions.size());
+    assertEquals("0", acquisitions.get(0).get("id"));
+    assertEquals("1", acquisitions.get(1).get("id"));
+
+    assertEquals(rows.size(), rowCount);
+    assertEquals(columns.size(), colCount);
+
+    assertEquals(1, wells.size());
+    Map<String, Object> well = wells.get(0);
+    String wellPath = (String) well.get("path");
+    assertEquals("E/6", wellPath);
+    assertEquals(4, ((Number) well.get("rowIndex")).intValue());
+    assertEquals(5, ((Number) well.get("columnIndex")).intValue());
+
+    // check well metadata
+    ZarrGroup wellGroup = ZarrGroup.open(output.resolve(wellPath));
+    Map<Integer, Integer> wellAcquisitions = new HashMap<Integer, Integer>();
+    wellAcquisitions.put(0, 0);
+    wellAcquisitions.put(1, 1);
+    checkWell(wellGroup, fieldCount, wellAcquisitions);
+  }
+
+  /**
    * Convert an RGB image.  Ensure that the Channels are correctly split.
    */
   @Test
