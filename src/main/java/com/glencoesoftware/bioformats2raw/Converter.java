@@ -562,6 +562,12 @@ public class Converter implements Callable<Void> {
 
         if (!noHCS) {
           noHCS = !hasValidPlate(meta);
+          int plateCount = meta.getPlateCount();
+          if (!noHCS && plateCount > 1) {
+            throw new IllegalArgumentException(
+              "Found " + plateCount + " plates; only one can be converted. " +
+              "Use --no-hcs to as a work-around.");
+          }
         }
         else {
           ((OMEXMLMetadata) meta).resolveReferences();

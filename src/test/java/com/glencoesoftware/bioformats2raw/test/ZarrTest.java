@@ -905,6 +905,19 @@ public class ZarrTest {
   }
 
   /**
+   * Make sure conversion fails when multiple plates are present.
+   */
+  @Test
+  public void testMultiPlates() throws Exception {
+    input = fake(
+      "plates", "2", "plateAcqs", "1",
+      "plateRows", "2", "plateCols", "3", "fields", "2");
+    assertThrows(ExecutionException.class, () -> {
+      assertTool();
+    });
+  }
+
+  /**
    * Convert a plate with default options.
    * The output should be compliant with OME Zarr HCS.
    */
