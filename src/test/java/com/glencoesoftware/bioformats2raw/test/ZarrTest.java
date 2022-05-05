@@ -941,7 +941,7 @@ public class ZarrTest {
       (List<Map<String, Object>>) plate.get("wells");
 
     assertEquals(1, acquisitions.size());
-    assertEquals("0", acquisitions.get(0).get("id"));
+    assertEquals(0, acquisitions.get(0).get("id"));
 
     assertEquals(rows.size(), rowCount);
     assertEquals(columns.size(), colCount);
@@ -1091,7 +1091,7 @@ public class ZarrTest {
       (List<Map<String, Object>>) plate.get("wells");
 
     assertEquals(1, acquisitions.size());
-    assertEquals("0", acquisitions.get(0).get("id"));
+    assertEquals(0, acquisitions.get(0).get("id"));
 
     assertEquals(rows.size(), rowCount);
     assertEquals(columns.size(), colCount);
@@ -1153,7 +1153,7 @@ public class ZarrTest {
       (List<Map<String, Object>>) plate.get("wells");
 
     assertEquals(1, acquisitions.size());
-    assertEquals("0", acquisitions.get(0).get("id"));
+    assertEquals(0, acquisitions.get(0).get("id"));
 
     assertEquals(rows.size(), rowCount);
     assertEquals(columns.size(), colCount);
@@ -1213,7 +1213,7 @@ public class ZarrTest {
       (List<Map<String, Object>>) plate.get("wells");
 
     assertEquals(1, acquisitions.size());
-    assertEquals("0", acquisitions.get(0).get("id"));
+    assertEquals(0, acquisitions.get(0).get("id"));
 
     assertEquals(rows.size(), rowCount);
     assertEquals(columns.size(), colCount);
@@ -1268,8 +1268,8 @@ public class ZarrTest {
       (List<Map<String, Object>>) plate.get("wells");
 
     assertEquals(2, acquisitions.size());
-    assertEquals("0", acquisitions.get(0).get("id"));
-    assertEquals("1", acquisitions.get(1).get("id"));
+    assertEquals(0, acquisitions.get(0).get("id"));
+    assertEquals(1, acquisitions.get(1).get("id"));
 
     assertEquals(rows.size(), rowCount);
     assertEquals(columns.size(), colCount);
