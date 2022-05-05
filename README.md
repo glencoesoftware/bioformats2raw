@@ -65,7 +65,7 @@ If the input file has multiple series, a subset of the series can be converted b
 
     bioformats2raw /path/to/file.scn /path/to/zarr-pyramid --series 0,2,3,4
 
-By default, three additional readers (MiraxReader, PyramidTiffReader, and BioTekReader) are added to the beginning of Bio-Formats' list of reader classes.
+By default, four additional readers (MiraxReader, PyramidTiffReader, BioTekReader, and ND2PlateReader) are added to the beginning of Bio-Formats' list of reader classes.
 These readers are considered to be experimental and as a result only a limited range of input data is supported.
 
 Any of these readers can be excluded with the `--extra-readers` option:

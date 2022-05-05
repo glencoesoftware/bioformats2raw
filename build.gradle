@@ -31,7 +31,11 @@ repositories {
         url 'https://artifacts.glencoesoftware.com/artifactory/scijava-thirdparty'
     }
     maven {
-        url 'https://nexus.senbox.net/nexus/content/groups/public'
+        url 'https://artifacts.glencoesoftware.com/artifactory/jzarr-releases'
+    }
+    maven {
+        name 'Unidata'
+        url 'https://artifacts.glencoesoftware.com/artifactory/unidata-releases'
     }
 }
 
@@ -42,7 +46,7 @@ configurations.all {
 
 dependencies {
     implementation 'net.java.dev.jna:jna:5.10.0'
-    implementation 'ome:formats-gpl:6.8.0'
+    implementation 'ome:formats-gpl:6.9.1'
     implementation 'info.picocli:picocli:4.6.1'
     implementation 'com.univocity:univocity-parsers:2.8.4'
     implementation 'com.bc.zarr:jzarr:0.3.3-gs-SNAPSHOT'
