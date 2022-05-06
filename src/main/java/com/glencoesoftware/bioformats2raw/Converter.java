@@ -73,6 +73,7 @@ import org.slf4j.LoggerFactory;
 import com.bc.zarr.ArrayParams;
 import com.bc.zarr.CompressorFactory;
 import com.bc.zarr.DataType;
+import com.bc.zarr.DimensionSeparator;
 import com.bc.zarr.ZarrArray;
 import com.bc.zarr.ZarrGroup;
 import com.glencoesoftware.bioformats2raw.MiraxReader.TilePointer;
@@ -1264,7 +1265,7 @@ public class Converter implements Callable<Void> {
           .chunks(new int[] {1, 1, activeChunkDepth, activeTileHeight,
             activeTileWidth})
           .dataType(dataType)
-          .nested(nested)
+          .dimensionSeparator(getDimensionSeparator())
           .compressor(CompressorFactory.create(
               compressionType.toString(), compressionProperties));
       ZarrArray.create(getRootPath().resolve(resolutionString), arrayParams);
@@ -1911,6 +1912,10 @@ public class Converter implements Callable<Void> {
         throw new IllegalArgumentException("Unsupported pixel type: "
             + FormatTools.getPixelTypeString(type));
     }
+  }
+
+  private DimensionSeparator getDimensionSeparator() {
+    return nested ? DimensionSeparator.SLASH : DimensionSeparator.DOT;
   }
 
   private void checkOutputPaths() {
