@@ -298,6 +298,11 @@ public class MiraxReader extends FormatReader {
           if (tileBuf != null) {
             int channelIndex = channel * (tileBuf.length / MAX_CHANNELS);
 
+            // channels were separated during readTile
+            if (tileBuf.length == width * height * pixel) {
+              channelIndex = 0;
+            }
+
             // overlap is confined to the edges of the tile,
             // so we can copy directly
             for (int trow=0; trow<intersection.height; trow++) {
