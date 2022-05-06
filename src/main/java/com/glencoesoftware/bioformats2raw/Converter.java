@@ -55,11 +55,15 @@ import loci.formats.meta.IMetadata;
 import loci.formats.ome.OMEXMLMetadata;
 import loci.formats.services.OMEXMLService;
 import loci.formats.services.OMEXMLServiceImpl;
+import ome.units.quantity.Length;
 import ome.units.quantity.Quantity;
+import ome.units.quantity.Time;
 import ome.xml.meta.OMEXMLMetadataRoot;
 import ome.xml.model.enums.DimensionOrder;
 import ome.xml.model.enums.EnumerationException;
 import ome.xml.model.enums.PixelType;
+import ome.xml.model.enums.UnitsLength;
+import ome.xml.model.enums.UnitsTime;
 import ome.xml.model.primitives.PositiveInteger;
 
 import org.perf4j.slf4j.Slf4JStopWatch;
@@ -69,6 +73,7 @@ import org.slf4j.LoggerFactory;
 import com.bc.zarr.ArrayParams;
 import com.bc.zarr.CompressorFactory;
 import com.bc.zarr.DataType;
+import com.bc.zarr.DimensionSeparator;
 import com.bc.zarr.ZarrArray;
 import com.bc.zarr.ZarrGroup;
 import com.glencoesoftware.bioformats2raw.MiraxReader.TilePointer;
@@ -239,7 +244,8 @@ public class Converter implements Callable<Void> {
                   "(default: ${DEFAULT-VALUE})"
   )
   private volatile Class<?>[] extraReaders = new Class[] {
-    PyramidTiffReader.class, MiraxReader.class, BioTekReader.class
+    PyramidTiffReader.class, MiraxReader.class,
+    BioTekReader.class, ND2PlateReader.class
   };
 
   @Option(
@@ -296,6 +302,12 @@ public class Converter implements Callable<Void> {
           description = "Directory used to store .bfmemo cache files"
   )
   private volatile File memoDirectory;
+
+  @Option(
+          names = "--keep-memo-files",
+          description = "Do not delete .bfmemo files created during conversion"
+  )
+  private volatile boolean keepMemoFiles = false;
 
   @Option(
           names = "--pixel-type",
@@ -507,6 +519,7 @@ public class Converter implements Callable<Void> {
 
     // Now with our found type instantiate our queue of readers for use
     // during conversion
+    boolean savedMemoFile = false;
     for (int i=0; i < maxWorkers; i++) {
       IFormatReader reader;
       Memoizer memoizer;
@@ -515,13 +528,7 @@ public class Converter implements Callable<Void> {
         if (fillValue != null && reader instanceof MiraxReader) {
           ((MiraxReader) reader).setFillValue(fillValue.byteValue());
         }
-        if (memoDirectory == null) {
-          memoizer = new Memoizer(reader);
-        }
-        else {
-          memoizer = new Memoizer(
-            reader, Memoizer.DEFAULT_MINIMUM_ELAPSED, memoDirectory);
-        }
+        memoizer = createMemoizer(reader);
       }
       catch (Exception e) {
         LOGGER.error("Failed to instantiate reader: {}", readerClass, e);
@@ -550,6 +557,7 @@ public class Converter implements Callable<Void> {
         ((MiraxReader) reader).setTileCache(tileCache);
       }
       readers.add(separator);
+      savedMemoFile = savedMemoFile || memoizer.isSavedToMemo();
     }
 
     // Finally, perform conversion on all series
@@ -562,6 +570,12 @@ public class Converter implements Callable<Void> {
 
         if (!noHCS) {
           noHCS = !hasValidPlate(meta);
+          int plateCount = meta.getPlateCount();
+          if (!noHCS && plateCount > 1) {
+            throw new IllegalArgumentException(
+              "Found " + plateCount + " plates; only one can be converted. " +
+              "Use --no-hcs to as a work-around.");
+          }
         }
         else {
           ((OMEXMLMetadata) meta).resolveReferences();
@@ -669,6 +683,14 @@ public class Converter implements Callable<Void> {
         }
       });
     }
+
+    // delete the memo file if it was saved and it's not explicitly kept
+    // this should mean that memo files which existed before conversion
+    // started will not be deleted
+    if (savedMemoFile && !keepMemoFiles) {
+      File memoFile = createMemoizer(null).getMemoFile(inputPath.toString());
+      memoFile.delete();
+    }
   }
 
   /**
@@ -689,6 +711,32 @@ public class Converter implements Callable<Void> {
       reader.setSeries(series);
     });
     saveResolutions(series);
+  }
+
+  /**
+   * Create a new Memoizer that wraps the given reader, based on the
+   * user-specified caching options. The supplied reader may be null.
+   *
+   * @param reader existing reader to wrap, or null
+   * @return new uninitialized Memoizer instance
+   */
+  private Memoizer createMemoizer(IFormatReader reader) {
+    if (memoDirectory == null) {
+      if (reader == null) {
+        return new Memoizer();
+      }
+      return new Memoizer(reader);
+    }
+    else {
+      if (reader == null) {
+        return new Memoizer(
+          Memoizer.DEFAULT_MINIMUM_ELAPSED, memoDirectory);
+      }
+      else {
+        return new Memoizer(
+          reader, Memoizer.DEFAULT_MINIMUM_ELAPSED, memoDirectory);
+      }
+    }
   }
 
   /**
@@ -1217,7 +1265,7 @@ public class Converter implements Callable<Void> {
           .chunks(new int[] {1, 1, activeChunkDepth, activeTileHeight,
             activeTileWidth})
           .dataType(dataType)
-          .nested(nested)
+          .dimensionSeparator(getDimensionSeparator())
           .compressor(CompressorFactory.create(
               compressionType.toString(), compressionProperties));
       ZarrArray.create(getRootPath().resolve(resolutionString), arrayParams);
@@ -1610,7 +1658,20 @@ public class Converter implements Callable<Void> {
       thisAxis.put("name", axis);
       thisAxis.put("type", type);
       if (scale != null) {
-        thisAxis.put("unit", scale.unit().getSymbol());
+        String symbol = scale.unit().getSymbol();
+        String unitName = null;
+        try {
+          if (scale instanceof Length) {
+            unitName = UnitsLength.fromString(symbol).name().toLowerCase();
+          }
+          else if (scale instanceof Time) {
+            unitName = UnitsTime.fromString(symbol).name().toLowerCase();
+          }
+        }
+        catch (EnumerationException e) {
+          LOGGER.warn("Could not identify unit '{}'", symbol);
+        }
+        thisAxis.put("unit", unitName);
       }
       axes.add(thisAxis);
     }
@@ -1851,6 +1912,10 @@ public class Converter implements Callable<Void> {
         throw new IllegalArgumentException("Unsupported pixel type: "
             + FormatTools.getPixelTypeString(type));
     }
+  }
+
+  private DimensionSeparator getDimensionSeparator() {
+    return nested ? DimensionSeparator.SLASH : DimensionSeparator.DOT;
   }
 
   private void checkOutputPaths() {

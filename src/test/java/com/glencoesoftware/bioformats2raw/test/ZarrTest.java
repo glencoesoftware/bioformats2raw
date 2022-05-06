@@ -32,6 +32,7 @@ import com.glencoesoftware.bioformats2raw.Downsampling;
 import loci.common.LogbackTools;
 import loci.common.services.ServiceFactory;
 import loci.formats.FormatTools;
+import loci.formats.Memoizer;
 import loci.formats.in.FakeReader;
 import loci.formats.ome.OMEXMLMetadata;
 import loci.formats.services.OMEXMLService;
@@ -240,7 +241,12 @@ public class ZarrTest {
     Integer layout = (Integer)
         z.getAttributes().get("bioformats2raw.layout");
     ZarrArray series0 = ZarrGroup.open(output.resolve("0")).openArray("0");
-    assertTrue(series0.getNested());
+
+    // no getter for DimensionSeparator in ZarrArray
+    // check that the correct separator was used by checking
+    // that the expected first chunk file exists
+    assertTrue(output.resolve("0/0/0/0/0/0/0").toFile().exists());
+
     // Also ensure we're using the latest .zarray metadata
     ObjectMapper objectMapper = new ObjectMapper();
     JsonNode root = objectMapper.readTree(
@@ -270,7 +276,7 @@ public class ZarrTest {
 
     List<Map<String, Object>> axes =
       (List<Map<String, Object>>) multiscale.get("axes");
-    checkAxes(axes, "TCZYX");
+    checkAxes(axes, "TCZYX", null);
 
     for (int r=0; r<datasets.size(); r++) {
       Map<String, Object> dataset = datasets.get(r);
@@ -320,7 +326,7 @@ public class ZarrTest {
     Map<String, Object> multiscale = multiscales.get(0);
     List<Map<String, Object>> axes =
       (List<Map<String, Object>>) multiscale.get("axes");
-    checkAxes(axes, "TZCYX");
+    checkAxes(axes, "TZCYX", null);
   }
 
   /**
@@ -341,7 +347,7 @@ public class ZarrTest {
     Map<String, Object> multiscale = multiscales.get(0);
     List<Map<String, Object>> axes =
       (List<Map<String, Object>>) multiscale.get("axes");
-    checkAxes(axes, "TZCYX");
+    checkAxes(axes, "TZCYX", null);
   }
 
   /**
@@ -349,7 +355,7 @@ public class ZarrTest {
    */
   @Test
   public void testPhysicalSizes() throws Exception {
-    input = fake("physicalSizeX", "1.0mm",
+    input = fake("physicalSizeX", "1.0Å",
       "physicalSizeY", "0.5mm",
       "physicalSizeZ", "2cm");
     assertTool();
@@ -361,7 +367,8 @@ public class ZarrTest {
     Map<String, Object> multiscale = multiscales.get(0);
     List<Map<String, Object>> axes =
       (List<Map<String, Object>>) multiscale.get("axes");
-    checkAxes(axes, "TCZYX");
+    checkAxes(axes, "TCZYX",
+      new String[] {null, null, "centimeter", "millimeter", "angstrom"});
 
     List<Map<String, Object>> datasets =
       (List<Map<String, Object>>) multiscale.get("datasets");
@@ -878,6 +885,12 @@ public class ZarrTest {
   public void testNestedStorage(boolean nested) throws IOException {
     input = fake();
     assertTool(nested ? "--nested" : "--no-nested");
+    if (nested) {
+      assertTrue(output.resolve("0/0/0/0/0/0/0").toFile().exists());
+    }
+    else {
+      assertTrue(output.resolve("0/0/0.0.0.0.0").toFile().exists());
+    }
   }
 
   /**
@@ -902,6 +915,19 @@ public class ZarrTest {
     // Check OME metadata
     OME ome = getOMEMetadata();
     assertEquals(0, ome.sizeOfPlateList());
+  }
+
+  /**
+   * Make sure conversion fails when multiple plates are present.
+   */
+  @Test
+  public void testMultiPlates() throws Exception {
+    input = fake(
+      "plates", "2", "plateAcqs", "1",
+      "plateRows", "2", "plateCols", "3", "fields", "2");
+    assertThrows(ExecutionException.class, () -> {
+      assertTool();
+    });
   }
 
   /**
@@ -1609,6 +1635,31 @@ public class ZarrTest {
   }
 
   /**
+   * Check that --keep-memo-files works as expected.
+   */
+  @Test
+  public void testMemoFiles() throws Exception {
+    // make sure a memo file is created
+    // by default the fake init time is too small
+    input = fake("sleepInitFile", "1000");
+    assertTool("--debug", "--keep-memo-files");
+
+    Memoizer m = new Memoizer();
+    File memoFile = m.getMemoFile(input.toString());
+    assertTrue(memoFile.exists());
+
+    // make sure the existing memo file is not deleted
+    assertTool("--overwrite");
+    assertTrue(memoFile.exists());
+
+    // now delete the memo file and make sure that
+    // a clean conversion doesn't leave a memo file around
+    memoFile.delete();
+    assertTool("--overwrite");
+    assertFalse(memoFile.exists());
+  }
+
+  /**
    * @param root dataset root path
    * @param rowCount total rows the plate could contain
    * @param colCount total columns the plate could contain
@@ -1687,12 +1738,20 @@ public class ZarrTest {
     }
   }
 
-  private void checkAxes(List<Map<String, Object>> axes, String order) {
+  private void checkAxes(List<Map<String, Object>> axes, String order,
+    String[] units)
+  {
     assertEquals(axes.size(), order.length());
     for (int i=0; i<axes.size(); i++) {
       String name = axes.get(i).get("name").toString();
       assertEquals(name, order.toLowerCase().substring(i, i + 1));
       assertTrue(axes.get(i).containsKey("type"));
+      if (units != null) {
+        assertEquals(axes.get(i).get("unit"), units[i]);
+      }
+      else {
+        assertTrue(!axes.get(i).containsKey("unit"));
+      }
     }
   }
 
