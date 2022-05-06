@@ -270,7 +270,7 @@ public class ZarrTest {
 
     List<Map<String, Object>> axes =
       (List<Map<String, Object>>) multiscale.get("axes");
-    checkAxes(axes, "TCZYX");
+    checkAxes(axes, "TCZYX", null);
 
     for (int r=0; r<datasets.size(); r++) {
       Map<String, Object> dataset = datasets.get(r);
@@ -320,7 +320,7 @@ public class ZarrTest {
     Map<String, Object> multiscale = multiscales.get(0);
     List<Map<String, Object>> axes =
       (List<Map<String, Object>>) multiscale.get("axes");
-    checkAxes(axes, "TZCYX");
+    checkAxes(axes, "TZCYX", null);
   }
 
   /**
@@ -341,7 +341,7 @@ public class ZarrTest {
     Map<String, Object> multiscale = multiscales.get(0);
     List<Map<String, Object>> axes =
       (List<Map<String, Object>>) multiscale.get("axes");
-    checkAxes(axes, "TZCYX");
+    checkAxes(axes, "TZCYX", null);
   }
 
   /**
@@ -349,7 +349,7 @@ public class ZarrTest {
    */
   @Test
   public void testPhysicalSizes() throws Exception {
-    input = fake("physicalSizeX", "1.0mm",
+    input = fake("physicalSizeX", "1.0Å",
       "physicalSizeY", "0.5mm",
       "physicalSizeZ", "2cm");
     assertTool();
@@ -361,7 +361,8 @@ public class ZarrTest {
     Map<String, Object> multiscale = multiscales.get(0);
     List<Map<String, Object>> axes =
       (List<Map<String, Object>>) multiscale.get("axes");
-    checkAxes(axes, "TCZYX");
+    checkAxes(axes, "TCZYX",
+      new String[] {null, null, "centimeter", "millimeter", "angstrom"});
 
     List<Map<String, Object>> datasets =
       (List<Map<String, Object>>) multiscale.get("datasets");
@@ -1631,12 +1632,20 @@ public class ZarrTest {
     }
   }
 
-  private void checkAxes(List<Map<String, Object>> axes, String order) {
+  private void checkAxes(List<Map<String, Object>> axes, String order,
+    String[] units)
+  {
     assertEquals(axes.size(), order.length());
     for (int i=0; i<axes.size(); i++) {
       String name = axes.get(i).get("name").toString();
       assertEquals(name, order.toLowerCase().substring(i, i + 1));
       assertTrue(axes.get(i).containsKey("type"));
+      if (units != null) {
+        assertEquals(axes.get(i).get("unit"), units[i]);
+      }
+      else {
+        assertTrue(!axes.get(i).containsKey("unit"));
+      }
     }
   }
 

@@ -55,11 +55,15 @@ import loci.formats.meta.IMetadata;
 import loci.formats.ome.OMEXMLMetadata;
 import loci.formats.services.OMEXMLService;
 import loci.formats.services.OMEXMLServiceImpl;
+import ome.units.quantity.Length;
 import ome.units.quantity.Quantity;
+import ome.units.quantity.Time;
 import ome.xml.meta.OMEXMLMetadataRoot;
 import ome.xml.model.enums.DimensionOrder;
 import ome.xml.model.enums.EnumerationException;
 import ome.xml.model.enums.PixelType;
+import ome.xml.model.enums.UnitsLength;
+import ome.xml.model.enums.UnitsTime;
 import ome.xml.model.primitives.PositiveInteger;
 
 import org.perf4j.slf4j.Slf4JStopWatch;
@@ -1617,7 +1621,20 @@ public class Converter implements Callable<Void> {
       thisAxis.put("name", axis);
       thisAxis.put("type", type);
       if (scale != null) {
-        thisAxis.put("unit", scale.unit().getSymbol());
+        String symbol = scale.unit().getSymbol();
+        String unitName = null;
+        try {
+          if (scale instanceof Length) {
+            unitName = UnitsLength.fromString(symbol).name().toLowerCase();
+          }
+          else if (scale instanceof Time) {
+            unitName = UnitsTime.fromString(symbol).name().toLowerCase();
+          }
+        }
+        catch (EnumerationException e) {
+          LOGGER.warn("Could not identify unit '{}'", symbol);
+        }
+        thisAxis.put("unit", unitName);
       }
       axes.add(thisAxis);
     }
