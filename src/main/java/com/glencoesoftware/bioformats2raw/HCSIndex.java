@@ -29,7 +29,9 @@ public class HCSIndex {
     for (int p=0; p<meta.getPlateCount(); p++) {
       for (int w=0; w<meta.getWellCount(p); w++) {
         for (int ws=0; ws<meta.getWellSampleCount(p, w); ws++) {
-          if (meta.getWellSampleIndex(p, w, ws).getValue() == series) {
+          if (meta.getWellSampleImageRef(p, w, ws).equals(
+              meta.getImageID(series)))
+          {
             plate = p;
             field = ws;
             wellRow = meta.getWellRow(p, w).getValue();
@@ -44,7 +46,7 @@ public class HCSIndex {
                   break;
                 }
               }
-              if (thePlateAcquisition >= 0) {
+              if (thePlateAcquisition != null) {
                 break;
               }
             }
