@@ -1523,6 +1523,7 @@ public class Converter implements Callable<Void> {
     plateMap.put("rows", rows);
 
     plateMap.put("field_count", maxField + 1);
+    plateMap.put("version", NGFF_VERSION);
 
     Map<String, Object> attributes = root.getAttributes();
     attributes.put("plate", plateMap);

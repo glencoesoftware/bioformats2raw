@@ -956,6 +956,7 @@ public class ZarrTest {
     Map<String, Object> plate =
         (Map<String, Object>) z.getAttributes().get("plate");
     assertEquals(fieldCount, ((Number) plate.get("field_count")).intValue());
+    assertEquals("0.4", plate.get("version"));
 
     List<Map<String, Object>> acquisitions =
       (List<Map<String, Object>>) plate.get("acquisitions");
@@ -1028,6 +1029,7 @@ public class ZarrTest {
     Map<String, Object> plate =
         (Map<String, Object>) z.getAttributes().get("plate");
     assertEquals(fieldCount, ((Number) plate.get("field_count")).intValue());
+    assertEquals("0.4", plate.get("version"));
 
     List<Map<String, Object>> rows =
       (List<Map<String, Object>>) plate.get("rows");
@@ -1106,6 +1108,7 @@ public class ZarrTest {
     Map<String, Object> plate =
         (Map<String, Object>) z.getAttributes().get("plate");
     assertEquals(fieldCount, ((Number) plate.get("field_count")).intValue());
+    assertEquals("0.4", plate.get("version"));
 
     List<Map<String, Object>> acquisitions =
       (List<Map<String, Object>>) plate.get("acquisitions");
@@ -1168,6 +1171,7 @@ public class ZarrTest {
     Map<String, Object> plate =
         (Map<String, Object>) z.getAttributes().get("plate");
     assertEquals(fieldCount, ((Number) plate.get("field_count")).intValue());
+    assertEquals("0.4", plate.get("version"));
 
     List<Map<String, Object>> acquisitions =
       (List<Map<String, Object>>) plate.get("acquisitions");
@@ -1228,6 +1232,7 @@ public class ZarrTest {
     Map<String, Object> plate =
         (Map<String, Object>) z.getAttributes().get("plate");
     assertEquals(fieldCount, ((Number) plate.get("field_count")).intValue());
+    assertEquals("0.4", plate.get("version"));
 
     List<Map<String, Object>> acquisitions =
       (List<Map<String, Object>>) plate.get("acquisitions");
@@ -1283,6 +1288,7 @@ public class ZarrTest {
     Map<String, Object> plate =
         (Map<String, Object>) z.getAttributes().get("plate");
     assertEquals(fieldCount, ((Number) plate.get("field_count")).intValue());
+    assertEquals("0.4", plate.get("version"));
 
     List<Map<String, Object>> acquisitions =
       (List<Map<String, Object>>) plate.get("acquisitions");
