@@ -32,9 +32,7 @@ Installation
 
     https://github.com/glencoesoftware/bioformats2raw/releases
 
-2. OR, install via `conda`:
-
-    conda install -c ome bioformats2raw
+2. OR, install via `conda` as described at [conda-bioformats2raw](https://github.com/ome/conda-bioformats2raw).
 
 Development Installation
 ========================
