@@ -632,6 +632,9 @@ public class Converter implements Callable<Void> {
         }
 
         if (!noOMEMeta) {
+          for (int s=0; s<meta.getImageCount(); s++) {
+            getService().addMetadataOnly((OMEXMLMetadata) meta, s, s == 0);
+          }
           String xml = getService().getOMEXML(meta);
 
           // write the original OME-XML to a file

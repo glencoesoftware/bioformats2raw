@@ -445,6 +445,12 @@ public class ZarrTest {
     series1.read(tile, shape);
     seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
     assertArrayEquals(new int[] {1, 0, 0, 0, 0}, seriesPlaneNumberZCT);
+
+    OME ome = getOMEMetadata();
+    assertEquals(2, ome.sizeOfImageList());
+    for (int i=0; i<ome.sizeOfImageList(); i++) {
+      assertNotNull(ome.getImage(i).getPixels().getMetadataOnly());
+    }
   }
 
   /**
