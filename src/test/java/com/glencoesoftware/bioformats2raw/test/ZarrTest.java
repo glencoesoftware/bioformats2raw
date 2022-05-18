@@ -1774,7 +1774,8 @@ public class ZarrTest {
     Path xml = output.resolve("OME").resolve("METADATA.ome.xml");
     ServiceFactory sf = new ServiceFactory();
     OMEXMLService xmlService = sf.getInstance(OMEXMLService.class);
-    return (OME) xmlService.createOMEXMLRoot(
-      new String(Files.readAllBytes(xml), StandardCharsets.UTF_8));
+    String omexml = new String(Files.readAllBytes(xml), StandardCharsets.UTF_8);
+    assertTrue(xmlService.validateOMEXML(omexml));
+    return (OME) xmlService.createOMEXMLRoot(omexml);
   }
 }
