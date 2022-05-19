@@ -445,6 +445,12 @@ public class ZarrTest {
     series1.read(tile, shape);
     seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
     assertArrayEquals(new int[] {1, 0, 0, 0, 0}, seriesPlaneNumberZCT);
+
+    OME ome = getOMEMetadata();
+    assertEquals(2, ome.sizeOfImageList());
+    for (int i=0; i<ome.sizeOfImageList(); i++) {
+      assertNotNull(ome.getImage(i).getPixels().getMetadataOnly());
+    }
   }
 
   /**
@@ -1768,7 +1774,8 @@ public class ZarrTest {
     Path xml = output.resolve("OME").resolve("METADATA.ome.xml");
     ServiceFactory sf = new ServiceFactory();
     OMEXMLService xmlService = sf.getInstance(OMEXMLService.class);
-    return (OME) xmlService.createOMEXMLRoot(
-      new String(Files.readAllBytes(xml), StandardCharsets.UTF_8));
+    String omexml = new String(Files.readAllBytes(xml), StandardCharsets.UTF_8);
+    assertTrue(xmlService.validateOMEXML(omexml));
+    return (OME) xmlService.createOMEXMLRoot(omexml);
   }
 }
