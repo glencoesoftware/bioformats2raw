@@ -1439,7 +1439,7 @@ public class Converter implements Callable<Void> {
       new ArrayList<Map<String, Object>>();
     for (int pa=0; pa<meta.getPlateAcquisitionCount(plate); pa++) {
       Map<String, Object> acquisition = new HashMap<String, Object>();
-      acquisition.put("id", String.valueOf(pa));
+      acquisition.put("id", pa);
       acquisitions.add(acquisition);
     }
     if (acquisitions.size() > 0) {
