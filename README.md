@@ -21,6 +21,7 @@ The native libraries are not packaged with any relevant jars.  See also note in 
  * macOS: `brew install c-blosc` then set `JAVA_OPTS='-Djna.library.path=/usr/local/Cellar/c-blosc/*/lib'`
  * Windows: Pre-built blosc DLLs are available from the [Fiji project](https://sites.imagej.net/N5/lib/win64/).  Rename the downloaded DLL to `blosc.dll` and place in a fixed location then set `JAVA_OPTS="-Djna.library.path=C:\path\to\blosc\folder"`.
  * Ubuntu 18.04+: `apt-get install libblosc1`
+ * conda: Installing `bioformats2raw` via conda (see below) will include `blosc` as a dependency.
 
 __NOTE:__ If you are setting `jna.library.path` via the `JAVA_OPTS` environment variable, make sure the path is to the folder __containing__ the library not path to the library itself.
 
@@ -30,6 +31,8 @@ Installation
 1. Download and unpack a release artifact:
 
     https://github.com/glencoesoftware/bioformats2raw/releases
+
+2. OR, install via `conda` as described at [conda-bioformats2raw](https://github.com/ome/conda-bioformats2raw).
 
 Development Installation
 ========================
