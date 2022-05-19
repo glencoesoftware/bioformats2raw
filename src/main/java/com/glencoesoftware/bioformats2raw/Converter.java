@@ -115,6 +115,9 @@ public class Converter implements Callable<Void> {
   /** Version of the bioformats2raw layout. */
   public static final Integer LAYOUT = 3;
 
+  /** NGFF specification version.*/
+  public static final String NGFF_VERSION = "0.4";
+
   @Parameters(
     index = "0",
     arity = "1",
@@ -426,6 +429,7 @@ public class Converter implements Callable<Void> {
         ).orElse("development");
       System.out.println("Version = " + version);
       System.out.println("Bio-Formats version = " + FormatTools.VERSION);
+      System.out.println("NGFF specification version = " + NGFF_VERSION);
       return null;
     }
 
@@ -1525,6 +1529,7 @@ public class Converter implements Callable<Void> {
     plateMap.put("rows", rows);
 
     plateMap.put("field_count", maxField + 1);
+    plateMap.put("version", NGFF_VERSION);
 
     Map<String, Object> attributes = root.getAttributes();
     attributes.put("plate", plateMap);
@@ -1576,7 +1581,7 @@ public class Converter implements Callable<Void> {
       multiscale.put("type", downsampling.getName());
     }
     multiscale.put("metadata", metadata);
-    multiscale.put("version", nested ? "0.4" : "0.1");
+    multiscale.put("version", nested ? NGFF_VERSION : "0.1");
     multiscales.add(multiscale);
 
     IFormatReader v = null;
