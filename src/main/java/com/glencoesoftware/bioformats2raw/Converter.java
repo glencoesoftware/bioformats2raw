@@ -665,6 +665,32 @@ public class Converter implements Callable<Void> {
         scaleFormatString = "%s/%s/%d/%d";
       }
 
+      // fileset level metadata
+      if (!noRootGroup) {
+        final ZarrGroup root = ZarrGroup.create(getRootPath());
+        Map<String, Object> attributes = new HashMap<String, Object>();
+        attributes.put("bioformats2raw.layout", LAYOUT);
+
+        // record the path to each series (multiscales) and the corresponding
+        // series (OME-XML Image) index
+        // using the index as the key would mean that the index is stored
+        // as a string instead of an integer
+        Map<String, Integer> groupMap = new HashMap<String, Integer>();
+        for (Integer index : seriesList) {
+          String resolutionString = String.format(
+                  scaleFormatString, getScaleFormatStringArgs(index, 0));
+          String seriesString = "";
+          if (resolutionString.indexOf('/') >= 0) {
+            seriesString = resolutionString.substring(0,
+                resolutionString.lastIndexOf('/'));
+          }
+          groupMap.put(seriesString, index);
+        }
+        attributes.put("groups", groupMap);
+
+        root.writeAttributes(attributes);
+      }
+
       for (Integer index : seriesList) {
         try {
           write(index);
@@ -1214,14 +1240,6 @@ public class Converter implements Callable<Void> {
       "sizeY {} (tileWidth: {}) sizeZ {} (tileDepth: {}) imageCount {}",
         sizeX, tileWidth, sizeY, tileHeight, sizeZ, chunkDepth, imageCount
     );
-
-    // fileset level metadata
-    if (!noRootGroup) {
-      final ZarrGroup root = ZarrGroup.create(getRootPath());
-      Map<String, Object> attributes = new HashMap<String, Object>();
-      attributes.put("bioformats2raw.layout", LAYOUT);
-      root.writeAttributes(attributes);
-    }
 
     // series level metadata
     setSeriesLevelMetadata(series, resolutions);
