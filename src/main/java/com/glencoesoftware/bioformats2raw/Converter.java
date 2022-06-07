@@ -671,6 +671,13 @@ public class Converter implements Callable<Void> {
         Map<String, Object> attributes = new HashMap<String, Object>();
         attributes.put("bioformats2raw.layout", LAYOUT);
 
+        root.writeAttributes(attributes);
+      }
+      if (!noOMEMeta) {
+        Path metadataPath = getRootPath().resolve("OME");
+        final ZarrGroup root = ZarrGroup.create(metadataPath);
+        Map<String, Object> attributes = new HashMap<String, Object>();
+
         // record the path to each series (multiscales) and the corresponding
         // series (OME-XML Image) index
         // using the index as the key would mean that the index is stored
@@ -686,7 +693,7 @@ public class Converter implements Callable<Void> {
           }
           groupMap.put(seriesString, index);
         }
-        attributes.put("groups", groupMap);
+        attributes.put("series", groupMap);
 
         root.writeAttributes(attributes);
       }

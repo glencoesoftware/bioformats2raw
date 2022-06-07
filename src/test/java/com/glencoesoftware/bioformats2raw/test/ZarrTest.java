@@ -211,9 +211,10 @@ public class ZarrTest {
     series0 = ZarrGroup.open(output.resolve("ghi/999/1").toString());
     series0.openArray("0");
 
-    ZarrGroup z = ZarrGroup.open(output.toString());
+    Path omePath = output.resolve("OME");
+    ZarrGroup z = ZarrGroup.open(omePath.toString());
     Map<String, Integer> groupMap =
-      (Map<String, Integer>) z.getAttributes().get("groups");
+      (Map<String, Integer>) z.getAttributes().get("series");
     assertEquals(groupMap.size(), 2);
     assertEquals(groupMap.get("abc/888/0"), 0);
     assertEquals(groupMap.get("ghi/999/1"), 1);
@@ -248,8 +249,10 @@ public class ZarrTest {
     Integer layout = (Integer)
         z.getAttributes().get("bioformats2raw.layout");
 
+    Path omePath = output.resolve("OME");
+    ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
     Map<String, Integer> groupMap =
-      (Map<String, Integer>) z.getAttributes().get("groups");
+      (Map<String, Integer>) omeGroup.getAttributes().get("series");
     assertEquals(groupMap.size(), 1);
     assertEquals(groupMap.get("0"), 0);
 
@@ -441,8 +444,10 @@ public class ZarrTest {
     assertTool();
     ZarrGroup z = ZarrGroup.open(output.toString());
 
+    Path omePath = output.resolve("OME");
+    ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
     Map<String, Integer> groupMap =
-      (Map<String, Integer>) z.getAttributes().get("groups");
+      (Map<String, Integer>) omeGroup.getAttributes().get("series");
     assertEquals(groupMap.size(), 2);
     assertEquals(groupMap.get("0"), 0);
     assertEquals(groupMap.get("1"), 1);
@@ -480,8 +485,11 @@ public class ZarrTest {
     input = fake("series", "2");
     assertTool("-s", "0");
     ZarrGroup z = ZarrGroup.open(output.toString());
+
+    Path omePath = output.resolve("OME");
+    ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
     Map<String, Integer> groupMap =
-      (Map<String, Integer>) z.getAttributes().get("groups");
+      (Map<String, Integer>) omeGroup.getAttributes().get("series");
     assertEquals(groupMap.size(), 1);
     assertEquals(groupMap.get("0"), 0);
 
@@ -511,8 +519,11 @@ public class ZarrTest {
     input = fake("series", "2");
     assertTool("-s", "1");
     ZarrGroup z = ZarrGroup.open(output.toString());
+
+    Path omePath = output.resolve("OME");
+    ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
     Map<String, Integer> groupMap =
-      (Map<String, Integer>) z.getAttributes().get("groups");
+      (Map<String, Integer>) omeGroup.getAttributes().get("series");
     assertEquals(groupMap.size(), 1);
     assertEquals(groupMap.get("0"), 1);
 
@@ -542,8 +553,11 @@ public class ZarrTest {
     input = fake("series", "3");
     assertTool("-s", "1");
     ZarrGroup z = ZarrGroup.open(output.toString());
+
+    Path omePath = output.resolve("OME");
+    ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
     Map<String, Integer> groupMap =
-      (Map<String, Integer>) z.getAttributes().get("groups");
+      (Map<String, Integer>) omeGroup.getAttributes().get("series");
     assertEquals(groupMap.size(), 1);
     assertEquals(groupMap.get("0"), 1);
 
@@ -942,8 +956,11 @@ public class ZarrTest {
     assertTool("--no-hcs");
 
     ZarrGroup z = ZarrGroup.open(output);
+
+    Path omePath = output.resolve("OME");
+    ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
     Map<String, Integer> groupMap =
-      (Map<String, Integer>) z.getAttributes().get("groups");
+      (Map<String, Integer>) omeGroup.getAttributes().get("series");
     assertEquals(groupMap.size(), 12);
     for (int i=0; i<12; i++) {
       assertEquals(groupMap.get(String.valueOf(i)), i);
@@ -953,7 +970,8 @@ public class ZarrTest {
     ZarrArray series0 = z.openArray("0/0");
     assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getShape());
     assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getChunks());
-    assertEquals(12, z.getGroupKeys().size());
+    // 12 series + OME group
+    assertEquals(13, z.getGroupKeys().size());
 
     // Check OME metadata
     OME ome = getOMEMetadata();
@@ -990,8 +1008,10 @@ public class ZarrTest {
     int colCount = 3;
     int fieldCount = 2;
 
+    Path omePath = output.resolve("OME");
+    ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
     Map<String, Integer> groupMap =
-      (Map<String, Integer>) z.getAttributes().get("groups");
+      (Map<String, Integer>) omeGroup.getAttributes().get("series");
     assertEquals(groupMap.size(), 12);
     int index = 0;
     for (int r=0; r<rowCount; r++) {
@@ -1441,6 +1461,8 @@ public class ZarrTest {
 
     assertTrue(!Files.exists(
       output.resolve("OME").resolve("METADATA.ome.xml")));
+    assertTrue(!Files.exists(
+      output.resolve("OME").resolve(".zattrs")));
   }
 
   /**
