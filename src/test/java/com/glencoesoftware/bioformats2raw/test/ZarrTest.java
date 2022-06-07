@@ -213,11 +213,10 @@ public class ZarrTest {
 
     Path omePath = output.resolve("OME");
     ZarrGroup z = ZarrGroup.open(omePath.toString());
-    Map<String, Integer> groupMap =
-      (Map<String, Integer>) z.getAttributes().get("series");
+    List<String> groupMap = (List<String>) z.getAttributes().get("series");
     assertEquals(groupMap.size(), 2);
-    assertEquals(groupMap.get("abc/888/0"), 0);
-    assertEquals(groupMap.get("ghi/999/1"), 1);
+    assertEquals(groupMap.get(0), "abc/888/0");
+    assertEquals(groupMap.get(1), "ghi/999/1");
   }
 
   /**
@@ -251,10 +250,10 @@ public class ZarrTest {
 
     Path omePath = output.resolve("OME");
     ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
-    Map<String, Integer> groupMap =
-      (Map<String, Integer>) omeGroup.getAttributes().get("series");
+    List<String> groupMap =
+      (List<String>) omeGroup.getAttributes().get("series");
     assertEquals(groupMap.size(), 1);
-    assertEquals(groupMap.get("0"), 0);
+    assertEquals(groupMap.get(0), "0");
 
     ZarrArray series0 = ZarrGroup.open(output.resolve("0")).openArray("0");
 
@@ -446,11 +445,11 @@ public class ZarrTest {
 
     Path omePath = output.resolve("OME");
     ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
-    Map<String, Integer> groupMap =
-      (Map<String, Integer>) omeGroup.getAttributes().get("series");
+    List<String> groupMap =
+      (List<String>) omeGroup.getAttributes().get("series");
     assertEquals(groupMap.size(), 2);
-    assertEquals(groupMap.get("0"), 0);
-    assertEquals(groupMap.get("1"), 1);
+    assertEquals(groupMap.get(0), "0");
+    assertEquals(groupMap.get(1), "1");
 
     // Check series 0 dimensions and special pixels
     ZarrArray series0 = z.openArray("0/0");
@@ -488,10 +487,13 @@ public class ZarrTest {
 
     Path omePath = output.resolve("OME");
     ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
-    Map<String, Integer> groupMap =
-      (Map<String, Integer>) omeGroup.getAttributes().get("series");
+    List<String> groupMap =
+      (List<String>) omeGroup.getAttributes().get("series");
     assertEquals(groupMap.size(), 1);
-    assertEquals(groupMap.get("0"), 0);
+    assertEquals(groupMap.get(0), "0");
+
+    OME ome = getOMEMetadata();
+    assertEquals(1, ome.sizeOfImageList());
 
     // Check series 0 dimensions and special pixels
     ZarrArray series0 = z.openArray("0/0");
@@ -522,10 +524,13 @@ public class ZarrTest {
 
     Path omePath = output.resolve("OME");
     ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
-    Map<String, Integer> groupMap =
-      (Map<String, Integer>) omeGroup.getAttributes().get("series");
+    List<String> groupMap =
+      (List<String>) omeGroup.getAttributes().get("series");
     assertEquals(groupMap.size(), 1);
-    assertEquals(groupMap.get("0"), 1);
+    assertEquals(groupMap.get(0), "0");
+
+    OME ome = getOMEMetadata();
+    assertEquals(1, ome.sizeOfImageList());
 
     // Check series 1 dimensions and special pixels
     ZarrArray series0 = z.openArray("0/0");
@@ -556,10 +561,13 @@ public class ZarrTest {
 
     Path omePath = output.resolve("OME");
     ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
-    Map<String, Integer> groupMap =
-      (Map<String, Integer>) omeGroup.getAttributes().get("series");
+    List<String> groupMap =
+      (List<String>) omeGroup.getAttributes().get("series");
     assertEquals(groupMap.size(), 1);
-    assertEquals(groupMap.get("0"), 1);
+    assertEquals(groupMap.get(0), "0");
+
+    OME ome = getOMEMetadata();
+    assertEquals(1, ome.sizeOfImageList());
 
     // Check series 1 dimensions and special pixels
     ZarrArray series0 = z.openArray("0/0");
@@ -959,11 +967,11 @@ public class ZarrTest {
 
     Path omePath = output.resolve("OME");
     ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
-    Map<String, Integer> groupMap =
-      (Map<String, Integer>) omeGroup.getAttributes().get("series");
+    List<String> groupMap =
+      (List<String>) omeGroup.getAttributes().get("series");
     assertEquals(groupMap.size(), 12);
     for (int i=0; i<12; i++) {
-      assertEquals(groupMap.get(String.valueOf(i)), i);
+      assertEquals(groupMap.get(i), String.valueOf(i));
     }
 
     // Check dimensions and block size
@@ -1010,15 +1018,15 @@ public class ZarrTest {
 
     Path omePath = output.resolve("OME");
     ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
-    Map<String, Integer> groupMap =
-      (Map<String, Integer>) omeGroup.getAttributes().get("series");
+    List<String> groupMap =
+      (List<String>) omeGroup.getAttributes().get("series");
     assertEquals(groupMap.size(), 12);
     int index = 0;
     for (int r=0; r<rowCount; r++) {
       for (int c=0; c<colCount; c++) {
         for (int f=0; f<fieldCount; f++) {
           String groupPath = (char) (r + 'A') + "/" + (c + 1) + "/" + f;
-          assertEquals(groupMap.get(groupPath), index++);
+          assertEquals(groupMap.get(index++), groupPath);
         }
       }
     }

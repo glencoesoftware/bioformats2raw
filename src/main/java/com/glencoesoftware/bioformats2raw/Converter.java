@@ -682,7 +682,7 @@ public class Converter implements Callable<Void> {
         // series (OME-XML Image) index
         // using the index as the key would mean that the index is stored
         // as a string instead of an integer
-        Map<String, Integer> groupMap = new HashMap<String, Integer>();
+        List<String> groups = new ArrayList<String>();
         for (Integer index : seriesList) {
           String resolutionString = String.format(
                   scaleFormatString, getScaleFormatStringArgs(index, 0));
@@ -691,9 +691,9 @@ public class Converter implements Callable<Void> {
             seriesString = resolutionString.substring(0,
                 resolutionString.lastIndexOf('/'));
           }
-          groupMap.put(seriesString, index);
+          groups.add(seriesString);
         }
-        attributes.put("series", groupMap);
+        attributes.put("series", groups);
 
         root.writeAttributes(attributes);
       }
