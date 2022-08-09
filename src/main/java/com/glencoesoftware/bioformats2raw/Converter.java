@@ -49,6 +49,7 @@ import loci.formats.FormatTools;
 import loci.formats.IFormatReader;
 import loci.formats.ImageReader;
 import loci.formats.Memoizer;
+import loci.formats.MinMaxCalculator;
 import loci.formats.MissingLibraryException;
 import loci.formats.in.DynamicMetadataOptions;
 import loci.formats.meta.IMetadata;
@@ -64,6 +65,7 @@ import ome.xml.model.enums.EnumerationException;
 import ome.xml.model.enums.PixelType;
 import ome.xml.model.enums.UnitsLength;
 import ome.xml.model.enums.UnitsTime;
+import ome.xml.model.primitives.Color;
 import ome.xml.model.primitives.PositiveInteger;
 
 import org.perf4j.slf4j.Slf4JStopWatch;
@@ -250,6 +252,13 @@ public class Converter implements Callable<Void> {
     PyramidTiffReader.class, MiraxReader.class,
     BioTekReader.class, ND2PlateReader.class
   };
+
+  @Option(
+          names = "--no-omero", negatable=true,
+          description = "Whether to write OMERO rendering metadata " +
+                  "(true by default)"
+  )
+  private volatile boolean omeroMetadata = true;
 
   @Option(
           names = "--no-nested", negatable=true,
@@ -560,7 +569,12 @@ public class Converter implements Callable<Void> {
       if (reader instanceof MiraxReader) {
         ((MiraxReader) reader).setTileCache(tileCache);
       }
-      readers.add(separator);
+      if (omeroMetadata) {
+        readers.add(new MinMaxCalculator(separator));
+      }
+      else {
+        readers.add(separator);
+      }
       savedMemoFile = savedMemoFile || memoizer.isSavedToMemo();
     }
 
@@ -1223,9 +1237,6 @@ public class Converter implements Callable<Void> {
       root.writeAttributes(attributes);
     }
 
-    // series level metadata
-    setSeriesLevelMetadata(series, resolutions);
-
     for (int resCounter=0; resCounter<resolutions; resCounter++) {
       final int resolution = resCounter;
       int scale = (int) Math.pow(PYRAMID_SCALE, resolution);
@@ -1382,6 +1393,11 @@ public class Converter implements Callable<Void> {
         }
       }
     }
+
+    // series level metadata
+    // do this after pixels are written, otherwise
+    // min/max calculation won't have been performed
+    setSeriesLevelMetadata(series, resolutions);
   }
 
   private void saveHCSMetadata(IMetadata meta) throws IOException {
@@ -1693,6 +1709,92 @@ public class Converter implements Callable<Void> {
     ZarrGroup subGroup = ZarrGroup.create(subGroupPath);
     Map<String, Object> attributes = new HashMap<String, Object>();
     attributes.put("multiscales", multiscales);
+
+    if (omeroMetadata) {
+      int seriesIndex = seriesList.indexOf(series);
+
+      Map<String, Object> omero = new HashMap<String, Object>();
+      omero.put("id", 0);
+      String name = meta.getImageName(seriesIndex);
+      if (name == null) {
+        name = "Series " + seriesIndex;
+      }
+      omero.put("name", name);
+      omero.put("version", NGFF_VERSION);
+
+      Map<String, Object> rdefs = new HashMap<String, Object>();
+      rdefs.put("defaultT", 0);
+      rdefs.put("defaultZ", meta.getPixelsSizeZ(seriesIndex).getValue() / 2);
+      rdefs.put("model", "greyscale");
+      omero.put("rdefs", rdefs);
+
+      double[] defaultMinMax =
+        getRange(FormatTools.pixelTypeFromString(
+          meta.getPixelsType(seriesIndex).toString()));
+
+      List<Map<String, Object>> channels = new ArrayList<Map<String, Object>>();
+      for (int c=0; c<meta.getChannelCount(seriesIndex); c++) {
+        Map<String, Object> channel = new HashMap<String, Object>();
+        channel.put("active", true);
+        channel.put("coefficient", 1);
+
+        // set an RGB color (alpha removed)
+        // if the channel color is set in the OME-XML, use that
+        // otherwise, set to yellow
+        // this doesn't (yet?) copy the wavelength logic from OMERO
+        Color color = meta.getChannelColor(seriesIndex, c);
+        if (color != null) {
+          Integer packedColor = color.getValue() >> 8;
+          channel.put("color", Integer.toHexString(packedColor));
+        }
+        else {
+          channel.put("color", "FFFF00");
+        }
+
+        channel.put("family", "linear");
+        channel.put("inverted", false);
+        channel.put("label", meta.getChannelName(seriesIndex, c));
+        Map<String, Object> window = new HashMap<String, Object>();
+
+        IFormatReader minmax = null;
+        try {
+          minmax = readers.take();
+
+          if (!(minmax instanceof MinMaxCalculator)) {
+            LOGGER.error("Cannot set OMERO min/max data");
+          }
+
+          Double min = ((MinMaxCalculator) minmax).getChannelGlobalMinimum(c);
+          Double max = ((MinMaxCalculator) minmax).getChannelGlobalMaximum(c);
+
+          if (min == null && defaultMinMax != null) {
+            min = defaultMinMax[0];
+          }
+          if (max == null && defaultMinMax != null) {
+            max = defaultMinMax[1];
+          }
+
+          window.put("start", min);
+          window.put("end", max);
+          window.put("min", min);
+          window.put("max", max);
+        }
+        catch (FormatException e) {
+          LOGGER.error("Cannot set OMERO min/max data", e);
+        }
+        finally {
+          readers.put(minmax);
+        }
+        channel.put("window", window);
+
+        channels.add(channel);
+      }
+
+      omero.put("channels", channels);
+
+      attributes.put("omero", omero);
+    }
+
     subGroup.writeAttributes(attributes);
     LOGGER.debug("    finished writing subgroup attributes");
   }
