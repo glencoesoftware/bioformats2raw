@@ -1741,11 +1741,12 @@ public class Converter implements Callable<Void> {
         // set an RGB color (alpha removed)
         // if the channel color is set in the OME-XML, use that
         // otherwise, set to yellow
-        // this doesn't (yet?) copy the wavelength logic from OMERO
+        // this doesn't yet copy the wavelength logic from OMERO
         Color color = meta.getChannelColor(seriesIndex, c);
         if (color != null) {
-          Integer packedColor = color.getValue() >> 8;
-          channel.put("color", Integer.toHexString(packedColor));
+          Integer packedColor = (color.getValue() >> 8) & 0xffffff;
+          String formattedColor = String.format("%06X", packedColor);
+          channel.put("color", formattedColor);
         }
         else {
           channel.put("color", "FFFF00");
