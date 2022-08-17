@@ -1757,35 +1757,43 @@ public class Converter implements Callable<Void> {
         channel.put("label", meta.getChannelName(seriesIndex, c));
         Map<String, Object> window = new HashMap<String, Object>();
 
-        IFormatReader minmax = null;
-        try {
-          minmax = readers.take();
+        final int channelIndex = c;
+        Double[] totalMin = new Double[1];
+        Double[] totalMax = new Double[1];
 
-          if (!(minmax instanceof MinMaxCalculator)) {
-            LOGGER.error("Cannot set OMERO min/max data");
+        readers.forEach((minmax) -> {
+          try {
+            if (!(minmax instanceof MinMaxCalculator)) {
+              LOGGER.error("Cannot set OMERO min/max data");
+            }
+
+            MinMaxCalculator calc = (MinMaxCalculator) minmax;
+            Double min = calc.getChannelGlobalMinimum(channelIndex);
+            Double max = calc.getChannelGlobalMaximum(channelIndex);
+
+            if (totalMin[0] == null || (min != null && min < totalMin[0])) {
+              totalMin[0] = min;
+            }
+            if (totalMax[0] == null || (max != null && max > totalMax[0])) {
+              totalMax[0] = max;
+            }
           }
-
-          Double min = ((MinMaxCalculator) minmax).getChannelGlobalMinimum(c);
-          Double max = ((MinMaxCalculator) minmax).getChannelGlobalMaximum(c);
-
-          if (min == null && defaultMinMax != null) {
-            min = defaultMinMax[0];
+          catch (FormatException|IOException e) {
+            LOGGER.error("Cannot set OMERO min/max data", e);
           }
-          if (max == null && defaultMinMax != null) {
-            max = defaultMinMax[1];
-          }
+        });
 
-          window.put("start", min);
-          window.put("end", max);
-          window.put("min", min);
-          window.put("max", max);
+        if (totalMin[0] == null && defaultMinMax != null) {
+          totalMin[0] = defaultMinMax[0];
         }
-        catch (FormatException e) {
-          LOGGER.error("Cannot set OMERO min/max data", e);
+        if (totalMax[0] == null && defaultMinMax != null) {
+          totalMax[0] = defaultMinMax[1];
         }
-        finally {
-          readers.put(minmax);
-        }
+
+        window.put("start", totalMin[0]);
+        window.put("end", totalMax[0]);
+        window.put("min", totalMin[0]);
+        window.put("max", totalMax[0]);
         channel.put("window", window);
 
         channels.add(channel);
