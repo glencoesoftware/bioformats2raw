@@ -45,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -1007,6 +1008,48 @@ public class ZarrTest {
     // check OME metadata
     OME ome = getOMEMetadata();
     assertEquals(1, ome.sizeOfPlateList());
+  }
+
+  /**
+   * Check for OMERO rendering metadata.
+   */
+  @Test
+  public void testOMERO() throws Exception {
+    input = getTestFile("colors.ome.xml");
+    assertTool();
+
+    String[] names = {"orange", "green", "blue"};
+    String[] colors = {"FF7F00", "00FF00", "0000FF"};
+
+    for (int i=0; i<3; i++) {
+      ZarrGroup z =
+        ZarrGroup.open(output.resolve(String.valueOf(i)).toString());
+      Map<String, Object> omero =
+            (Map<String, Object>) z.getAttributes().get("omero");
+      List<Map<String, Object>> channels =
+            (List<Map<String, Object>>) omero.get("channels");
+      assertEquals(1, channels.size());
+
+      Map<String, Object> channel = channels.get(0);
+      assertEquals(names[i], channel.get("label"));
+      assertEquals(colors[i], channel.get("color"));
+    }
+  }
+
+  /**
+   * Make sure OMERO metadata is not written when the
+   * "--no-omero" flag is used.
+   */
+  @Test
+  public void testNoOMERO() throws Exception {
+    input = getTestFile("colors.ome.xml");
+    assertTool("--no-omero");
+
+    for (int i=0; i<3; i++) {
+      ZarrGroup z =
+        ZarrGroup.open(output.resolve(String.valueOf(i)).toString());
+      assertNull(z.getAttributes().get("omero"));
+    }
   }
 
   /**
