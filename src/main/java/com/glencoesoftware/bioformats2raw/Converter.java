@@ -1714,18 +1714,19 @@ public class Converter implements Callable<Void> {
       int seriesIndex = seriesList.indexOf(series);
 
       Map<String, Object> omero = new HashMap<String, Object>();
-      omero.put("id", 0);
       String name = meta.getImageName(seriesIndex);
       if (name == null) {
         name = "Series " + seriesIndex;
       }
       omero.put("name", name);
-      omero.put("version", NGFF_VERSION);
+
+      int channelCount = meta.getChannelCount(seriesIndex);
+      boolean colorRender = channelCount > 1 && channelCount < 8;
 
       Map<String, Object> rdefs = new HashMap<String, Object>();
       rdefs.put("defaultT", 0);
       rdefs.put("defaultZ", meta.getPixelsSizeZ(seriesIndex).getValue() / 2);
-      rdefs.put("model", "greyscale");
+      rdefs.put("model", colorRender ? "color" : "greyscale");
       omero.put("rdefs", rdefs);
 
       double[] defaultMinMax =
@@ -1733,9 +1734,9 @@ public class Converter implements Callable<Void> {
           meta.getPixelsType(seriesIndex).toString()));
 
       List<Map<String, Object>> channels = new ArrayList<Map<String, Object>>();
-      for (int c=0; c<meta.getChannelCount(seriesIndex); c++) {
+      for (int c=0; c<channelCount; c++) {
         Map<String, Object> channel = new HashMap<String, Object>();
-        channel.put("active", true);
+        channel.put("active", c < 3);
         channel.put("coefficient", 1);
 
         // set an RGB color (alpha removed)

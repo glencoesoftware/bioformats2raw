@@ -111,7 +111,7 @@ public class Colors {
 
     // return red, green, or blue depending on the channel index
     int baseColor = 0xff;
-    int shift = (2 - (c % 3)) * 8;
+    int shift = (3 - (c % 3)) * 8;
     baseColor = baseColor << shift;
     return new Color(baseColor + 0xff);
   }

@@ -1026,6 +1026,10 @@ public class ZarrTest {
         ZarrGroup.open(output.resolve(String.valueOf(i)).toString());
       Map<String, Object> omero =
             (Map<String, Object>) z.getAttributes().get("omero");
+
+      Map<String, Object> rdefs = (Map<String, Object>) omero.get("rdefs");
+      assertEquals("greyscale", rdefs.get("model"));
+
       List<Map<String, Object>> channels =
             (List<Map<String, Object>>) omero.get("channels");
       assertEquals(1, channels.size());
@@ -1033,6 +1037,37 @@ public class ZarrTest {
       Map<String, Object> channel = channels.get(0);
       assertEquals(names[i], channel.get("label"));
       assertEquals(colors[i], channel.get("color"));
+      assertEquals(true, channel.get("active"));
+    }
+  }
+
+  /**
+   * Check for OMERO rendering metadata on a 4 channel image.
+   */
+  @Test
+  public void testOMEROMultiC() throws Exception {
+    input = getTestFile("multichannel-colors.ome.xml");
+    assertTool();
+
+    String[] names = {"orange", "green", "blue", "red"};
+    String[] colors = {"FF7F00", "00FF00", "0000FF", "FF0000"};
+
+    ZarrGroup z = ZarrGroup.open(output.resolve("0").toString());
+    Map<String, Object> omero =
+          (Map<String, Object>) z.getAttributes().get("omero");
+
+    Map<String, Object> rdefs = (Map<String, Object>) omero.get("rdefs");
+    assertEquals("color", rdefs.get("model"));
+
+    List<Map<String, Object>> channels =
+          (List<Map<String, Object>>) omero.get("channels");
+    assertEquals(names.length, channels.size());
+
+    for (int c=0; c<channels.size(); c++) {
+      Map<String, Object> channel = channels.get(c);
+      assertEquals(names[c], channel.get("label"));
+      assertEquals(colors[c], channel.get("color"));
+      assertEquals(c < 3, channel.get("active"));
     }
   }
 
