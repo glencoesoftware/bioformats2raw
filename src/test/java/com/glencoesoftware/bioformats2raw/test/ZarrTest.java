@@ -270,6 +270,7 @@ public class ZarrTest {
     assertEquals(1, multiscales.size());
     Map<String, Object> multiscale = multiscales.get(0);
     assertEquals("0.4", multiscale.get("version"));
+    assertEquals("image", multiscale.get("name"));
     List<Map<String, Object>> datasets =
             (List<Map<String, Object>>) multiscale.get("datasets");
     assertTrue(datasets.size() > 0);

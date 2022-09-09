@@ -1704,6 +1704,13 @@ public class Converter implements Callable<Void> {
     }
     multiscale.put("axes", axes);
 
+    int seriesIndex = seriesList.indexOf(series);
+    String name = meta.getImageName(seriesIndex);
+    if (name == null) {
+      name = "Series " + seriesIndex;
+    }
+    multiscale.put("name", name);
+
     Path subGroupPath = getRootPath().resolve(seriesString);
     LOGGER.debug("  creating subgroup {}", subGroupPath);
     ZarrGroup subGroup = ZarrGroup.create(subGroupPath);
@@ -1711,14 +1718,7 @@ public class Converter implements Callable<Void> {
     attributes.put("multiscales", multiscales);
 
     if (omeroMetadata) {
-      int seriesIndex = seriesList.indexOf(series);
-
       Map<String, Object> omero = new HashMap<String, Object>();
-      String name = meta.getImageName(seriesIndex);
-      if (name == null) {
-        name = "Series " + seriesIndex;
-      }
-      omero.put("name", name);
 
       int channelCount = meta.getChannelCount(seriesIndex);
       boolean colorRender = channelCount > 1 && channelCount < 8;
