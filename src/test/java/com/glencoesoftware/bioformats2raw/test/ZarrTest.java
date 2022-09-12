@@ -1073,6 +1073,33 @@ public class ZarrTest {
   }
 
   /**
+   * Check for OMERO rendering metadata on a 3 channel image with
+   * no channel names.
+   */
+  @Test
+  public void testOMEROChannelNames() throws Exception {
+    input = getTestFile("multichannel-no-names.ome.xml");
+    assertTool();
+
+    String[] names = {"300.0", "600.0", "350.0"};
+
+    ZarrGroup z = ZarrGroup.open(output.resolve("0").toString());
+    Map<String, Object> omero =
+          (Map<String, Object>) z.getAttributes().get("omero");
+
+    Map<String, Object> rdefs = (Map<String, Object>) omero.get("rdefs");
+
+    List<Map<String, Object>> channels =
+          (List<Map<String, Object>>) omero.get("channels");
+    assertEquals(names.length, channels.size());
+
+    for (int c=0; c<channels.size(); c++) {
+      Map<String, Object> channel = channels.get(c);
+      assertEquals(names[c], channel.get("label"));
+    }
+  }
+
+  /**
    * Make sure OMERO metadata is not written when the
    * "--no-omero" flag is used.
    */

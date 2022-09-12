@@ -60,6 +60,15 @@ import ome.units.quantity.Length;
 import ome.units.quantity.Quantity;
 import ome.units.quantity.Time;
 import ome.xml.meta.OMEXMLMetadataRoot;
+import ome.xml.model.Channel;
+import ome.xml.model.Filter;
+import ome.xml.model.FilterSet;
+import ome.xml.model.Image;
+import ome.xml.model.Laser;
+import ome.xml.model.LightPath;
+import ome.xml.model.LightSource;
+import ome.xml.model.LightSourceSettings;
+import ome.xml.model.TransmittanceRange;
 import ome.xml.model.enums.DimensionOrder;
 import ome.xml.model.enums.EnumerationException;
 import ome.xml.model.enums.PixelType;
@@ -81,6 +90,7 @@ import com.bc.zarr.ZarrGroup;
 import com.glencoesoftware.bioformats2raw.MiraxReader.TilePointer;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.google.common.math.DoubleMath;
 import com.univocity.parsers.csv.CsvParser;
 import com.univocity.parsers.csv.CsvParserSettings;
 
@@ -1747,7 +1757,8 @@ public class Converter implements Callable<Void> {
 
         channel.put("family", "linear");
         channel.put("inverted", false);
-        channel.put("label", meta.getChannelName(seriesIndex, c));
+        channel.put("label",
+          getChannelName((OMEXMLMetadata) meta, seriesIndex, c));
         Map<String, Object> window = new HashMap<String, Object>();
 
         final int channelIndex = c;
@@ -2093,6 +2104,114 @@ public class Converter implements Callable<Void> {
       LOGGER.warn("Encountered invalid plate #{}", p);
     }
     return false;
+  }
+
+  private String getChannelName(OMEXMLMetadata meta,
+    int series, int channelIndex)
+  {
+    String channelName = meta.getChannelName(series, channelIndex);
+    if (channelName != null) {
+      return channelName;
+    }
+
+    Length emission = meta.getChannelEmissionWavelength(series, channelIndex);
+    Length excitation =
+      meta.getChannelExcitationWavelength(series, channelIndex);
+
+    OMEXMLMetadataRoot root = (OMEXMLMetadataRoot) meta.getRoot();
+    Image img = root.getImage(series);
+    Channel channel = img.getPixels().getChannel(channelIndex);
+    LightPath path = channel.getLightPath();
+    FilterSet filterSet = channel.getLinkedFilterSet();
+    LightSourceSettings sourceSettings = channel.getLightSourceSettings();
+    LightSource source = null;
+    if (sourceSettings != null) {
+      source = sourceSettings.getLightSource();
+    }
+
+    if (emission != null) {
+      String name = getNameFromWavelength(emission);
+      if (name != null) {
+        return name;
+      }
+    }
+
+    if (path != null) {
+      List<Filter> emFilters = path.copyLinkedEmissionFilterList();
+      for (Filter f : emFilters) {
+        String name = getNameFromFilter(f);
+        if (name != null) {
+          return name;
+        }
+      }
+    }
+
+    if (filterSet != null) {
+      List<Filter> emFilters = filterSet.copyLinkedEmissionFilterList();
+      for (Filter f : emFilters) {
+        String name = getNameFromFilter(f);
+        if (name != null) {
+          return name;
+        }
+      }
+    }
+    if (source != null && source instanceof Laser) {
+      Laser laser = (Laser) source;
+      if (laser.getWavelength() != null) {
+        String name = getNameFromWavelength(laser.getWavelength());
+        if (name != null) {
+          return name;
+        }
+      }
+    }
+    if (excitation != null) {
+      String name = getNameFromWavelength(excitation);
+      if (name != null) {
+        return name;
+      }
+    }
+
+    if (path != null) {
+      List<Filter> exFilters = path.copyLinkedExcitationFilterList();
+      for (Filter f : exFilters) {
+        String name = getNameFromFilter(f);
+        if (name != null) {
+          return name;
+        }
+      }
+    }
+    if (filterSet != null) {
+      List<Filter> exFilters = filterSet.copyLinkedExcitationFilterList();
+      for (Filter f : exFilters) {
+        String name = getNameFromFilter(f);
+        if (name != null) {
+          return name;
+        }
+      }
+    }
+    return "Channel " + channelIndex;
+  }
+
+  private String getNameFromFilter(Filter f) {
+    if (f == null) {
+      return null;
+    }
+    TransmittanceRange range = f.getTransmittanceRange();
+    if (range == null) {
+      return null;
+    }
+    return String.valueOf(range.getCutIn().value());
+  }
+
+  private String getNameFromWavelength(Length v) {
+    if (v == null) {
+      return null;
+    }
+    double wave = v.value().doubleValue();
+    if (DoubleMath.isMathematicalInteger(wave)) {
+      return String.valueOf(wave);
+    }
+    return v.toString();
   }
 
   private int calculateResolutions(int width, int height) {
