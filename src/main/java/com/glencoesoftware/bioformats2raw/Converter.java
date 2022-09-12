@@ -1772,14 +1772,18 @@ public class Converter implements Callable<Void> {
             }
 
             MinMaxCalculator calc = (MinMaxCalculator) minmax;
-            Double min = calc.getChannelGlobalMinimum(channelIndex);
-            Double max = calc.getChannelGlobalMaximum(channelIndex);
+            Double min = calc.getChannelKnownMinimum(channelIndex);
+            Double max = calc.getChannelKnownMaximum(channelIndex);
 
-            if (totalMin[0] == null || (min != null && min < totalMin[0])) {
-              totalMin[0] = min;
+            if (min != null && min < Double.POSITIVE_INFINITY) {
+              if (totalMin[0] == null || min < totalMin[0]) {
+                totalMin[0] = min;
+              }
             }
-            if (totalMax[0] == null || (max != null && max > totalMax[0])) {
-              totalMax[0] = max;
+            if (max != null && max > Double.NEGATIVE_INFINITY) {
+              if (totalMax[0] == null || max > totalMax[0]) {
+                totalMax[0] = max;
+              }
             }
           }
           catch (FormatException|IOException e) {
