@@ -1745,6 +1745,9 @@ public class Converter implements Callable<Void> {
         getRange(FormatTools.pixelTypeFromString(
           meta.getPixelsType(seriesIndex).toString()));
 
+      OMEXMLMetadata omexml = (OMEXMLMetadata) meta;
+      omexml.resolveReferences();
+
       List<Map<String, Object>> channels = new ArrayList<Map<String, Object>>();
       for (int c=0; c<channelCount; c++) {
         Map<String, Object> channel = new HashMap<String, Object>();
@@ -1752,15 +1755,14 @@ public class Converter implements Callable<Void> {
         channel.put("coefficient", 1);
 
         // set an RGB color (alpha removed)
-        Color color = Colors.getColor((OMEXMLMetadata) meta, seriesIndex, c);
+        Color color = Colors.getColor(omexml, seriesIndex, c);
         Integer packedColor = (color.getValue() >> 8) & 0xffffff;
         String formattedColor = String.format("%06X", packedColor);
         channel.put("color", formattedColor);
 
         channel.put("family", "linear");
         channel.put("inverted", false);
-        channel.put("label",
-          getChannelName((OMEXMLMetadata) meta, seriesIndex, c));
+        channel.put("label", getChannelName(omexml, seriesIndex, c));
         Map<String, Object> window = new HashMap<String, Object>();
 
         final int channelIndex = c;
