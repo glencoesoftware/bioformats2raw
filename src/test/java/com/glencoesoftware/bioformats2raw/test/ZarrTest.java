@@ -1101,12 +1101,12 @@ public class ZarrTest {
 
   /**
    * Make sure OMERO metadata is not written when the
-   * "--no-omero" flag is used.
+   * "--no-minmax" flag is used.
    */
   @Test
   public void testNoOMERO() throws Exception {
     input = getTestFile("colors.ome.xml");
-    assertTool("--no-omero");
+    assertTool("--no-minmax");
 
     for (int i=0; i<3; i++) {
       ZarrGroup z =

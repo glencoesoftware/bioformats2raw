@@ -264,9 +264,11 @@ public class Converter implements Callable<Void> {
   };
 
   @Option(
-          names = "--no-omero", negatable=true,
-          description = "Whether to write OMERO rendering metadata " +
-                  "(true by default)"
+          names = "--no-minmax", negatable=true,
+          description = "Whether to calculate minimum and maximum pixel " +
+                        "values. Min/max calculation can result in slower " +
+                        "conversions. If true, min/max values are saved as " +
+                        "OMERO rendering metadata (true by default)"
   )
   private volatile boolean omeroMetadata = true;
 
