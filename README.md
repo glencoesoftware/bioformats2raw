@@ -18,7 +18,7 @@ Java 8 or later is required.
 libblosc (https://github.com/Blosc/c-blosc) version 1.9.0 or later must be installed separately.
 The native libraries are not packaged with any relevant jars.  See also note in jzarr readme (https://github.com/bcdev/jzarr/blob/master/README.md)
 
- * macOS: `brew install c-blosc` then set `JAVA_OPTS='-Djna.library.path=/usr/local/Cellar/c-blosc/*/lib'`
+ * macOS: `brew install c-blosc` then set `JAVA_OPTS=-Djna.library.path=$(echo $(brew --cellar c-blosc)/*/lib/)`
  * Windows: Pre-built blosc DLLs are available from the [Fiji project](https://sites.imagej.net/N5/lib/win64/).  Rename the downloaded DLL to `blosc.dll` and place in a fixed location then set `JAVA_OPTS="-Djna.library.path=C:\path\to\blosc\folder"`.
  * Ubuntu 18.04+: `apt-get install libblosc1`
  * conda: Installing `bioformats2raw` via conda (see below) will include `blosc` as a dependency.
