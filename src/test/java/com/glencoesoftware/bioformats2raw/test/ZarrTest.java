@@ -211,6 +211,13 @@ public class ZarrTest {
     series0.openArray("0");
     series0 = ZarrGroup.open(output.resolve("ghi/999/1").toString());
     series0.openArray("0");
+
+    Path omePath = output.resolve("OME");
+    ZarrGroup z = ZarrGroup.open(omePath.toString());
+    List<String> groupMap = (List<String>) z.getAttributes().get("series");
+    assertEquals(groupMap.size(), 2);
+    assertEquals(groupMap.get(0), "abc/888/0");
+    assertEquals(groupMap.get(1), "ghi/999/1");
   }
 
   /**
@@ -241,6 +248,14 @@ public class ZarrTest {
     ZarrGroup z = ZarrGroup.open(output.toString());
     Integer layout = (Integer)
         z.getAttributes().get("bioformats2raw.layout");
+
+    Path omePath = output.resolve("OME");
+    ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
+    List<String> groupMap =
+      (List<String>) omeGroup.getAttributes().get("series");
+    assertEquals(groupMap.size(), 1);
+    assertEquals(groupMap.get(0), "0");
+
     ZarrArray series0 = ZarrGroup.open(output.resolve("0")).openArray("0");
 
     // no getter for DimensionSeparator in ZarrArray
@@ -430,6 +445,14 @@ public class ZarrTest {
     assertTool();
     ZarrGroup z = ZarrGroup.open(output.toString());
 
+    Path omePath = output.resolve("OME");
+    ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
+    List<String> groupMap =
+      (List<String>) omeGroup.getAttributes().get("series");
+    assertEquals(groupMap.size(), 2);
+    assertEquals(groupMap.get(0), "0");
+    assertEquals(groupMap.get(1), "1");
+
     // Check series 0 dimensions and special pixels
     ZarrArray series0 = z.openArray("0/0");
     assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getShape());
@@ -464,6 +487,16 @@ public class ZarrTest {
     assertTool("-s", "0");
     ZarrGroup z = ZarrGroup.open(output.toString());
 
+    Path omePath = output.resolve("OME");
+    ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
+    List<String> groupMap =
+      (List<String>) omeGroup.getAttributes().get("series");
+    assertEquals(groupMap.size(), 1);
+    assertEquals(groupMap.get(0), "0");
+
+    OME ome = getOMEMetadata();
+    assertEquals(1, ome.sizeOfImageList());
+
     // Check series 0 dimensions and special pixels
     ZarrArray series0 = z.openArray("0/0");
     assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getShape());
@@ -491,6 +524,16 @@ public class ZarrTest {
     assertTool("-s", "1");
     ZarrGroup z = ZarrGroup.open(output.toString());
 
+    Path omePath = output.resolve("OME");
+    ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
+    List<String> groupMap =
+      (List<String>) omeGroup.getAttributes().get("series");
+    assertEquals(groupMap.size(), 1);
+    assertEquals(groupMap.get(0), "0");
+
+    OME ome = getOMEMetadata();
+    assertEquals(1, ome.sizeOfImageList());
+
     // Check series 1 dimensions and special pixels
     ZarrArray series0 = z.openArray("0/0");
     assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getShape());
@@ -517,6 +560,16 @@ public class ZarrTest {
     input = fake("series", "3");
     assertTool("-s", "1");
     ZarrGroup z = ZarrGroup.open(output.toString());
+
+    Path omePath = output.resolve("OME");
+    ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
+    List<String> groupMap =
+      (List<String>) omeGroup.getAttributes().get("series");
+    assertEquals(groupMap.size(), 1);
+    assertEquals(groupMap.get(0), "0");
+
+    OME ome = getOMEMetadata();
+    assertEquals(1, ome.sizeOfImageList());
 
     // Check series 1 dimensions and special pixels
     ZarrArray series0 = z.openArray("0/0");
@@ -914,11 +967,21 @@ public class ZarrTest {
 
     ZarrGroup z = ZarrGroup.open(output);
 
+    Path omePath = output.resolve("OME");
+    ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
+    List<String> groupMap =
+      (List<String>) omeGroup.getAttributes().get("series");
+    assertEquals(groupMap.size(), 12);
+    for (int i=0; i<12; i++) {
+      assertEquals(groupMap.get(i), String.valueOf(i));
+    }
+
     // Check dimensions and block size
     ZarrArray series0 = z.openArray("0/0");
     assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getShape());
     assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getChunks());
-    assertEquals(12, z.getGroupKeys().size());
+    // 12 series + OME group
+    assertEquals(13, z.getGroupKeys().size());
 
     // Check OME metadata
     OME ome = getOMEMetadata();
@@ -954,6 +1017,22 @@ public class ZarrTest {
     int rowCount = 2;
     int colCount = 3;
     int fieldCount = 2;
+
+    Path omePath = output.resolve("OME");
+    ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
+    List<String> groupMap =
+      (List<String>) omeGroup.getAttributes().get("series");
+    assertEquals(groupMap.size(), 12);
+    int index = 0;
+    for (int r=0; r<rowCount; r++) {
+      for (int c=0; c<colCount; c++) {
+        for (int f=0; f<fieldCount; f++) {
+          String groupPath = (char) (r + 'A') + "/" + (c + 1) + "/" + f;
+          assertEquals(groupMap.get(index++), groupPath);
+        }
+      }
+    }
+
     Map<String, List<String>> plateMap = new HashMap<String, List<String>>();
     plateMap.put("A", Arrays.asList("1", "2", "3"));
     plateMap.put("B", Arrays.asList("1", "2", "3"));
@@ -1496,6 +1575,8 @@ public class ZarrTest {
 
     assertTrue(!Files.exists(
       output.resolve("OME").resolve("METADATA.ome.xml")));
+    assertTrue(!Files.exists(
+      output.resolve("OME").resolve(".zattrs")));
   }
 
   /**

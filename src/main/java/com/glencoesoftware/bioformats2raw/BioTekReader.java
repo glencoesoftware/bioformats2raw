@@ -60,8 +60,8 @@ public class BioTekReader extends FormatReader {
   private static final Logger LOGGER =
     LoggerFactory.getLogger(BioTekReader.class);
   private static final String BIOTEK_MAGIC = "BTIImageMetaData";
-  private static final String WELL_REGEX = "([A-Z]{1,2})(\\d{1,2})_(\\d+)";
-  private static final String ALPHANUM = "([A-Za-z0-9 ]+)";
+  private static final String WELL_REGEX = "([A-Z]{1,2})(\\d{1,2})_(-?\\d+)";
+  private static final String ALPHANUM = "([A-Za-z0-9 ,\\[\\]]+)";
   private static final String SUFFIX = ".tif[f]?";
   private static final String TIFF_REGEX_A =
     WELL_REGEX + "_(\\d+)_(\\d+)_" + ALPHANUM + "_(\\d+)" + SUFFIX;
