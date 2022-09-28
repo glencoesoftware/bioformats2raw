@@ -49,6 +49,7 @@ import loci.formats.FormatTools;
 import loci.formats.IFormatReader;
 import loci.formats.ImageReader;
 import loci.formats.Memoizer;
+import loci.formats.MinMaxCalculator;
 import loci.formats.MissingLibraryException;
 import loci.formats.in.DynamicMetadataOptions;
 import loci.formats.meta.IMetadata;
@@ -59,11 +60,21 @@ import ome.units.quantity.Length;
 import ome.units.quantity.Quantity;
 import ome.units.quantity.Time;
 import ome.xml.meta.OMEXMLMetadataRoot;
+import ome.xml.model.Channel;
+import ome.xml.model.Filter;
+import ome.xml.model.FilterSet;
+import ome.xml.model.Image;
+import ome.xml.model.Laser;
+import ome.xml.model.LightPath;
+import ome.xml.model.LightSource;
+import ome.xml.model.LightSourceSettings;
+import ome.xml.model.TransmittanceRange;
 import ome.xml.model.enums.DimensionOrder;
 import ome.xml.model.enums.EnumerationException;
 import ome.xml.model.enums.PixelType;
 import ome.xml.model.enums.UnitsLength;
 import ome.xml.model.enums.UnitsTime;
+import ome.xml.model.primitives.Color;
 import ome.xml.model.primitives.PositiveInteger;
 
 import org.perf4j.slf4j.Slf4JStopWatch;
@@ -79,6 +90,7 @@ import com.bc.zarr.ZarrGroup;
 import com.glencoesoftware.bioformats2raw.MiraxReader.TilePointer;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.google.common.math.DoubleMath;
 import com.univocity.parsers.csv.CsvParser;
 import com.univocity.parsers.csv.CsvParserSettings;
 
@@ -250,6 +262,15 @@ public class Converter implements Callable<Void> {
     PyramidTiffReader.class, MiraxReader.class,
     BioTekReader.class, ND2PlateReader.class
   };
+
+  @Option(
+          names = "--no-minmax", negatable=true,
+          description = "Whether to calculate minimum and maximum pixel " +
+                        "values. Min/max calculation can result in slower " +
+                        "conversions. If true, min/max values are saved as " +
+                        "OMERO rendering metadata (true by default)"
+  )
+  private volatile boolean omeroMetadata = true;
 
   @Option(
           names = "--no-nested", negatable=true,
@@ -560,7 +581,12 @@ public class Converter implements Callable<Void> {
       if (reader instanceof MiraxReader) {
         ((MiraxReader) reader).setTileCache(tileCache);
       }
-      readers.add(separator);
+      if (omeroMetadata) {
+        readers.add(new MinMaxCalculator(separator));
+      }
+      else {
+        readers.add(separator);
+      }
       savedMemoFile = savedMemoFile || memoizer.isSavedToMemo();
     }
 
@@ -1249,6 +1275,8 @@ public class Converter implements Callable<Void> {
     );
 
     // series level metadata
+    // do this after pixels are written, otherwise
+    // min/max calculation won't have been performed
     setSeriesLevelMetadata(series, resolutions);
 
     for (int resCounter=0; resCounter<resolutions; resCounter++) {
@@ -1407,6 +1435,11 @@ public class Converter implements Callable<Void> {
         }
       }
     }
+
+    // series level metadata
+    // do this after pixels are written, otherwise
+    // min/max calculation won't have been performed
+    setSeriesLevelMetadata(series, resolutions);
   }
 
   private void saveHCSMetadata(IMetadata meta) throws IOException {
@@ -1713,11 +1746,106 @@ public class Converter implements Callable<Void> {
     }
     multiscale.put("axes", axes);
 
+    int seriesIndex = seriesList.indexOf(series);
+    String name = meta.getImageName(seriesIndex);
+    if (name == null) {
+      name = "Series " + seriesIndex;
+    }
+    multiscale.put("name", name);
+
     Path subGroupPath = getRootPath().resolve(seriesString);
     LOGGER.debug("  creating subgroup {}", subGroupPath);
     ZarrGroup subGroup = ZarrGroup.create(subGroupPath);
     Map<String, Object> attributes = new HashMap<String, Object>();
     attributes.put("multiscales", multiscales);
+
+    if (omeroMetadata) {
+      Map<String, Object> omero = new HashMap<String, Object>();
+
+      int channelCount = meta.getChannelCount(seriesIndex);
+      boolean colorRender = channelCount > 1 && channelCount < 8;
+
+      Map<String, Object> rdefs = new HashMap<String, Object>();
+      rdefs.put("defaultT", 0);
+      rdefs.put("defaultZ", meta.getPixelsSizeZ(seriesIndex).getValue() / 2);
+      rdefs.put("model", colorRender ? "color" : "greyscale");
+      omero.put("rdefs", rdefs);
+
+      double[] defaultMinMax =
+        getRange(FormatTools.pixelTypeFromString(
+          meta.getPixelsType(seriesIndex).toString()));
+
+      OMEXMLMetadata omexml = (OMEXMLMetadata) meta;
+      omexml.resolveReferences();
+
+      List<Map<String, Object>> channels = new ArrayList<Map<String, Object>>();
+      for (int c=0; c<channelCount; c++) {
+        Map<String, Object> channel = new HashMap<String, Object>();
+        channel.put("active", c < 3);
+        channel.put("coefficient", 1);
+
+        // set an RGB color (alpha removed)
+        Color color = Colors.getColor(omexml, seriesIndex, c);
+        Integer packedColor = (color.getValue() >> 8) & 0xffffff;
+        String formattedColor = String.format("%06X", packedColor);
+        channel.put("color", formattedColor);
+
+        channel.put("family", "linear");
+        channel.put("inverted", false);
+        channel.put("label", getChannelName(omexml, seriesIndex, c));
+        Map<String, Object> window = new HashMap<String, Object>();
+
+        final int channelIndex = c;
+        Double[] totalMin = new Double[1];
+        Double[] totalMax = new Double[1];
+
+        readers.forEach((minmax) -> {
+          try {
+            if (!(minmax instanceof MinMaxCalculator)) {
+              LOGGER.error("Cannot set OMERO min/max data");
+            }
+
+            MinMaxCalculator calc = (MinMaxCalculator) minmax;
+            Double min = calc.getChannelKnownMinimum(channelIndex);
+            Double max = calc.getChannelKnownMaximum(channelIndex);
+
+            if (min != null && min < Double.POSITIVE_INFINITY) {
+              if (totalMin[0] == null || min < totalMin[0]) {
+                totalMin[0] = min;
+              }
+            }
+            if (max != null && max > Double.NEGATIVE_INFINITY) {
+              if (totalMax[0] == null || max > totalMax[0]) {
+                totalMax[0] = max;
+              }
+            }
+          }
+          catch (FormatException|IOException e) {
+            LOGGER.error("Cannot set OMERO min/max data", e);
+          }
+        });
+
+        if (totalMin[0] == null && defaultMinMax != null) {
+          totalMin[0] = defaultMinMax[0];
+        }
+        if (totalMax[0] == null && defaultMinMax != null) {
+          totalMax[0] = defaultMinMax[1];
+        }
+
+        window.put("start", totalMin[0]);
+        window.put("end", totalMax[0]);
+        window.put("min", totalMin[0]);
+        window.put("max", totalMax[0]);
+        channel.put("window", window);
+
+        channels.add(channel);
+      }
+
+      omero.put("channels", channels);
+
+      attributes.put("omero", omero);
+    }
+
     subGroup.writeAttributes(attributes);
     LOGGER.debug("    finished writing subgroup attributes");
   }
@@ -2014,6 +2142,114 @@ public class Converter implements Callable<Void> {
       LOGGER.warn("Encountered invalid plate #{}", p);
     }
     return false;
+  }
+
+  private String getChannelName(OMEXMLMetadata meta,
+    int series, int channelIndex)
+  {
+    String channelName = meta.getChannelName(series, channelIndex);
+    if (channelName != null) {
+      return channelName;
+    }
+
+    Length emission = meta.getChannelEmissionWavelength(series, channelIndex);
+    Length excitation =
+      meta.getChannelExcitationWavelength(series, channelIndex);
+
+    OMEXMLMetadataRoot root = (OMEXMLMetadataRoot) meta.getRoot();
+    Image img = root.getImage(series);
+    Channel channel = img.getPixels().getChannel(channelIndex);
+    LightPath path = channel.getLightPath();
+    FilterSet filterSet = channel.getLinkedFilterSet();
+    LightSourceSettings sourceSettings = channel.getLightSourceSettings();
+    LightSource source = null;
+    if (sourceSettings != null) {
+      source = sourceSettings.getLightSource();
+    }
+
+    if (emission != null) {
+      String name = getNameFromWavelength(emission);
+      if (name != null) {
+        return name;
+      }
+    }
+
+    if (path != null) {
+      List<Filter> emFilters = path.copyLinkedEmissionFilterList();
+      for (Filter f : emFilters) {
+        String name = getNameFromFilter(f);
+        if (name != null) {
+          return name;
+        }
+      }
+    }
+
+    if (filterSet != null) {
+      List<Filter> emFilters = filterSet.copyLinkedEmissionFilterList();
+      for (Filter f : emFilters) {
+        String name = getNameFromFilter(f);
+        if (name != null) {
+          return name;
+        }
+      }
+    }
+    if (source != null && source instanceof Laser) {
+      Laser laser = (Laser) source;
+      if (laser.getWavelength() != null) {
+        String name = getNameFromWavelength(laser.getWavelength());
+        if (name != null) {
+          return name;
+        }
+      }
+    }
+    if (excitation != null) {
+      String name = getNameFromWavelength(excitation);
+      if (name != null) {
+        return name;
+      }
+    }
+
+    if (path != null) {
+      List<Filter> exFilters = path.copyLinkedExcitationFilterList();
+      for (Filter f : exFilters) {
+        String name = getNameFromFilter(f);
+        if (name != null) {
+          return name;
+        }
+      }
+    }
+    if (filterSet != null) {
+      List<Filter> exFilters = filterSet.copyLinkedExcitationFilterList();
+      for (Filter f : exFilters) {
+        String name = getNameFromFilter(f);
+        if (name != null) {
+          return name;
+        }
+      }
+    }
+    return "Channel " + channelIndex;
+  }
+
+  private String getNameFromFilter(Filter f) {
+    if (f == null) {
+      return null;
+    }
+    TransmittanceRange range = f.getTransmittanceRange();
+    if (range == null) {
+      return null;
+    }
+    return String.valueOf(range.getCutIn().value());
+  }
+
+  private String getNameFromWavelength(Length v) {
+    if (v == null) {
+      return null;
+    }
+    double wave = v.value().doubleValue();
+    if (DoubleMath.isMathematicalInteger(wave)) {
+      return String.valueOf(wave);
+    }
+    return v.toString();
   }
 
   private int calculateResolutions(int width, int height) {

@@ -45,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -284,6 +285,7 @@ public class ZarrTest {
     assertEquals(1, multiscales.size());
     Map<String, Object> multiscale = multiscales.get(0);
     assertEquals("0.4", multiscale.get("version"));
+    assertEquals("image", multiscale.get("name"));
     List<Map<String, Object>> datasets =
             (List<Map<String, Object>>) multiscale.get("datasets");
     assertTrue(datasets.size() > 0);
@@ -1086,6 +1088,110 @@ public class ZarrTest {
     // check OME metadata
     OME ome = getOMEMetadata();
     assertEquals(1, ome.sizeOfPlateList());
+  }
+
+  /**
+   * Check for OMERO rendering metadata.
+   */
+  @Test
+  public void testOMERO() throws Exception {
+    input = getTestFile("colors.ome.xml");
+    assertTool();
+
+    String[] names = {"orange", "green", "blue"};
+    String[] colors = {"FF7F00", "00FF00", "0000FF"};
+
+    for (int i=0; i<3; i++) {
+      ZarrGroup z =
+        ZarrGroup.open(output.resolve(String.valueOf(i)).toString());
+      Map<String, Object> omero =
+            (Map<String, Object>) z.getAttributes().get("omero");
+
+      Map<String, Object> rdefs = (Map<String, Object>) omero.get("rdefs");
+      assertEquals("greyscale", rdefs.get("model"));
+
+      List<Map<String, Object>> channels =
+            (List<Map<String, Object>>) omero.get("channels");
+      assertEquals(1, channels.size());
+
+      Map<String, Object> channel = channels.get(0);
+      assertEquals(names[i], channel.get("label"));
+      assertEquals(colors[i], channel.get("color"));
+      assertEquals(true, channel.get("active"));
+    }
+  }
+
+  /**
+   * Check for OMERO rendering metadata on a 4 channel image.
+   */
+  @Test
+  public void testOMEROMultiC() throws Exception {
+    input = getTestFile("multichannel-colors.ome.xml");
+    assertTool();
+
+    String[] names = {"orange", "green", "blue", "red"};
+    String[] colors = {"FF7F00", "00FF00", "0000FF", "FF0000"};
+
+    ZarrGroup z = ZarrGroup.open(output.resolve("0").toString());
+    Map<String, Object> omero =
+          (Map<String, Object>) z.getAttributes().get("omero");
+
+    Map<String, Object> rdefs = (Map<String, Object>) omero.get("rdefs");
+    assertEquals("color", rdefs.get("model"));
+
+    List<Map<String, Object>> channels =
+          (List<Map<String, Object>>) omero.get("channels");
+    assertEquals(names.length, channels.size());
+
+    for (int c=0; c<channels.size(); c++) {
+      Map<String, Object> channel = channels.get(c);
+      assertEquals(names[c], channel.get("label"));
+      assertEquals(colors[c], channel.get("color"));
+      assertEquals(c < 3, channel.get("active"));
+    }
+  }
+
+  /**
+   * Check for OMERO rendering metadata on a 3 channel image with
+   * no channel names.
+   */
+  @Test
+  public void testOMEROChannelNames() throws Exception {
+    input = getTestFile("multichannel-no-names.ome.xml");
+    assertTool();
+
+    String[] names = {"300.0", "600.0", "350.0"};
+
+    ZarrGroup z = ZarrGroup.open(output.resolve("0").toString());
+    Map<String, Object> omero =
+          (Map<String, Object>) z.getAttributes().get("omero");
+
+    Map<String, Object> rdefs = (Map<String, Object>) omero.get("rdefs");
+
+    List<Map<String, Object>> channels =
+          (List<Map<String, Object>>) omero.get("channels");
+    assertEquals(names.length, channels.size());
+
+    for (int c=0; c<channels.size(); c++) {
+      Map<String, Object> channel = channels.get(c);
+      assertEquals(names[c], channel.get("label"));
+    }
+  }
+
+  /**
+   * Make sure OMERO metadata is not written when the
+   * "--no-minmax" flag is used.
+   */
+  @Test
+  public void testNoOMERO() throws Exception {
+    input = getTestFile("colors.ome.xml");
+    assertTool("--no-minmax");
+
+    for (int i=0; i<3; i++) {
+      ZarrGroup z =
+        ZarrGroup.open(output.resolve(String.valueOf(i)).toString());
+      assertNull(z.getAttributes().get("omero"));
+    }
   }
 
   /**

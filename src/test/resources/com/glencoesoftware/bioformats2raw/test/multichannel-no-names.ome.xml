@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OME xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Creator="OME Bio-Formats 6.6.1-SNAPSHOT" xsi:schemaLocation="http://www.openmicroscopy.org/Schemas/OME/2016-06 http://www.openmicroscopy.org/Schemas/OME/2016-06/ome.xsd">
+<Instrument ID="Instrument:0">
+  <Filter ID="Filter:0:0">
+    <TransmittanceRange CutIn="350" CutOut="450"/>
+  </Filter>
+</Instrument>
+<Image ID="Image:0" Name="test">
+<Description>Image Description 0</Description>
+<Pixels BigEndian="false" DimensionOrder="XYZCT" ID="Pixels:0" Interleaved="false" PhysicalSizeX="1.0" PhysicalSizeXUnit="µm" PhysicalSizeY="1.0" PhysicalSizeYUnit="µm" PhysicalSizeZ="1.0" PhysicalSizeZUnit="µm" SignificantBits="8" SizeC="3" SizeT="1" SizeX="1" SizeY="1" SizeZ="1" Type="uint8">
+<Channel AcquisitionMode="FluorescenceLifetime" Color="-8453889" ContrastMethod="Brightfield" EmissionWavelength="300.0" EmissionWavelengthUnit="nm" ExcitationWavelength="400.0" ExcitationWavelengthUnit="nm" Fluor="Fluor" ID="Channel:0:0" IlluminationType="Oblique" NDFilter="1.0" PinholeSize="0.5" PinholeSizeUnit="µm" PockelCellSetting="0" SamplesPerPixel="1"/>
+<Channel AcquisitionMode="FluorescenceLifetime" ContrastMethod="Brightfield" ExcitationWavelength="600.0" ExcitationWavelengthUnit="nm" Fluor="Fluor" ID="Channel:0:1" IlluminationType="Oblique" NDFilter="1.0" PinholeSize="0.5" PinholeSizeUnit="µm" PockelCellSetting="0" SamplesPerPixel="1"/>
+<Channel AcquisitionMode="FluorescenceLifetime" ContrastMethod="Brightfield" Fluor="Fluor" ID="Channel:0:2" IlluminationType="Oblique" NDFilter="1.0" PinholeSize="0.5" PinholeSizeUnit="µm" PockelCellSetting="0" SamplesPerPixel="1">
+  <LightPath>
+    <EmissionFilterRef ID="Filter:0:0"/>
+  </LightPath>
+</Channel>
+<Plane DeltaT="0.1" DeltaTUnit="s" ExposureTime="10.0" ExposureTimeUnit="s" PositionX="1.0" PositionXUnit="reference frame" PositionY="1.0" PositionYUnit="reference frame" PositionZ="1.0" PositionZUnit="reference frame" TheC="0" TheT="0" TheZ="0"/>
+<BinData xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06" Length="4" BigEndian="false">AAAAAA==</BinData></Pixels></Image></OME>
