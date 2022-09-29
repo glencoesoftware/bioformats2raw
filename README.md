@@ -5,7 +5,8 @@ bioformats2raw converter
 ========================
 
 Java application to convert image file formats, including .mrxs,
-to an intermediate Zarr structure.
+to an intermediate Zarr structure compatible with the OME-NGFF
+specification.
 The [raw2ometiff](https://github.com/glencoesoftware/raw2ometiff)
 application can then be used to produce a
 Bio-Formats 5.9.x ("Faas") or Bio-Formats 6.x (true OME-TIFF) pyramid.
@@ -105,8 +106,15 @@ https://github.com/glencoesoftware/raw2ometiff for more information.
 Output Formatting Options
 =========================
 
-Using any combination of these options will result in a Zarr dataset that is not compatible with raw2ometiff,
-but may be suitable for other applications.
+By default, the output of `bioformats2raw` will be a
+[Zarr dataset](https://zarr.readthedocs.io/en/stable/spec/v2.html) which follows the
+metadata conventions defined by the
+[OME-NGFF 0.4 specification](https://ngff.openmicroscopy.org/0.4/) including the
+[bioformats2raw.layout specification](https://ngff.openmicroscopy.org/0.4/#bf2raw).
+
+Several formatting options can be passed to the converter and will result in a Zarr dataset
+that is not compatible with raw2ometiff and does not strictly follow the OME-NGFF
+specification but may be suitable for other applications.
 
 #### --pyramid-name
 
