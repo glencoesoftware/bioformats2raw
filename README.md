@@ -234,6 +234,14 @@ Prior to version 0.3.0, N5/Zarr output was placed in a subdirectory (`data.[n5|z
 at the same level.  As of 0.3.0 the desired output directory is now a Zarr group and the `METADATA.ome.xml` file is
 placed in a `OME` directory within.  These changes reflect layout version 3.
 
+Prior to version 0.5.0, the plate and series Zarr groups followed the metadata defined in
+the [0.2 version of the OME-NGFF specification](https://ngff.openmicroscopy.org/0.2). As of
+0.5.0, these groups now follow the metadata conventions defined in the
+[0.4 version of the OME-NGFF specification](https://ngff.openmicroscopy.org/0.4). Additionally,
+the layout of the top-level Zarr group is now part of the upstream specification - see
+https://ngff.openmicroscopy.org/0.4/#bf2raw and the `OME` directory containing the
+`METADATA.ome.xml` file is now a Zarr group.
+
 Performance
 ===========
 
