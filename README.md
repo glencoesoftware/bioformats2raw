@@ -39,7 +39,7 @@ Development Installation
 
 1. Clone the repository:
 
-    git clone git@github.com:glencoesoftware/bioformats2raw.git
+    git clone https://github.com/glencoesoftware/bioformats2raw.git
 
 2. Run the Gradle build as required, a list of available tasks can be found by running:
 
