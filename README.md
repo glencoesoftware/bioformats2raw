@@ -57,12 +57,25 @@ Usage
 
 Run the conversion:
 
+    bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid
+    bioformats2raw /path/to/file.svs /path/to/zarr-pyramid
+
+By default, the resolutions will be set so that the smallest resolution is no greater than 256x256.
+The target of the smallest resolution can be configured with `--target-min-size` e.g. to ensure
+that the smallest resolution is no greater than 128x128
+
+    bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --target-min-size 128
+    bioformats2raw /path/to/file.svs /path/to/zarr-pyramid --target-min-size 128
+
+
+Alternatively, the `--resolutions` options can be passed to specify the exact number of resolution levels:
+
     bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --resolutions 6
     bioformats2raw /path/to/file.svs /path/to/zarr-pyramid --resolutions 6
 
-Maximum tile dimensions are can be configured with the `--tile_width` and `--tile_height` options.  Defaults can be viewed with
-`bioformats2raw --help`.  `--resolutions` is optional; if omitted, the number of resolutions is set so that the smallest
-resolution is no greater than 256x256.
+
+Maximum tile dimensions can be configured with the `--tile_width` and `--tile_height` options.  Defaults can be viewed with
+`bioformats2raw --help`.
 
 If the input file has multiple series, a subset of the series can be converted by specifying a comma-separated list of indexes:
 
