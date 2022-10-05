@@ -5,7 +5,8 @@ bioformats2raw converter
 ========================
 
 Java application to convert image file formats, including .mrxs,
-to an intermediate Zarr structure.
+to an intermediate Zarr structure compatible with the OME-NGFF
+specification.
 The [raw2ometiff](https://github.com/glencoesoftware/raw2ometiff)
 application can then be used to produce a
 Bio-Formats 5.9.x ("Faas") or Bio-Formats 6.x (true OME-TIFF) pyramid.
@@ -39,7 +40,7 @@ Development Installation
 
 1. Clone the repository:
 
-    git clone git@github.com:glencoesoftware/bioformats2raw.git
+    git clone https://github.com/glencoesoftware/bioformats2raw.git
 
 2. Run the Gradle build as required, a list of available tasks can be found by running:
 
@@ -57,12 +58,25 @@ Usage
 
 Run the conversion:
 
+    bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid
+    bioformats2raw /path/to/file.svs /path/to/zarr-pyramid
+
+By default, the resolutions will be set so that the smallest resolution is no greater than 256x256.
+The target of the smallest resolution can be configured with `--target-min-size` e.g. to ensure
+that the smallest resolution is no greater than 128x128
+
+    bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --target-min-size 128
+    bioformats2raw /path/to/file.svs /path/to/zarr-pyramid --target-min-size 128
+
+
+Alternatively, the `--resolutions` options can be passed to specify the exact number of resolution levels:
+
     bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --resolutions 6
     bioformats2raw /path/to/file.svs /path/to/zarr-pyramid --resolutions 6
 
-Maximum tile dimensions are can be configured with the `--tile_width` and `--tile_height` options.  Defaults can be viewed with
-`bioformats2raw --help`.  `--resolutions` is optional; if omitted, the number of resolutions is set so that the smallest
-resolution is no greater than 256x256.
+
+Maximum tile dimensions can be configured with the `--tile_width` and `--tile_height` options.  Defaults can be viewed with
+`bioformats2raw --help`.
 
 If the input file has multiple series, a subset of the series can be converted by specifying a comma-separated list of indexes:
 
@@ -92,8 +106,15 @@ https://github.com/glencoesoftware/raw2ometiff for more information.
 Output Formatting Options
 =========================
 
-Using any combination of these options will result in a Zarr dataset that is not compatible with raw2ometiff,
-but may be suitable for other applications.
+By default, the output of `bioformats2raw` will be a
+[Zarr dataset](https://zarr.readthedocs.io/en/stable/spec/v2.html) which follows the
+metadata conventions defined by the
+[OME-NGFF 0.4 specification](https://ngff.openmicroscopy.org/0.4/) including the
+[bioformats2raw.layout specification](https://ngff.openmicroscopy.org/0.4/#bf2raw).
+
+Several formatting options can be passed to the converter and will result in a Zarr dataset
+that is not compatible with raw2ometiff and does not strictly follow the OME-NGFF
+specification but may be suitable for other applications.
 
 #### --pyramid-name
 
@@ -212,6 +233,14 @@ The specified dimension order is then reversed when creating Zarr arrays, e.g. `
 Prior to version 0.3.0, N5/Zarr output was placed in a subdirectory (`data.[n5|zarr]`) with a `METADATA.ome.xml` file
 at the same level.  As of 0.3.0 the desired output directory is now a Zarr group and the `METADATA.ome.xml` file is
 placed in a `OME` directory within.  These changes reflect layout version 3.
+
+Prior to version 0.5.0, the plate and series Zarr groups followed the metadata defined in
+the [0.2 version of the OME-NGFF specification](https://ngff.openmicroscopy.org/0.2). As of
+0.5.0, these groups now follow the metadata conventions defined in the
+[0.4 version of the OME-NGFF specification](https://ngff.openmicroscopy.org/0.4). Additionally,
+the layout of the top-level Zarr group is now part of the upstream specification - see
+https://ngff.openmicroscopy.org/0.4/#bf2raw and the `OME` directory containing the
+`METADATA.ome.xml` file is now a Zarr group.
 
 Performance
 ===========
