@@ -95,6 +95,10 @@ distributions {
     }
 }
 
+startScripts {
+  classpath += files('src/dist/lib/config/')
+}
+
 publishing {
     publications {
         bioformats2raw(MavenPublication) {
