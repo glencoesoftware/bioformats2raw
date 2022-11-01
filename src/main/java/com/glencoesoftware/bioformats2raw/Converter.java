@@ -95,9 +95,6 @@ import com.univocity.parsers.csv.CsvParser;
 import com.univocity.parsers.csv.CsvParserSettings;
 
 import ch.qos.logback.classic.Level;
-import me.tongfei.progressbar.DelegatingProgressBarConsumer;
-import me.tongfei.progressbar.ProgressBar;
-import me.tongfei.progressbar.ProgressBarBuilder;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -442,6 +439,8 @@ public class Converter implements Callable<Void> {
   /** Calculated from outputLocation. */
   private volatile Path outputPath;
 
+  private IProgressListener progressListener;
+
   @Override
   public Void call() throws Exception {
     if (printVersion) {
@@ -463,6 +462,10 @@ public class Converter implements Callable<Void> {
     ch.qos.logback.classic.Logger root = (ch.qos.logback.classic.Logger)
         LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
     root.setLevel(Level.toLevel(logLevel));
+
+    if (progressBars) {
+      setProgressListener(new ProgressBarListener(logLevel));
+    }
 
     if (outputLocation.contains("://")) {
 
@@ -1205,6 +1208,7 @@ public class Converter implements Callable<Void> {
         littleEndian ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN);
     }
     writeBytes(zarr, shape, offset, tileBuffer);
+    getProgressListener().notifyChunk(plane, offset[4], offset[3], zOffset);
   }
 
   /**
@@ -1342,24 +1346,7 @@ public class Converter implements Callable<Void> {
       List<CompletableFuture<Void>> futures =
         new ArrayList<CompletableFuture<Void>>();
 
-      final ProgressBar pb;
-      if (progressBars) {
-        ProgressBarBuilder builder = new ProgressBarBuilder()
-          .setInitialMax(tileCount)
-          .setTaskName(String.format("[%d/%d]", series, resolution));
-
-        if (!(logLevel.equals("OFF") ||
-          logLevel.equals("ERROR") ||
-          logLevel.equals("WARN")))
-        {
-          builder.setConsumer(new DelegatingProgressBarConsumer(LOGGER::trace));
-        }
-
-        pb = builder.build();
-      }
-      else {
-        pb = null;
-      }
+      getProgressListener().notifyResolution(series, resolution, tileCount);
 
       try {
         for (int j=0; j<scaledHeight; j+=tileHeight) {
@@ -1408,11 +1395,6 @@ public class Converter implements Callable<Void> {
                         "xx={} yy={} zz={} width={} height={} depth={}",
                         resolution, plane, xx, yy, zz, width, height, depth, t);
                     }
-                    finally {
-                      if (pb != null) {
-                        pb.step();
-                      }
-                    }
                   });
                 }
               }
@@ -1430,9 +1412,7 @@ public class Converter implements Callable<Void> {
 
       }
       finally {
-        if (pb != null) {
-          pb.close();
-        }
+        getProgressListener().notifyDone(series, resolution);
       }
     }
 
@@ -2264,6 +2244,29 @@ public class Converter implements Callable<Void> {
 
   private static Slf4JStopWatch stopWatch() {
     return new Slf4JStopWatch(LOGGER, Slf4JStopWatch.DEBUG_LEVEL);
+  }
+
+  /**
+   * Set a listener for tile processing events.
+   * Intended to be used to show a status bar.
+   *
+   * @param listener a progress event listener
+   */
+  public void setProgressListener(IProgressListener listener) {
+    progressListener = listener;
+  }
+
+  /**
+   * Get the currrent listener for tile processing events.
+   * If no listener was set, a no-op listener is returned.
+   *
+   * @return the current progress listener
+   */
+  public IProgressListener getProgressListener() {
+    if (progressListener == null) {
+      setProgressListener(new NoOpProgressListener());
+    }
+    return progressListener;
   }
 
   /**
