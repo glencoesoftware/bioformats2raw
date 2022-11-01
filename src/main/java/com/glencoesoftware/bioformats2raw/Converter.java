@@ -36,7 +36,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 import loci.common.Constants;
-import loci.common.DataTools;
 import loci.common.image.IImageScaler;
 import loci.common.image.SimpleImageScaler;
 import loci.common.services.DependencyException;
@@ -71,7 +70,6 @@ import ome.xml.model.LightSourceSettings;
 import ome.xml.model.TransmittanceRange;
 import ome.xml.model.enums.DimensionOrder;
 import ome.xml.model.enums.EnumerationException;
-import ome.xml.model.enums.PixelType;
 import ome.xml.model.enums.UnitsLength;
 import ome.xml.model.enums.UnitsTime;
 import ome.xml.model.primitives.Color;
@@ -332,13 +330,6 @@ public class Converter implements Callable<Void> {
           description = "Do not delete .bfmemo files created during conversion"
   )
   private volatile boolean keepMemoFiles = false;
-
-  @Option(
-          names = "--pixel-type",
-          description = "Pixel type to write if input data is " +
-                  " float or double (${COMPLETION-CANDIDATES})"
-  )
-  private PixelType outputPixelType;
 
   @Option(
           names = "--downsample-type",
@@ -643,16 +634,6 @@ public class Converter implements Callable<Void> {
 
           if (dimensionOrder != null) {
             meta.setPixelsDimensionOrder(dimensionOrder, s);
-          }
-
-          PixelType type = meta.getPixelsType(s);
-          int bfType =
-            getRealType(FormatTools.pixelTypeFromString(type.getValue()));
-          String realType = FormatTools.getPixelTypeString(bfType);
-          if (!type.getValue().equals(realType)) {
-            meta.setPixelsType(PixelType.fromString(realType), s);
-            meta.setPixelsSignificantBits(new PositiveInteger(
-              FormatTools.getBytesPerPixel(bfType) * 8), s);
           }
 
           if (!noHCS) {
@@ -1074,9 +1055,7 @@ public class Converter implements Callable<Void> {
     if (resolution == 0) {
       reader = readers.take();
       try {
-        return changePixelType(
-          reader.openBytes(plane, xx, yy, width, height),
-          reader.getPixelType(), reader.isLittleEndian());
+        return reader.openBytes(plane, xx, yy, width, height);
       }
       finally {
         readers.put(reader);
@@ -1262,7 +1241,7 @@ public class Converter implements Callable<Void> {
       sizeC = workingReader.getSizeC();
       readerDimensionOrder = workingReader.getDimensionOrder();
       imageCount = workingReader.getImageCount();
-      pixelType = getRealType(workingReader.getPixelType());
+      pixelType = workingReader.getPixelType();
     }
     finally {
       readers.put(workingReader);
@@ -1931,87 +1910,6 @@ public class Converter implements Callable<Void> {
     catch (ServiceException se) {
       throw new FormatException(se);
     }
-  }
-
-  /**
-   * Get the actual pixel type to write based upon the given input type
-   * and command line options.  Input and output pixel types are Bio-Formats
-   * types as defined in FormatTools.
-   *
-   * Changing the pixel type during export is only supported when the input
-   * type is float or double.
-   *
-   * @param srcPixelType pixel type of the input data
-   * @return pixel type of the output data
-   */
-  private int getRealType(int srcPixelType) {
-    if (outputPixelType == null) {
-      return srcPixelType;
-    }
-    int bfPixelType =
-      FormatTools.pixelTypeFromString(outputPixelType.getValue());
-    if (bfPixelType == srcPixelType ||
-      (srcPixelType != FormatTools.FLOAT && srcPixelType != FormatTools.DOUBLE))
-    {
-      return srcPixelType;
-    }
-    return bfPixelType;
-  }
-
-  /**
-   * Change the pixel type of the input tile as appropriate.
-   *
-   * @param tile input pixel data
-   * @param srcPixelType pixel type of the input data
-   * @param littleEndian true if tile bytes have little-endian ordering
-   * @return pixel data with the correct output pixel type
-   */
-  private byte[] changePixelType(byte[] tile, int srcPixelType,
-    boolean littleEndian)
-  {
-    if (outputPixelType == null) {
-      return tile;
-    }
-    int bfPixelType =
-      FormatTools.pixelTypeFromString(outputPixelType.getValue());
-
-    if (bfPixelType == srcPixelType ||
-      (srcPixelType != FormatTools.FLOAT && srcPixelType != FormatTools.DOUBLE))
-    {
-      return tile;
-    }
-
-    int bpp = FormatTools.getBytesPerPixel(bfPixelType);
-    int srcBpp = FormatTools.getBytesPerPixel(srcPixelType);
-    byte[] output = new byte[bpp * (tile.length / srcBpp)];
-
-    double[] range = getRange(bfPixelType);
-    if (range == null) {
-      throw new IllegalArgumentException(
-        "Cannot convert to " + outputPixelType);
-    }
-
-    if (srcPixelType == FormatTools.FLOAT) {
-      float[] pixels = DataTools.normalizeFloats(
-        (float[]) DataTools.makeDataArray(tile, 4, true, littleEndian));
-
-      for (int pixel=0; pixel<pixels.length; pixel++) {
-        long v = (long) ((pixels[pixel] * (range[1] - range[0])) + range[0]);
-        DataTools.unpackBytes(v, output, pixel * bpp, bpp, littleEndian);
-      }
-
-    }
-    else if (srcPixelType == FormatTools.DOUBLE) {
-      double[] pixels = DataTools.normalizeDoubles(
-        (double[]) DataTools.makeDataArray(tile, 8, true, littleEndian));
-
-      for (int pixel=0; pixel<pixels.length; pixel++) {
-        long v = (long) ((pixels[pixel] * (range[1] - range[0])) + range[0]);
-        DataTools.unpackBytes(v, output, pixel * bpp, bpp, littleEndian);
-      }
-    }
-
-    return output;
   }
 
   /**
