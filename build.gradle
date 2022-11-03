@@ -96,6 +96,14 @@ distributions {
 }
 
 startScripts {
+  // placing logback.xml somewhere under src/dist/lib/ keeps it out of
+  // bioformats2raw-*.jar but automatically includes it in the distribution zip
+  // the directory containing logback.xml must be explicitly added to the
+  // startup scripts' classpath, otherwise it will not be detected
+
+  // a subdirectory of 'src/dist/lib/' (not just 'src/dist/') is necessary,
+  // likely due to https://issues.gradle.org/browse/GRADLE-2991
+  // see also discussion in https://github.com/glencoesoftware/bioformats2raw/pull/169
   classpath += files('src/dist/lib/config/')
 }
 
