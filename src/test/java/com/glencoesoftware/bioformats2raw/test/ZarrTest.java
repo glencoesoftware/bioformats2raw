@@ -1098,26 +1098,29 @@ public class ZarrTest {
     input = getTestFile("colors.ome.xml");
     assertTool();
 
-    String[] names = {"orange", "green", "blue"};
-    String[] colors = {"FF7F00", "00FF00", "0000FF"};
+    String[][] names = {{"orange"}, {"green", "blue"}, {"blue"}};
+    String[][] colors = {{"FF7F00"}, {"00FF00", "0000FF"}, {"808080"}};
 
-    for (int i=0; i<3; i++) {
+    for (int i=0; i<names.length; i++) {
       ZarrGroup z =
         ZarrGroup.open(output.resolve(String.valueOf(i)).toString());
       Map<String, Object> omero =
             (Map<String, Object>) z.getAttributes().get("omero");
 
       Map<String, Object> rdefs = (Map<String, Object>) omero.get("rdefs");
-      assertEquals("greyscale", rdefs.get("model"));
+      assertEquals(
+        names[i].length == 1 ? "greyscale" : "color", rdefs.get("model"));
 
       List<Map<String, Object>> channels =
             (List<Map<String, Object>>) omero.get("channels");
-      assertEquals(1, channels.size());
+      assertEquals(names[i].length, channels.size());
 
-      Map<String, Object> channel = channels.get(0);
-      assertEquals(names[i], channel.get("label"));
-      assertEquals(colors[i], channel.get("color"));
-      assertEquals(true, channel.get("active"));
+      for (int c=0; c<names[i].length; c++) {
+        Map<String, Object> channel = channels.get(c);
+        assertEquals(names[i][c], channel.get("label"));
+        assertEquals(colors[i][c], channel.get("color"));
+        assertEquals(true, channel.get("active"));
+      }
     }
   }
 
