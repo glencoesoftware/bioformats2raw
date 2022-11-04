@@ -12,13 +12,43 @@ import java.util.EventListener;
 public interface IProgressListener extends EventListener {
 
   /**
-   * Indicates the beginning of processing a particular resolution.
+   * Indicates the beginning of processing a particular series.
    *
    * @param series the series index being processed
+   */
+  void notifySeriesStart(int series);
+
+  /**
+   * Indicates the end of processing a particular series.
+   *
+   * @param series the series index being processed
+   */
+  void notifySeriesEnd(int series);
+
+  /**
+   * Indicates the beginning of processing a particular resolution.
+   *
    * @param resolution the resolution index being processed
    * @param tileCount the total number of tiles in this resolution
    */
-  void notifyResolution(int series, int resolution, int tileCount);
+  void notifyResolutionStart(int resolution, int tileCount);
+
+  /**
+   * Indicates the end of processing a particular resolution.
+   *
+   * @param resolution the resolution index being processed
+   */
+  void notifyResolutionEnd(int resolution);
+
+  /**
+   * Indicates that the given chunk is about to be processed.
+   *
+   * @param plane plane index
+   * @param xx X coordinate
+   * @param yy Y coordinate
+   * @param zz Z coordinate
+   */
+  void notifyChunkStart(int plane, int xx, int yy, int zz);
 
   /**
    * Indicates that the given chunk has been processed.
@@ -28,14 +58,6 @@ public interface IProgressListener extends EventListener {
    * @param yy Y coordinate
    * @param zz Z coordinate
    */
-  void notifyChunk(int plane, int xx, int yy, int zz);
-
-  /**
-   * Indicates the end of processing a particular resolution.
-   *
-   * @param series the series index being processed
-   * @param resolution the resolution index being processed
-   */
-  void notifyDone(int series, int resolution);
+  void notifyChunkEnd(int plane, int xx, int yy, int zz);
 
 }

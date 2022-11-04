@@ -1177,6 +1177,8 @@ public class Converter implements Callable<Void> {
     finally {
       readers.put(reader);
     }
+    getProgressListener().notifyChunkStart(
+      plane, offset[4], offset[3], zOffset);
     Slf4JStopWatch t0 = new Slf4JStopWatch("getChunk");
     try {
       for (int z = zOffset; z < zOffset + zShape; z++) {
@@ -1208,7 +1210,7 @@ public class Converter implements Callable<Void> {
         littleEndian ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN);
     }
     writeBytes(zarr, shape, offset, tileBuffer);
-    getProgressListener().notifyChunk(plane, offset[4], offset[3], zOffset);
+    getProgressListener().notifyChunkEnd(plane, offset[4], offset[3], zOffset);
   }
 
   /**
@@ -1225,6 +1227,7 @@ public class Converter implements Callable<Void> {
     throws FormatException, IOException, InterruptedException,
            EnumerationException
   {
+    getProgressListener().notifySeriesStart(series);
     IFormatReader workingReader = readers.take();
     int resolutions = 1;
     int sizeX;
@@ -1346,7 +1349,7 @@ public class Converter implements Callable<Void> {
       List<CompletableFuture<Void>> futures =
         new ArrayList<CompletableFuture<Void>>();
 
-      getProgressListener().notifyResolution(series, resolution, tileCount);
+      getProgressListener().notifyResolutionStart(resolution, tileCount);
 
       try {
         for (int j=0; j<scaledHeight; j+=tileHeight) {
@@ -1412,7 +1415,7 @@ public class Converter implements Callable<Void> {
 
       }
       finally {
-        getProgressListener().notifyDone(series, resolution);
+        getProgressListener().notifyResolutionEnd(resolution);
       }
     }
 
@@ -1420,6 +1423,7 @@ public class Converter implements Callable<Void> {
     // do this after pixels are written, otherwise
     // min/max calculation won't have been performed
     setSeriesLevelMetadata(series, resolutions);
+    getProgressListener().notifySeriesEnd(series);
   }
 
   private void saveHCSMetadata(IMetadata meta) throws IOException {

@@ -10,15 +10,28 @@ package com.glencoesoftware.bioformats2raw;
 public class NoOpProgressListener implements IProgressListener {
 
   @Override
-  public void notifyResolution(int series, int resolution, int tileCount) {
+  public void notifySeriesStart(int series) {
   }
 
   @Override
-  public void notifyChunk(int plane, int xx, int yy, int zz) {
+  public void notifySeriesEnd(int series) {
   }
 
   @Override
-  public void notifyDone(int series, int resolution) {
+  public void notifyResolutionStart(int resolution, int tileCount) {
   }
+
+  @Override
+  public void notifyResolutionEnd(int resolution) {
+  }
+
+  @Override
+  public void notifyChunkStart(int plane, int xx, int yy, int zz) {
+  }
+
+  @Override
+  public void notifyChunkEnd(int plane, int xx, int yy, int zz) {
+  }
+
 
 }

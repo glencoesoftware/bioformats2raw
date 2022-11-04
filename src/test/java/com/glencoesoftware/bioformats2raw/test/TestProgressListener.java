@@ -15,25 +15,40 @@ import java.util.List;
 public class TestProgressListener implements IProgressListener {
 
   private List<Integer> finishedResolutions = new ArrayList<Integer>();
+  private int startedTiles = 0;
   private int completedTiles = 0;
   private int expectedTileCount = 0;
 
   @Override
-  public void notifyResolution(int series, int resolution, int tileCount) {
+  public void notifySeriesStart(int series) {
+  }
+
+  @Override
+  public void notifySeriesEnd(int series) {
+  }
+
+  @Override
+  public void notifyResolutionStart(int resolution, int tileCount) {
     expectedTileCount = tileCount;
   }
 
   @Override
-  public void notifyChunk(int plane, int xx, int yy, int zz) {
+  public void notifyChunkStart(int plane, int xx, int yy, int zz) {
+    startedTiles++;
+  }
+
+  @Override
+  public void notifyChunkEnd(int plane, int xx, int yy, int zz) {
     completedTiles++;
   }
 
   @Override
-  public void notifyDone(int series, int resolution) {
-    if (completedTiles == expectedTileCount) {
+  public void notifyResolutionEnd(int resolution) {
+    if (startedTiles == completedTiles && completedTiles == expectedTileCount) {
       finishedResolutions.add(completedTiles);
     }
     completedTiles = 0;
+    startedTiles = 0;
   }
 
   /**

@@ -21,6 +21,7 @@ public class ProgressBarListener implements IProgressListener {
 
   private String logLevel;
   private ProgressBar pb;
+  private int currentSeries = -1;
 
   /**
    * Create a new progress listener that displays a progress bar.
@@ -31,11 +32,21 @@ public class ProgressBarListener implements IProgressListener {
     logLevel = level;
   }
 
+
   @Override
-  public void notifyResolution(int series, int resolution, int tileCount) {
+  public void notifySeriesStart(int series) {
+    currentSeries = series;
+  }
+
+  @Override
+  public void notifySeriesEnd(int series) {
+  }
+
+  @Override
+  public void notifyResolutionStart(int resolution, int tileCount) {
     ProgressBarBuilder builder = new ProgressBarBuilder()
       .setInitialMax(tileCount)
-      .setTaskName(String.format("[%d/%d]", series, resolution));
+      .setTaskName(String.format("[%d/%d]", currentSeries, resolution));
 
     if (!(logLevel.equals("OFF") ||
       logLevel.equals("ERROR") ||
@@ -47,16 +58,22 @@ public class ProgressBarListener implements IProgressListener {
   }
 
   @Override
-  public void notifyChunk(int plane, int xx, int yy, int zz) {
+  public void notifyChunkStart(int plane, int xx, int yy, int zz) {
+    // intentional no-op
+  }
+
+  @Override
+  public void notifyChunkEnd(int plane, int xx, int yy, int zz) {
     if (pb != null) {
       pb.step();
     }
   }
 
   @Override
-  public void notifyDone(int series, int resolution) {
+  public void notifyResolutionEnd(int resolution) {
     if (pb != null) {
       pb.close();
+      pb = null;
     }
   }
 
