@@ -46,12 +46,24 @@ Development Installation
 
     ./gradlew tasks
 
+Configuring Logging
+===================
+
+Logging is provided using the logback library. The `logback.xml` file in `src/dist/lib/config/` provides a default configuration for the command line tool.
+In release and snapshot artifacts, `logback.xml` is in `lib/config/`.
+You can configure logging by editing the provided `logback.xml` or by specifying the path to a different file::
+
+JAVA_OPTS="-Dlogback.configurationFile=/path/to/external/logback.xml" \
+    bioformats2raw ...
+
 Eclipse Configuration
 =====================
 
 1. Run the Gradle Eclipse task:
 
     ./gradlew eclipse
+
+2. Add the logback configuration in `src/dist/lib/config/` to your CLASSPATH.
 
 Usage
 =====
