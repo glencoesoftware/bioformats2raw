@@ -34,12 +34,16 @@ public class TestProgressListener implements IProgressListener {
 
   @Override
   public void notifyChunkStart(int plane, int xx, int yy, int zz) {
-    startedTiles++;
+    synchronized (this) {
+      startedTiles++;
+    }
   }
 
   @Override
   public void notifyChunkEnd(int plane, int xx, int yy, int zz) {
-    completedTiles++;
+    synchronized (this) {
+      completedTiles++;
+    }
   }
 
   @Override
