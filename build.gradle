@@ -47,7 +47,7 @@ dependencies {
     implementation 'javax.xml.bind:jaxb-api:2.3.0'
     implementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.3.14'
     implementation group: 'ch.qos.logback', name: 'logback-core', version: '1.3.14'
-
+    implementation 'com.google.cloud:google-cloud-nio:0.123.10'
 
     implementation 'org.openpnp:opencv:4.7.0-0'
     implementation 'me.tongfei:progressbar:0.9.0'

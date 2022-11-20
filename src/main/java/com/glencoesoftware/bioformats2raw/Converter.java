@@ -128,7 +128,7 @@ public class Converter implements Callable<Integer> {
   private volatile Path inputPath;
   private volatile String outputLocation;
 
-  private Map<String, String> outputOptions;
+  private Map<String, String> outputOptions = new HashMap<String, String>();
   private volatile Integer pyramidResolutions;
   private volatile List<Integer> seriesList;
 
