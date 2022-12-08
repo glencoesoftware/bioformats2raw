@@ -1643,8 +1643,17 @@ public class Converter implements Callable<Void> {
     for (int r = 0; r < resolutions; r++) {
       resolutionString = String.format(
               scaleFormatString, getScaleFormatStringArgs(series, r));
-      String lastPath = resolutionString.substring(
-              resolutionString.lastIndexOf('/') + 1);
+
+      // calculate the relative path to this resolution
+      String lastPath = resolutionString;
+      int lastFileSeparator = lastPath.lastIndexOf('/');
+      if (lastFileSeparator == lastPath.length() - 1) {
+        // if there is a trailing slash, remove it and recalculate
+        // the last file separator index
+        lastPath = lastPath.substring(0, lastFileSeparator);
+        lastFileSeparator = lastPath.lastIndexOf('/');
+      }
+      lastPath = lastPath.substring(lastFileSeparator + 1);
 
       List<Map<String, Object>> transforms =
         new ArrayList<Map<String, Object>>();
