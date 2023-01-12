@@ -96,6 +96,12 @@ public class PyramidTiffReader extends BaseTiffReader {
       {
         return false;
       }
+      if (lastIFD.getSamplesPerPixel() != ifd.getSamplesPerPixel()) {
+        return false;
+      }
+      if (lastIFD.getPixelType() != ifd.getPixelType()) {
+        return false;
+      }
 
       int powerOfTwo = 0;
       long width = ifd.getImageWidth();
