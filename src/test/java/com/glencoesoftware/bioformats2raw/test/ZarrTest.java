@@ -235,6 +235,14 @@ public class ZarrTest {
     List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
             series0.getAttributes().get("multiscales");
     assertEquals(1, multiscales.size());
+
+    Map<String, Object> multiscale = multiscales.get(0);
+    List<Map<String, Object>> datasets =
+            (List<Map<String, Object>>) multiscale.get("datasets");
+    assertTrue(datasets.size() > 0);
+    for (int i=0; i<datasets.size(); i++) {
+      assertEquals(String.valueOf(i), datasets.get(i).get("path"));
+    }
   }
 
   /**
