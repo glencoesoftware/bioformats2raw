@@ -88,7 +88,8 @@ Alternatively, the `--resolutions` options can be passed to specify the exact nu
 
 
 Maximum tile dimensions can be configured with the `--tile_width` and `--tile_height` options.  Defaults can be viewed with
-`bioformats2raw --help`.
+`bioformats2raw --help`. Be mindful of the downstream workflow when selecting a tile size other than the default.
+A smaller than default tile size is rarely recommended.
 
 If the input file has multiple series, a subset of the series can be converted by specifying a comma-separated list of indexes:
 
@@ -268,7 +269,7 @@ On systems with significant I/O bandwidth, particularly SATA or
 NVMe based storage, you may find sharply diminishing returns with high
 worker counts.  There are significant performance gains to be had utilizing
 larger tile sizes but be mindful of the consequences on the downstream
-workflow.
+workflow. Smaller tile sizes than the default are rarely recommended.
 
 The worker count defaults to the number of detected CPUs.  This may or may not be appropriate for the chosen input data.
 If reading a single tile from the input data requires a lot of memory, decreasing the worker count will be necessary
