@@ -60,6 +60,11 @@ Alternatively you can use the `--debug` flag, optionally writing the stdout to a
 
     bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --debug > bf2raw.log
 
+The `--log-level` option takes an [slf4j logging level](https://www.slf4j.org/faq.html#fatal) for additional simple logging configuration.
+`--log-level DEBUG` is equivalent to `--debug`. For even more verbose logging::
+
+    bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --log-level TRACE
+
 Eclipse Configuration
 =====================
 
@@ -258,6 +263,11 @@ the layout of the top-level Zarr group is now part of the upstream specification
 https://ngff.openmicroscopy.org/0.4/#bf2raw and the `OME` directory containing the
 `METADATA.ome.xml` file is now a Zarr group.
 
+Versions 0.5.0 and later write [OMERO rendering metadata](https://ngff.openmicroscopy.org/0.4/#omero-md)
+by default. This includes calculating the minimum and maximum pixel values for the entire image.
+We recommend keeping this metadata for maximum compatibility with downstream applications, but it can
+be omitted by using the `--no-minmax` option.
+
 Performance
 ===========
 
@@ -283,6 +293,19 @@ This is not a common case, but is a known issue with Imaris HDF data in particul
 
 In general, expect to need to tune the above settings and measure
 relative performance.
+
+Metadata caching
+================
+
+During conversion, a temporary `.*.bfmemo` file will be created. By default, this file is in the same directory as the input data
+and will be removed after the conversion finishes. The location of the `.*.bfmemo` file can be configured using the `--memo-directory` option::
+
+    bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --memo-directory /tmp/
+
+This is particularly helpful if you do not have write permissions in the input data directory.
+
+As of version 0.5.0-rc1, `.*.bfmemo` files are deleted at the end of conversion by default. We do not recommend keeping these files for normal
+conversions, but if they are needed for troubleshooting then the `--keep-memo-files` option can be used.
 
 License
 =======
