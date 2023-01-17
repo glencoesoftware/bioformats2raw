@@ -56,7 +56,7 @@ You can configure logging by editing the provided `logback.xml` or by specifying
     JAVA_OPTS="-Dlogback.configurationFile=/path/to/external/logback.xml" \
     bioformats2raw ...
 
-Alternatively you can use the `debug` flag, optionally writing the stdout to a file:
+Alternatively you can use the `--debug` flag, optionally writing the stdout to a file:
 
     bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --debug > bf2raw.log
 
