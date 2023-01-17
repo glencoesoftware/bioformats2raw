@@ -304,7 +304,7 @@ and will be removed after the conversion finishes. The location of the `.*.bfmem
 
 This is particularly helpful if you do not have write permissions in the input data directory.
 
-As of version 0.5.0-rc1, `.*.bfmemo` files are deleted at the end of conversion by default. We do not recommend keeping these files for normal
+As of version 0.5.0, `.*.bfmemo` files are deleted at the end of conversion by default. We do not recommend keeping these files for normal
 conversions, but if they are needed for troubleshooting then the `--keep-memo-files` option can be used.
 
 License
