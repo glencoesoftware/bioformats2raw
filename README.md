@@ -53,8 +53,12 @@ Logging is provided using the logback library. The `logback.xml` file in `src/di
 In release and snapshot artifacts, `logback.xml` is in `lib/config/`.
 You can configure logging by editing the provided `logback.xml` or by specifying the path to a different file::
 
-JAVA_OPTS="-Dlogback.configurationFile=/path/to/external/logback.xml" \
+    JAVA_OPTS="-Dlogback.configurationFile=/path/to/external/logback.xml" \
     bioformats2raw ...
+
+Alternatively you can use the `--debug` flag, optionally writing the stdout to a file:
+
+    bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --debug > bf2raw.log
 
 Eclipse Configuration
 =====================
