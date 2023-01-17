@@ -51,7 +51,7 @@ Configuring Logging
 
 Logging is provided using the logback library. The `logback.xml` file in `src/dist/lib/config/` provides a default configuration for the command line tool.
 In release and snapshot artifacts, `logback.xml` is in `lib/config/`.
-You can configure logging by editing the provided `logback.xml` or by specifying the path to a different file::
+You can configure logging by editing the provided `logback.xml` or by specifying the path to a different file:
 
     JAVA_OPTS="-Dlogback.configurationFile=/path/to/external/logback.xml" \
     bioformats2raw ...
@@ -61,7 +61,7 @@ Alternatively you can use the `--debug` flag, optionally writing the stdout to a
     bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --debug > bf2raw.log
 
 The `--log-level` option takes an [slf4j logging level](https://www.slf4j.org/faq.html#fatal) for additional simple logging configuration.
-`--log-level DEBUG` is equivalent to `--debug`. For even more verbose logging::
+`--log-level DEBUG` is equivalent to `--debug`. For even more verbose logging:
 
     bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --log-level TRACE
 
@@ -298,7 +298,7 @@ Metadata caching
 ================
 
 During conversion, a temporary `.*.bfmemo` file will be created. By default, this file is in the same directory as the input data
-and will be removed after the conversion finishes. The location of the `.*.bfmemo` file can be configured using the `--memo-directory` option::
+and will be removed after the conversion finishes. The location of the `.*.bfmemo` file can be configured using the `--memo-directory` option:
 
     bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --memo-directory /tmp/
 
