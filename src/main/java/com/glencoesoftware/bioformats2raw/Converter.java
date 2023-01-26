@@ -175,13 +175,19 @@ public class Converter implements Callable<Void> {
 
   @Option(
     names = {"-w", "--tile_width"},
-    description = "Maximum tile width to read (default: ${DEFAULT-VALUE})"
+    description = "Maximum tile width (default: ${DEFAULT-VALUE}). " +
+      "This is both the chunk size (in X) when writing Zarr and the tile " +
+      "size used for reading from the original data. Changing the tile " +
+      "size may have performance implications."
   )
   private volatile int tileWidth = 1024;
 
   @Option(
     names = {"-h", "--tile_height"},
-    description = "Maximum tile height to read (default: ${DEFAULT-VALUE})"
+    description = "Maximum tile height (default: ${DEFAULT-VALUE}). " +
+      "This is both the chunk size (in Y) when writing Zarr and the tile " +
+      "size used for reading from the original data. Changing the tile " +
+      "size may have performance implications."
   )
   private volatile int tileHeight = 1024;
 
@@ -447,6 +453,11 @@ public class Converter implements Callable<Void> {
 
     if (fillValue != null && (fillValue < 0 || fillValue > 255)) {
       throw new IllegalArgumentException("Invalid fill value: " + fillValue);
+    }
+    if (tileWidth != 1024 || tileHeight != 1024) {
+      LOGGER.warn("Non-default tile size: {} x {}. " +
+        "This may cause performance issues in some applications.",
+        tileWidth, tileHeight);
     }
 
     OpenCVTools.loadOpenCV();
