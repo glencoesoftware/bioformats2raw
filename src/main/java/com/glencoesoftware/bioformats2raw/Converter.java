@@ -48,6 +48,7 @@ import loci.formats.FormatTools;
 import loci.formats.IFormatReader;
 import loci.formats.ImageReader;
 import loci.formats.Memoizer;
+import loci.formats.MetadataTools;
 import loci.formats.MinMaxCalculator;
 import loci.formats.MissingLibraryException;
 import loci.formats.in.DynamicMetadataOptions;
@@ -67,6 +68,7 @@ import ome.xml.model.Laser;
 import ome.xml.model.LightPath;
 import ome.xml.model.LightSource;
 import ome.xml.model.LightSourceSettings;
+import ome.xml.model.MapPair;
 import ome.xml.model.TransmittanceRange;
 import ome.xml.model.enums.DimensionOrder;
 import ome.xml.model.enums.EnumerationException;
@@ -107,6 +109,9 @@ import ucar.ma2.InvalidRangeException;
 public class Converter implements Callable<Void> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(Converter.class);
+
+  public static final String PROVENANCE_NAMESPACE =
+    "glencoesoftware.com/ngff/provenance";
 
   /**
    * Relative path to OME-XML metadata file.
@@ -439,13 +444,20 @@ public class Converter implements Callable<Void> {
   /** Calculated from outputLocation. */
   private volatile Path outputPath;
 
+  /**
+   * @return the version of bioformats2raw, or "development" if
+   *         a version number cannot be read
+   */
+  public String getVersion() {
+    return Optional.ofNullable(
+        this.getClass().getPackage().getImplementationVersion()
+        ).orElse("development");
+  }
+
   @Override
   public Void call() throws Exception {
     if (printVersion) {
-      String version = Optional.ofNullable(
-        this.getClass().getPackage().getImplementationVersion()
-        ).orElse("development");
-      System.out.println("Version = " + version);
+      System.out.println("Version = " + getVersion());
       System.out.println("Bio-Formats version = " + FormatTools.VERSION);
       System.out.println("NGFF specification version = " + NGFF_VERSION);
       return null;
@@ -660,6 +672,29 @@ public class Converter implements Callable<Void> {
           for (int s=0; s<meta.getImageCount(); s++) {
             service.addMetadataOnly((OMEXMLMetadata) meta, s, s == 0);
           }
+
+          // add an annotation indicating the original file path
+          // and bioformats2raw version
+
+          List<MapPair> annotation = new ArrayList<MapPair>();
+          annotation.add(new MapPair("input_path", inputPath.toString()));
+          annotation.add(new MapPair("bioformats2raw", getVersion()));
+          annotation.add(new MapPair("bioformats", FormatTools.VERSION));
+
+          int annotationIndex = 0;
+          try {
+            annotationIndex = meta.getMapAnnotationCount();
+          }
+          catch (NullPointerException e) {
+            // expected when there are no StructuredAnnotations
+          }
+          String annotationID =
+            MetadataTools.createLSID(
+              "Annotation:bioformats2raw", annotationIndex);
+          meta.setMapAnnotationID(annotationID, annotationIndex);
+          meta.setMapAnnotationNamespace(PROVENANCE_NAMESPACE, annotationIndex);
+          meta.setMapAnnotationValue(annotation, annotationIndex);
+
           String xml = service.getOMEXML(meta);
 
           // write the original OME-XML to a file

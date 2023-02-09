@@ -36,6 +36,8 @@ import loci.formats.Memoizer;
 import loci.formats.in.FakeReader;
 import loci.formats.ome.OMEXMLMetadata;
 import loci.formats.services.OMEXMLService;
+import ome.xml.model.MapAnnotation;
+import ome.xml.model.MapPair;
 import ome.xml.model.OME;
 import ome.xml.model.Pixels;
 import picocli.CommandLine;
@@ -1980,6 +1982,15 @@ public class ZarrTest {
     OMEXMLService xmlService = sf.getInstance(OMEXMLService.class);
     String omexml = new String(Files.readAllBytes(xml), StandardCharsets.UTF_8);
     assertTrue(xmlService.validateOMEXML(omexml));
-    return (OME) xmlService.createOMEXMLRoot(omexml);
+    OME root = (OME) xmlService.createOMEXMLRoot(omexml);
+    int mapAnnCount = root.getStructuredAnnotations().sizeOfMapAnnotationList();
+    assertTrue(mapAnnCount >= 1);
+    MapAnnotation lastMapAnn =
+      root.getStructuredAnnotations().getMapAnnotation(mapAnnCount - 1);
+    assertEquals(lastMapAnn.getNamespace(), Converter.PROVENANCE_NAMESPACE);
+    List<MapPair> lastMapValue = lastMapAnn.getValue();
+    assertEquals(lastMapValue.size(), 3);
+
+    return root;
   }
 }
