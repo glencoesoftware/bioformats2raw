@@ -1991,6 +1991,8 @@ public class ZarrTest {
     List<MapPair> lastMapValue = lastMapAnn.getValue();
     assertEquals(lastMapValue.size(), 3);
 
+    assertEquals(root.getCreator(), "bioformats2raw " + converter.getVersion());
+
     return root;
   }
 }

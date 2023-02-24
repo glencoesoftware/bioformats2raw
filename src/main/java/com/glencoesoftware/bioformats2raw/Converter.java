@@ -695,6 +695,12 @@ public class Converter implements Callable<Void> {
           meta.setMapAnnotationNamespace(PROVENANCE_NAMESPACE, annotationIndex);
           meta.setMapAnnotationValue(annotation, annotationIndex);
 
+          if (meta.getCreator() != null) {
+            LOGGER.warn("Overwriting OME-XML Creator attribute: {}",
+              meta.getCreator());
+          }
+          meta.setCreator("bioformats2raw " + getVersion());
+
           String xml = service.getOMEXML(meta);
 
           // write the original OME-XML to a file
