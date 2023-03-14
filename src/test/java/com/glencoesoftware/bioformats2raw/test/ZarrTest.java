@@ -1879,7 +1879,7 @@ public class ZarrTest {
     input = fake("series", "2", "sizeX", "4096", "sizeY", "4096");
 
     Converter apiConverter = new Converter();
-    apiConverter.setInputPath(input);
+    apiConverter.setInputPath(input.toString());
     apiConverter.setOutputPath(output.toString());
     apiConverter.setSeriesList(Collections.singletonList(1));
     apiConverter.setTileWidth(128);

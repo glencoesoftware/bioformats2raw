@@ -221,8 +221,9 @@ public class Converter implements Callable<Void> {
     arity = "1",
     description = "file to convert"
   )
-  public void setInputPath(Path input) {
-    inputPath = input;
+  public void setInputPath(String input) {
+    // this could be expanded later to support files not on disk
+    inputPath = Paths.get(input);
   }
 
   /**
@@ -786,8 +787,8 @@ public class Converter implements Callable<Void> {
   /**
    * @return path to input data
    */
-  public Path getInputPath() {
-    return inputPath;
+  public String getInputPath() {
+    return inputPath.toString();
   }
 
   /**
