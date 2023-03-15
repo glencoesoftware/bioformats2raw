@@ -104,7 +104,7 @@ import ucar.ma2.InvalidRangeException;
 /**
  * Command line tool for converting whole slide imaging files to Zarr.
  */
-public class Converter implements Callable<Void> {
+public class Converter implements Callable<Integer> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(Converter.class);
 
@@ -1027,8 +1027,13 @@ public class Converter implements Callable<Void> {
 
   // Conversion methods
 
+  /**
+   * @return 0 if conversion completed without error,
+   *         -1 if conversion was not performed
+   * @throws Exception on most conversion errors
+   */
   @Override
-  public Void call() throws Exception {
+  public Integer call() throws Exception {
     if (printVersion) {
       String version = Optional.ofNullable(
         this.getClass().getPackage().getImplementationVersion()
@@ -1036,7 +1041,7 @@ public class Converter implements Callable<Void> {
       System.out.println("Version = " + version);
       System.out.println("Bio-Formats version = " + FormatTools.VERSION);
       System.out.println("NGFF specification version = " + NGFF_VERSION);
-      return null;
+      return -1;
     }
 
     if (inputPath == null) {
@@ -1109,7 +1114,7 @@ public class Converter implements Callable<Void> {
     executor = new ThreadPoolExecutor(
       maxWorkers, maxWorkers, 0L, TimeUnit.MILLISECONDS, queue);
     convert();
-    return null;
+    return 0;
   }
 
   /**
