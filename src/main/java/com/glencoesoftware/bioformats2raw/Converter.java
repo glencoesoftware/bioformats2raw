@@ -319,6 +319,9 @@ public class Converter implements Callable<Integer> {
     if (width > 0) {
       tileWidth = width;
     }
+    else {
+      LOGGER.warn("Ignoring invalid tile width: {}", width);
+    }
   }
 
   /**
@@ -338,6 +341,9 @@ public class Converter implements Callable<Integer> {
     if (height > 0) {
       tileHeight = height;
     }
+    else {
+      LOGGER.warn("Ignoring invalid tile height: {}", height);
+    }
   }
 
   /**
@@ -353,6 +359,9 @@ public class Converter implements Callable<Integer> {
   public void setChunkDepth(int depth) {
     if (depth > 0) {
       chunkDepth = depth;
+    }
+    else {
+      LOGGER.warn("Ignoring invalid chunk depth: {}", depth);
     }
   }
 
@@ -419,6 +428,9 @@ public class Converter implements Callable<Integer> {
   public void setMaxWorkers(int workers) {
     if (workers > 0) {
       maxWorkers = workers;
+    }
+    else {
+      LOGGER.warn("Ignoring invalid worker count: {}", workers);
     }
   }
 
@@ -654,6 +666,9 @@ public class Converter implements Callable<Integer> {
     if (tileFill == null || (tileFill >= 0 && tileFill <= 255)) {
       fillValue = tileFill;
     }
+    else {
+      LOGGER.warn("Ignoring invalid fill value (must be 0-255): {}", tileFill);
+    }
   }
 
   /**
@@ -761,6 +776,9 @@ public class Converter implements Callable<Integer> {
   public void setMinImageSize(int min) {
     if (min > 0) {
       minSize = min;
+    }
+    else {
+      LOGGER.warn("Ignoring invalid minimum image size: {}", min);
     }
   }
 
