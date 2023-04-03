@@ -104,7 +104,7 @@ import ucar.ma2.InvalidRangeException;
 /**
  * Command line tool for converting whole slide imaging files to Zarr.
  */
-public class Converter implements Callable<Void> {
+public class Converter implements Callable<Integer> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(Converter.class);
 
@@ -128,282 +128,54 @@ public class Converter implements Callable<Void> {
   /** NGFF specification version.*/
   public static final String NGFF_VERSION = "0.4";
 
-  @Parameters(
-    index = "0",
-    arity = "1",
-    description = "file to convert"
-  )
   private volatile Path inputPath;
-
-  @Parameters(
-    index = "1",
-    arity = "1",
-    description = "path to the output pyramid directory. " +
-      "The given path can also be a URI (containing ://) " +
-      "which will activate **experimental** support for " +
-      "Filesystems. For example, if the output path given " +
-      "is 's3://my-bucket/some-path' *and* you have an "+
-      "S3FileSystem implementation in your classpath, then " +
-      "all files will be written to S3."
-  )
   private volatile String outputLocation;
 
-  @Option(
-    names = "--output-options",
-    split = "\\|",
-    description = "|-separated list of key-value pairs " +
-      "to be used as an additional argument to Filesystem " +
-      "implementations if used. For example, " +
-      "--output-options=s3fs_path_style_access=true|... " +
-      "might be useful for connecting to minio."
-  )
   private Map<String, String> outputOptions;
-
-  @Option(
-    names = {"-r", "--resolutions"},
-    description = "Number of pyramid resolutions to generate"
-  )
   private volatile Integer pyramidResolutions;
-
-  @Option(
-    names = {"-s", "--series"},
-    arity = "0..1",
-    split = ",",
-    description = "Comma-separated list of series indexes to convert"
-  )
   private volatile List<Integer> seriesList = new ArrayList<Integer>();
 
-  @Option(
-    names = {"-w", "--tile_width"},
-    description = "Maximum tile width (default: ${DEFAULT-VALUE}). " +
-      "This is both the chunk size (in X) when writing Zarr and the tile " +
-      "size used for reading from the original data. Changing the tile " +
-      "size may have performance implications."
-  )
   private volatile int tileWidth = 1024;
-
-  @Option(
-    names = {"-h", "--tile_height"},
-    description = "Maximum tile height (default: ${DEFAULT-VALUE}). " +
-      "This is both the chunk size (in Y) when writing Zarr and the tile " +
-      "size used for reading from the original data. Changing the tile " +
-      "size may have performance implications."
-  )
   private volatile int tileHeight = 1024;
-
-  @Option(
-    names = {"-z", "--chunk_depth"},
-    description = "Maximum chunk depth to read (default: ${DEFAULT-VALUE}) "
-  )
   private volatile int chunkDepth = 1;
-
-  @Option(
-    names = {"--log-level", "--debug"},
-    arity = "0..1",
-    description = "Change logging level; valid values are " +
-      "OFF, ERROR, WARN, INFO, DEBUG, TRACE and ALL. " +
-      "(default: ${DEFAULT-VALUE})",
-    fallbackValue = "DEBUG"
-  )
   private volatile String logLevel = "WARN";
-
-  @Option(
-    names = {"-p", "--progress"},
-    description = "Print progress bars during conversion",
-    help = true
-  )
   private volatile boolean progressBars = false;
-
-  @Option(
-    names = "--version",
-    description = "Print version information and exit",
-    help = true
-  )
   private volatile boolean printVersion = false;
 
-  @Option(
-    names = "--max_workers",
-    description = "Maximum number of workers (default: ${DEFAULT-VALUE})"
-  )
   // cap the default worker count at 4, to prevent problems with
   // large images that are not tiled
   private volatile int maxWorkers =
       (int) Math.min(4, Runtime.getRuntime().availableProcessors());
 
-  @Option(
-    names = "--max_cached_tiles",
-    description =
-      "Maximum number of tiles that will be cached across all "
-      + "workers (default: ${DEFAULT-VALUE})"
-  )
   private volatile int maxCachedTiles = 64;
-
-  @Option(
-          names = {"-c", "--compression"},
-          description = "Compression type for Zarr " +
-                  "(${COMPLETION-CANDIDATES}; default: ${DEFAULT-VALUE})"
-  )
-  private volatile ZarrCompression compressionType =
-          ZarrCompression.blosc;
-
-  @Option(
-          names = {"--compression-properties"},
-          description = "Properties for the chosen compression (see " +
-            "https://jzarr.readthedocs.io/en/latest/tutorial.html#compressors" +
-            " )"
-  )
+  private volatile ZarrCompression compressionType = ZarrCompression.blosc;
   private volatile Map<String, Object> compressionProperties =
     new HashMap<String, Object>();;
-
-  @Option(
-          names = "--extra-readers",
-          arity = "0..1",
-          split = ",",
-          description = "Separate set of readers to include; " +
-                  "(default: ${DEFAULT-VALUE})"
-  )
   private volatile Class<?>[] extraReaders = new Class[] {
     PyramidTiffReader.class, MiraxReader.class,
     BioTekReader.class, ND2PlateReader.class
   };
-
-  @Option(
-          names = "--no-minmax", negatable=true,
-          description = "Whether to calculate minimum and maximum pixel " +
-                        "values. Min/max calculation can result in slower " +
-                        "conversions. If true, min/max values are saved as " +
-                        "OMERO rendering metadata (true by default)"
-  )
   private volatile boolean omeroMetadata = true;
-
-  @Option(
-          names = "--no-nested", negatable=true,
-          description = "Whether to use '/' as the chunk path separator " +
-                  "(true by default)"
-  )
   private volatile boolean nested = true;
-
-  @Option(
-          names = "--pyramid-name",
-          description = "Name of pyramid (default: ${DEFAULT-VALUE}) " +
-                  "[Can break compatibility with raw2ometiff]"
-  )
   private volatile String pyramidName = null;
-
-  @Option(
-          names = "--scale-format-string",
-          description = "Format string for scale paths; the first two " +
-                  "arguments will always be series and resolution followed " +
-                  "by any additional arguments brought in from " +
-                  "`--additional-scale-format-string-args` " +
-                  "[Can break compatibility with raw2ometiff] " +
-                  "(default: ${DEFAULT-VALUE})"
-  )
   private volatile String scaleFormatString = "%d/%d";
-
-  @Option(
-          names = "--additional-scale-format-string-args",
-          description = "Additional format string argument CSV file (without " +
-                  "header row).  Arguments will be added to the end of the " +
-                  "scale format string mapping the at the corresponding CSV " +
-                  "row index.  It is expected that the CSV file contain " +
-                  "exactly the same number of rows as the input file has " +
-                  "series"
-  )
   private volatile Path additionalScaleFormatStringArgsCsv;
 
   /** Additional scale format string arguments after parsing. */
   private volatile List<String[]> additionalScaleFormatStringArgs;
 
-  @Option(
-          names = "--dimension-order",
-          description = "Override the input file dimension order in the " +
-                  "output file [Can break compatibility with raw2ometiff] " +
-                  "(${COMPLETION-CANDIDATES})",
-          converter = DimensionOrderConverter.class,
-          defaultValue = "XYZCT"
-  )
-  private volatile DimensionOrder dimensionOrder;
-
-  @Option(
-          names = "--memo-directory",
-          description = "Directory used to store .bfmemo cache files"
-  )
+  private volatile DimensionOrder dimensionOrder = DimensionOrder.XYZCT;
   private volatile File memoDirectory;
-
-  @Option(
-          names = "--keep-memo-files",
-          description = "Do not delete .bfmemo files created during conversion"
-  )
   private volatile boolean keepMemoFiles = false;
-
-  @Option(
-          names = "--downsample-type",
-          description = "Tile downsampling algorithm (${COMPLETION-CANDIDATES})"
-  )
   private volatile Downsampling downsampling = Downsampling.SIMPLE;
-
-  @Option(
-          names = "--overwrite",
-          description = "Overwrite the output directory if it exists"
-  )
   private volatile boolean overwrite = false;
-
-  @Option(
-          names = "--fill-value",
-          description = "Default value to fill in for missing tiles (0-255)" +
-                        " (currently .mrxs only)"
-  )
   private volatile Short fillValue = null;
-
-  @Option(
-          arity = "0..1",
-          names = "--options",
-          split = ",",
-          description =
-            "Reader-specific options, in format key=value[,key2=value2]"
-  )
   private volatile List<String> readerOptions = new ArrayList<String>();
-
-  @Option(
-          names = "--no-hcs",
-          description = "Turn off HCS writing"
-  )
   private volatile boolean noHCS = false;
-
-  @Option(
-          names = "--no-ome-meta-export",
-          description = "Turn off OME metadata exporting " +
-                        "[Will break compatibility with raw2ometiff]"
-  )
   private volatile boolean noOMEMeta = false;
-
-  @Option(
-          names = "--no-root-group",
-          description = "Turn off creation of root group and corresponding " +
-                        "metadata [Will break compatibility with raw2ometiff]"
-
-  )
   private volatile boolean noRootGroup = false;
-
-  @Option(
-      names = "--use-existing-resolutions",
-      description = "Use existing sub resolutions from original input format" +
-          "[Will break compatibility with raw2ometiff]"
-
-  )
   private volatile boolean reuseExistingResolutions = false;
-
-  @Option(
-      names = "--target-min-size",
-      description = "Specifies the desired size for the largest XY dimension " +
-          "of the smallest resolution, when calculating the number " +
-          "of resolutions generate. If the target size cannot be matched " +
-          "exactly, the largest XY dimension of the smallest resolution " +
-          "should be smaller than the target size."
-  )
   private volatile int minSize = MIN_SIZE;
-
 
   /** Scaling implementation that will be used during downsampling. */
   private volatile IImageScaler scaler = new SimpleImageScaler();
@@ -439,8 +211,847 @@ public class Converter implements Callable<Void> {
   /** Calculated from outputLocation. */
   private volatile Path outputPath;
 
+  // Option setters
+
+  /**
+   * @param input path to the input data
+   */
+  @Parameters(
+    index = "0",
+    arity = "1",
+    description = "file to convert"
+  )
+  public void setInputPath(String input) {
+    // this could be expanded later to support files not on disk
+    inputPath = Paths.get(input);
+  }
+
+  /**
+   * @param output path or URI where output data should be written
+   */
+  @Parameters(
+    index = "1",
+    arity = "1",
+    description = "path to the output pyramid directory. " +
+      "The given path can also be a URI (containing ://) " +
+      "which will activate **experimental** support for " +
+      "Filesystems. For example, if the output path given " +
+      "is 's3://my-bucket/some-path' *and* you have an "+
+      "S3FileSystem implementation in your classpath, then " +
+      "all files will be written to S3."
+  )
+  public void setOutputPath(String output) {
+    outputLocation = output;
+  }
+
+  /**
+   * Options to use when connecting to a remote filesystem, e.g. s3.
+   *
+   * @param options output filesystem options
+   */
+  @Option(
+    names = "--output-options",
+    split = "\\|",
+    description = "|-separated list of key-value pairs " +
+      "to be used as an additional argument to Filesystem " +
+      "implementations if used. For example, " +
+      "--output-options=s3fs_path_style_access=true|... " +
+      "might be useful for connecting to minio."
+  )
+  public void setOutputOptions(Map<String, String> options) {
+    outputOptions = options;
+  }
+
+  /**
+   * Define the number of resolutions in the generated pyramid.
+   * By default, the resolution count is calculated based upon
+   * the input image size. The resolution count includes the
+   * full-resolution image, so must be greater than 0.
+   *
+   * @param resolutions pyramid resolution count
+   */
+  @Option(
+    names = {"-r", "--resolutions"},
+    description = "Number of pyramid resolutions to generate"
+  )
+  public void setResolutions(int resolutions) {
+    if (resolutions > 0) {
+      pyramidResolutions = resolutions;
+    }
+    else {
+      LOGGER.warn("Ignoring invalid resolution count: {}", resolutions);
+    }
+  }
+
+  /**
+   * Define a subset of input series indexes to convert.
+   * Series indexes begin at 0 and are the Bio-Formats series/OME Image
+   * index reported when resolution flattening has not been applied.
+   *
+   * @param seriesToConvert series index list
+   */
+  @Option(
+    names = {"-s", "--series"},
+    arity = "0..1",
+    split = ",",
+    description = "Comma-separated list of series indexes to convert"
+  )
+  public void setSeriesList(List<Integer> seriesToConvert) {
+    if (seriesToConvert != null) {
+      seriesList = seriesToConvert;
+    }
+  }
+
+  /**
+   * Set the maximum tile width (X chunk size) for input and output.
+   *
+   * @param width tile width
+   */
+  @Option(
+    names = {"-w", "--tile_width"},
+    description = "Maximum tile width (default: ${DEFAULT-VALUE}). " +
+      "This is both the chunk size (in X) when writing Zarr and the tile " +
+      "size used for reading from the original data. Changing the tile " +
+      "size may have performance implications.",
+    defaultValue = "1024"
+  )
+  public void setTileWidth(int width) {
+    if (width > 0) {
+      tileWidth = width;
+    }
+    else {
+      LOGGER.warn("Ignoring invalid tile width: {}", width);
+    }
+  }
+
+  /**
+   * Set the maximum tile height (Y chunk size) for input and output.
+   *
+   * @param height tile height
+   */
+  @Option(
+    names = {"-h", "--tile_height"},
+    description = "Maximum tile height (default: ${DEFAULT-VALUE}). " +
+      "This is both the chunk size (in Y) when writing Zarr and the tile " +
+      "size used for reading from the original data. Changing the tile " +
+      "size may have performance implications.",
+    defaultValue = "1024"
+  )
+  public void setTileHeight(int height) {
+    if (height > 0) {
+      tileHeight = height;
+    }
+    else {
+      LOGGER.warn("Ignoring invalid tile height: {}", height);
+    }
+  }
+
+  /**
+   * Set the maximum depth (Z chunk size) for writing Zarr.
+   *
+   * @param depth Z chunk size
+   */
+  @Option(
+    names = {"-z", "--chunk_depth"},
+    description = "Maximum chunk depth to read (default: ${DEFAULT-VALUE}) ",
+    defaultValue = "1"
+  )
+  public void setChunkDepth(int depth) {
+    if (depth > 0) {
+      chunkDepth = depth;
+    }
+    else {
+      LOGGER.warn("Ignoring invalid chunk depth: {}", depth);
+    }
+  }
+
+  /**
+   * Set the slf4j logging level. Defaults to "WARN".
+   *
+   * @param level logging level
+   */
+  @Option(
+    names = {"--log-level", "--debug"},
+    arity = "0..1",
+    description = "Change logging level; valid values are " +
+      "OFF, ERROR, WARN, INFO, DEBUG, TRACE and ALL. " +
+      "(default: ${DEFAULT-VALUE})",
+    defaultValue = "WARN",
+    fallbackValue = "DEBUG"
+  )
+  public void setLogLevel(String level) {
+    if (level != null) {
+      logLevel = level;
+    }
+  }
+
+  /**
+   * Configure whether or not progress bars are shown during conversion.
+   * Progress bars are turned off by default.
+   *
+   * @param useProgressBars whether or not to show progress bars
+   */
+  @Option(
+    names = {"-p", "--progress"},
+    description = "Print progress bars during conversion",
+    help = true
+  )
+  public void setProgressBars(boolean useProgressBars) {
+    progressBars = useProgressBars;
+  }
+
+  /**
+   * Configure whether to print version information and exit
+   * without converting.
+   *
+   * @param versionOnly whether or not to print version information and exit
+   */
+  @Option(
+    names = "--version",
+    description = "Print version information and exit",
+    help = true
+  )
+  public void setPrintVersionOnly(boolean versionOnly) {
+    printVersion = versionOnly;
+  }
+
+  /**
+   * Set the maximum number of workers to use for converting tiles.
+   * Defaults to 4 or the number of detected CPUs, whichever is smaller.
+   *
+   * @param workers maximum worker count
+   */
+  @Option(
+    names = "--max_workers",
+    description = "Maximum number of workers (default: ${DEFAULT-VALUE})"
+  )
+  public void setMaxWorkers(int workers) {
+    if (workers > 0) {
+      maxWorkers = workers;
+    }
+    else {
+      LOGGER.warn("Ignoring invalid worker count: {}", workers);
+    }
+  }
+
+  /**
+   * Set the maximum number of tiles that can be cached.
+   * Depending upon the input format, this can improve conversion performance
+   * by reducing the number of tile reads.
+   *
+   * @param maxTiles maximum number of cached tiles
+   */
+  @Option(
+    names = "--max_cached_tiles",
+    description =
+      "Maximum number of tiles that will be cached across all "
+      + "workers (default: ${DEFAULT-VALUE})",
+    defaultValue = "64"
+  )
+  public void setMaxCachedTiles(int maxTiles) {
+    maxCachedTiles = maxTiles;
+  }
+
+  /**
+   * Set the compression type for the output Zarr. Defaults to blosc.
+   *
+   * @param compression compression type
+   */
+  @Option(
+          names = {"-c", "--compression"},
+          description = "Compression type for Zarr " +
+                  "(${COMPLETION-CANDIDATES}; default: ${DEFAULT-VALUE})",
+          defaultValue = "blosc"
+  )
+  public void setCompression(ZarrCompression compression) {
+    if (compression != null) {
+      compressionType = compression;
+    }
+  }
+
+  /**
+   * Compression-specific options as defined by jzarr.
+   *
+   * @param properties compression properties
+   */
+  @Option(
+          names = {"--compression-properties"},
+          description = "Properties for the chosen compression (see " +
+            "https://jzarr.readthedocs.io/en/latest/tutorial.html#compressors" +
+            " )"
+  )
+  public void setCompressionProperties(Map<String, Object> properties) {
+    if (properties != null) {
+      compressionProperties = properties;
+    }
+  }
+
+  /**
+   * List of extra readers to use. This can include any reader that is on
+   * the classpath and not defined by Bio-Formats. By default this includes
+   * every reader in the bioformats2raw repository.
+   *
+   * @param extraReaderList list of extra readers
+   */
+  @Option(
+          names = "--extra-readers",
+          arity = "0..1",
+          split = ",",
+          description = "Separate set of readers to include; " +
+                  "(default: ${DEFAULT-VALUE})"
+  )
+  public void setExtraReaders(Class<?>[] extraReaderList) {
+    if (extraReaderList != null) {
+      extraReaders = extraReaderList;
+    }
+  }
+
+  /**
+   * Configure whether or not to calculate min/max pixel values and
+   * write OMERO rendering metadata. By default, min/max values are
+   * calculated and rendering metadata is written.
+   *
+   * @param noMinMax false if OMERO rendering metadata should be written
+   */
+  @Option(
+          names = "--no-minmax", negatable=true,
+          description = "Whether to calculate minimum and maximum pixel " +
+                        "values. Min/max calculation can result in slower " +
+                        "conversions. If true, min/max values are saved as " +
+                        "OMERO rendering metadata (true by default)"
+  )
+  public void setCalculateOMEROMetadata(boolean noMinMax) {
+    omeroMetadata = !noMinMax;
+  }
+
+  /**
+   * Configure whether or not the output Zarr is written as nested,
+   * using the '/' chunk separator.
+   *
+   * @param unnested false if nested chunk storage should be used
+   */
+  @Option(
+          names = "--no-nested", negatable=true,
+          description = "Whether to use '/' as the chunk path separator " +
+                  "(true by default)"
+  )
+  public void setUnnested(boolean unnested) {
+    nested = !unnested;
+  }
+
+  /**
+   * Set the name of the pyramid being converted.
+   * If not null, this will be used to create a subdirectory
+   * in the output location.
+   * By default, null for compatibility with raw2ometiff.
+   *
+   * @param pyramid pyramid name
+   */
+  @Option(
+          names = "--pyramid-name",
+          description = "Name of pyramid (default: ${DEFAULT-VALUE}) " +
+                  "[Can break compatibility with raw2ometiff]"
+  )
+  public void setPyramidName(String pyramid) {
+    pyramidName = pyramid;
+  }
+
+  /**
+   * Set the format string for scale paths.
+   *
+   * @param formatString scale path format string
+   */
+  @Option(
+          names = "--scale-format-string",
+          description = "Format string for scale paths; the first two " +
+                  "arguments will always be series and resolution followed " +
+                  "by any additional arguments brought in from " +
+                  "`--additional-scale-format-string-args` " +
+                  "[Can break compatibility with raw2ometiff] " +
+                  "(default: ${DEFAULT-VALUE})"
+  )
+  public void setScaleFormat(String formatString) {
+    if (formatString != null) {
+      scaleFormatString = formatString;
+    }
+  }
+
+  /**
+   * Set path to a CSV file with additional scale formatting arguments.
+   *
+   * @param scaleFormatCSV path to CSV file
+   */
+  @Option(
+          names = "--additional-scale-format-string-args",
+          description = "Additional format string argument CSV file (without " +
+                  "header row).  Arguments will be added to the end of the " +
+                  "scale format string mapping the at the corresponding CSV " +
+                  "row index.  It is expected that the CSV file contain " +
+                  "exactly the same number of rows as the input file has " +
+                  "series"
+  )
+  public void setAdditionalScaleFormatCSV(Path scaleFormatCSV) {
+    additionalScaleFormatStringArgsCsv = scaleFormatCSV;
+  }
+
+  /**
+   * Set the directory for memo (metadata cache) files.
+   *
+   * @param memoDir memo file directory
+   */
+  @Option(
+          names = "--memo-directory",
+          description = "Directory used to store .bfmemo cache files"
+  )
+  public void setMemoDirectory(File memoDir) {
+    memoDirectory = memoDir;
+  }
+
+  /**
+   * Set whether or not to keep memo (metadata cache) files after conversion.
+   * By default, memo files are deleted after conversion.
+   *
+   * @param keepMemos whether or not to keep memo files
+   */
+  @Option(
+          names = "--keep-memo-files",
+          description = "Do not delete .bfmemo files created during conversion"
+  )
+  public void setKeepMemoFiles(boolean keepMemos) {
+    keepMemoFiles = keepMemos;
+  }
+
+  /**
+   * Set downsampling algorithm.
+   *
+   * @param downsampleType downsampling type
+   */
+  @Option(
+          names = "--downsample-type",
+          description = "Tile downsampling algorithm " +
+            "(${COMPLETION-CANDIDATES})",
+          defaultValue = "SIMPLE"
+  )
+  public void setDownsampling(Downsampling downsampleType) {
+    if (downsampleType != null) {
+      downsampling = downsampleType;
+    }
+  }
+
+  /**
+   * Set whether or not to overwrite an existing output directory.
+   *
+   * @param canOverwrite whether or not overwriting is allowed
+   */
+  @Option(
+          names = "--overwrite",
+          description = "Overwrite the output directory if it exists"
+  )
+  public void setOverwrite(boolean canOverwrite) {
+    overwrite = canOverwrite;
+  }
+
+  /**
+   * Set the fill value for missing tiles. Must be in the range 0-255.
+   * Currently applies to .mrxs input data only.
+   *
+   * @param tileFill pixel value (0-255) to fill
+   */
+  @Option(
+          names = "--fill-value",
+          description = "Default value to fill in for missing tiles (0-255)" +
+                        " (currently .mrxs only)"
+  )
+  public void setFillValue(Short tileFill) {
+    if (tileFill == null || (tileFill >= 0 && tileFill <= 255)) {
+      fillValue = tileFill;
+    }
+    else {
+      LOGGER.warn("Ignoring invalid fill value (must be 0-255): {}", tileFill);
+    }
+  }
+
+  /**
+   * Set any reader-specific options.
+   * See https://docs.openmicroscopy.org/bio-formats/latest/formats/options.html
+   *
+   * @param readerOpts reader options
+   */
+  @Option(
+          arity = "0..1",
+          names = "--options",
+          split = ",",
+          description =
+            "Reader-specific options, in format key=value[,key2=value2]"
+  )
+  public void setReaderOptions(List<String> readerOpts) {
+    if (readerOpts != null) {
+      readerOptions = readerOpts;
+    }
+  }
+
+  /**
+   * Set whether or not to write HCS (plate/well) metadata.
+   * See https://ngff.openmicroscopy.org/latest/#plate-md.
+   * HCS metadata is written by default when the input data
+   * represents a plate.
+   *
+   * @param noHCSWriting true if HCS metadata should not be written
+   */
+  @Option(
+          names = "--no-hcs",
+          description = "Turn off HCS writing"
+  )
+  public void setNoHCS(boolean noHCSWriting) {
+    noHCS = noHCSWriting;
+  }
+
+  /**
+   * Set whether or not to write OME-XML metadata.
+   * See https://ngff.openmicroscopy.org/latest/#bf2raw
+   * By default, OME-XML metadata is written.
+   *
+   * @param noOMEMetaWriting true if OME-XML should not be written
+   */
+  @Option(
+          names = "--no-ome-meta-export",
+          description = "Turn off OME metadata exporting " +
+                        "[Will break compatibility with raw2ometiff]"
+  )
+  public void setNoOMEMeta(boolean noOMEMetaWriting) {
+    noOMEMeta = noOMEMetaWriting;
+  }
+
+  /**
+   * Set whether or not to write a root Zarr group.
+   * By default, the root group is written.
+   *
+   * @param noRootGroupWriting true if the root group should not be written
+   */
+  @Option(
+          names = "--no-root-group",
+          description = "Turn off creation of root group and corresponding " +
+                        "metadata [Will break compatibility with raw2ometiff]"
+
+  )
+  public void setNoRootGroup(boolean noRootGroupWriting) {
+    noRootGroup = noRootGroupWriting;
+  }
+
+  /**
+   * Set whether or not to keep pyramids from the input data.
+   * By default, only the full-resolution images from the input data are kept.
+   * Pyramid resolutions are generated by downsampling the full-resolution
+   * image, and any pyramid resolutions in the input data are ignored.
+   *
+   * @param reuse whether or not to reuse pyramids in the input data, if present
+   */
+  @Option(
+      names = "--use-existing-resolutions",
+      description = "Use existing sub resolutions from original input format" +
+          "[Will break compatibility with raw2ometiff]"
+
+  )
+  public void setReuseExistingResolutions(boolean reuse) {
+    reuseExistingResolutions = reuse;
+  }
+
+  /**
+   * The target size of the largest XY dimension in the
+   * smallest pyramid resolution. Defaults to 256.
+   * Used to calculate the number of pyramid resolutions,
+   * if the resolution count was not explicitly set.
+   *
+   * @param min target size of smallest pyramid resolution
+   */
+  @Option(
+      names = "--target-min-size",
+      description = "Specifies the desired size for the largest XY dimension " +
+          "of the smallest resolution, when calculating the number " +
+          "of resolutions generate. If the target size cannot be matched " +
+          "exactly, the largest XY dimension of the smallest resolution " +
+          "should be smaller than the target size.",
+      defaultValue = "" + MIN_SIZE
+  )
+  public void setMinImageSize(int min) {
+    if (min > 0) {
+      minSize = min;
+    }
+    else {
+      LOGGER.warn("Ignoring invalid minimum image size: {}", min);
+    }
+  }
+
+  /**
+   * Set the output dimension order. Defaults to XYZCT for compliance with
+   * the OME-NGFF specification.
+   *
+   * @param order dimension order
+   */
+  @Option(
+          names = "--dimension-order",
+          description = "Override the input file dimension order in the " +
+                  "output file [Can break compatibility with raw2ometiff] " +
+                  "(${COMPLETION-CANDIDATES})",
+          converter = DimensionOrderConverter.class,
+          defaultValue = "XYZCT"
+  )
+  public void setDimensionOrder(DimensionOrder order) {
+    dimensionOrder = order;
+  }
+
+  // Option getters
+
+  /**
+   * @return path to input data
+   */
+  public String getInputPath() {
+    return inputPath.toString();
+  }
+
+  /**
+   * @return path to output data
+   */
+  public String getOutputPath() {
+    return outputLocation;
+  }
+
+  /**
+   * @return current output filesystem options
+   */
+  public Map<String, String> getOutputOptions() {
+    return outputOptions;
+  }
+
+  /**
+   * @return number of pyramid resolutions
+   */
+  public Integer getResolutions() {
+    return pyramidResolutions;
+  }
+
+  /**
+   * @return list of series indexes to convert
+   */
+  public List<Integer> getSeriesList() {
+    return seriesList;
+  }
+
+  /**
+   * @return tile width (X chunk size)
+   */
+  public int getTileWidth() {
+    return tileWidth;
+  }
+
+  /**
+   * @return tile height (Y chunk size)
+   */
+  public int getTileHeight() {
+    return tileHeight;
+  }
+
+  /**
+   * @return tile depth (Z chunk size)
+   */
+  public int getChunkDepth() {
+    return chunkDepth;
+  }
+
+  /**
+   * @return slf4j logging level
+   */
+  public String getLogLevel() {
+    return logLevel;
+  }
+
+  /**
+   * @return true if progress bars are displayed
+   */
+  public boolean getProgressBars() {
+    return progressBars;
+  }
+
+  /**
+   * @return true if only version info is displayed
+   */
+  public boolean getPrintVersionOnly() {
+    return printVersion;
+  }
+
+  /**
+   * @return maximum number of worker threads
+   */
+  public int getMaxWorkers() {
+    return maxWorkers;
+  }
+
+  /**
+   * @return maximum number of cached input tiles
+   */
+  public int getMaxCachedTiles() {
+    return maxCachedTiles;
+  }
+
+  /**
+   * @return current compression type
+   */
+  public ZarrCompression getCompression() {
+    return compressionType;
+  }
+
+  /**
+   * @return compression options
+   */
+  public Map<String, Object> getCompressionProperties() {
+    return compressionProperties;
+  }
+
+  /**
+   * @return list of extra readers to use
+   */
+  public Class<?>[] getExtraReaders() {
+    return extraReaders;
+  }
+
+  /**
+   * @return true if min/max pixel values and OMERO rendering
+   *         metadata are calculated
+   */
+  public boolean getCalculateOMEROMetadata() {
+    return omeroMetadata;
+  }
+
+  /**
+   * @return true if chunks are stored nested ('/' chunk separator)
+   */
+  public boolean getNested() {
+    return nested;
+  }
+
+  /**
+   * @return pyramid name
+   */
+  public String getPyramidName() {
+    return pyramidName;
+  }
+
+  /**
+   * @return scale formatting pattern
+   */
+  public String getScaleFormat() {
+    return scaleFormatString;
+  }
+
+  /**
+   * @return path to CSV file with additional scale formatting arguments
+   */
+  public Path getAdditionalScaleFormatCSV() {
+    return additionalScaleFormatStringArgsCsv;
+  }
+
+  /**
+   * @return directory containing memo (metadata cache) files
+   */
+  public File getMemoDirectory() {
+    return memoDirectory;
+  }
+
+  /**
+   * @return true if memo (metadata cache) files are retained after conversion
+   */
+  public boolean getKeepMemoFiles() {
+    return keepMemoFiles;
+  }
+
+  /**
+   * @return downsampling algorithm
+   */
+  public Downsampling getDownsampling() {
+    return downsampling;
+  }
+
+  /**
+   * @return true if existing Zarr data can be overwritten
+   */
+  public boolean getOverwrite() {
+    return overwrite;
+  }
+
+  /**
+   * @return fill value for missing tiles (.mrxs input only)
+   */
+  public Short getFillValue() {
+    return fillValue;
+  }
+
+  /**
+   * See:
+   * https://docs.openmicroscopy.org/bio-formats/latest/formats/options.html.
+   *
+   * @return reader-specific options
+   */
+  public List<String> getReaderOptions() {
+    return readerOptions;
+  }
+
+  /**
+   * See https://ngff.openmicroscopy.org/latest/#plate-md.
+   *
+   * @return false if HCS (plate/well) metadata is written when the input data
+   *         represents a plate
+   */
+  public boolean getNoHCS() {
+    return noHCS;
+  }
+
+  /**
+   * See https://ngff.openmicroscopy.org/latest/#bf2raw.
+   *
+   * @return false if OME-XML metadata is written
+   */
+  public boolean getNoOMEMeta() {
+    return noOMEMeta;
+  }
+
+  /**
+   * @return true if a root Zarr group will not be written
+   */
+  public boolean getNoRootGroup() {
+    return noRootGroup;
+  }
+
+  /**
+   * @return true if resolutions in the input data are converted
+   */
+  public boolean getReuseExistingResolutions() {
+    return reuseExistingResolutions;
+  }
+
+  /**
+   * @return target size of the largest XY dimension in the smallest
+   *         pyramid resolution
+   */
+  public int getMinImageSize() {
+    return minSize;
+  }
+
+  /**
+   * @return current dimension roder
+   */
+  public DimensionOrder getDimensionOrder() {
+    return dimensionOrder;
+  }
+
+  // Conversion methods
+
+  /**
+   * @return 0 if conversion completed without error,
+   *         -1 if conversion was not performed
+   * @throws Exception on most conversion errors
+   */
   @Override
-  public Void call() throws Exception {
+  public Integer call() throws Exception {
     if (printVersion) {
       String version = Optional.ofNullable(
         this.getClass().getPackage().getImplementationVersion()
@@ -448,7 +1059,14 @@ public class Converter implements Callable<Void> {
       System.out.println("Version = " + version);
       System.out.println("Bio-Formats version = " + FormatTools.VERSION);
       System.out.println("NGFF specification version = " + NGFF_VERSION);
-      return null;
+      return -1;
+    }
+
+    if (inputPath == null) {
+      throw new IllegalArgumentException("Input path not specified");
+    }
+    if (outputLocation == null) {
+      throw new IllegalArgumentException("Output location not specified");
     }
 
     if (fillValue != null && (fillValue < 0 || fillValue > 255)) {
@@ -514,7 +1132,7 @@ public class Converter implements Callable<Void> {
     executor = new ThreadPoolExecutor(
       maxWorkers, maxWorkers, 0L, TimeUnit.MILLISECONDS, queue);
     convert();
-    return null;
+    return 0;
   }
 
   /**

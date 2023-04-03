@@ -16,6 +16,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.List;
@@ -1867,6 +1868,60 @@ public class ZarrTest {
     memoFile.delete();
     assertTool("--overwrite");
     assertFalse(memoFile.exists());
+  }
+
+  /**
+   * Check that setting options via API instead of command line arguments
+   * works as expected.
+   */
+  @Test
+  public void testOptionsAPI() throws Exception {
+    input = fake("series", "2", "sizeX", "4096", "sizeY", "4096");
+
+    Converter apiConverter = new Converter();
+    apiConverter.setInputPath(input.toString());
+    apiConverter.setOutputPath(output.toString());
+    apiConverter.setSeriesList(Collections.singletonList(1));
+    apiConverter.setTileWidth(128);
+    apiConverter.setTileHeight(128);
+
+    apiConverter.call();
+
+    ZarrGroup z = ZarrGroup.open(output.toString());
+
+    Path omePath = output.resolve("OME");
+    ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
+    List<String> groupMap =
+      (List<String>) omeGroup.getAttributes().get("series");
+    assertEquals(groupMap.size(), 1);
+    assertEquals(groupMap.get(0), "0");
+
+    OME ome = getOMEMetadata();
+    assertEquals(1, ome.sizeOfImageList());
+
+    // Check series 1 dimensions and special pixels
+    ZarrArray series0 = z.openArray("0/0");
+    int[] shape = new int[] {1, 1, 1, 4096, 4096};
+    assertArrayEquals(shape, series0.getShape());
+    assertArrayEquals(
+      new int[] {1, 1, 1,
+      apiConverter.getTileHeight(),
+      apiConverter.getTileWidth()},
+      series0.getChunks());
+    byte[] tile =
+      new byte[apiConverter.getTileWidth() * apiConverter.getTileHeight()];
+    shape[3] = 128;
+    shape[4] = 128;
+    series0.read(tile, shape);
+    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
+    assertArrayEquals(new int[] {1, 0, 0, 0, 0}, seriesPlaneNumberZCT);
+    try {
+      z.openArray("1/0");
+      fail("Array exists!");
+    }
+    catch (IOException e) {
+      // Pass
+    }
   }
 
   /**
