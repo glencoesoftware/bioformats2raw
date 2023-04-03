@@ -46,12 +46,33 @@ Development Installation
 
     ./gradlew tasks
 
+Configuring Logging
+===================
+
+Logging is provided using the logback library. The `logback.xml` file in `src/dist/lib/config/` provides a default configuration for the command line tool.
+In release and snapshot artifacts, `logback.xml` is in `lib/config/`.
+You can configure logging by editing the provided `logback.xml` or by specifying the path to a different file:
+
+    JAVA_OPTS="-Dlogback.configurationFile=/path/to/external/logback.xml" \
+    bioformats2raw ...
+
+Alternatively you can use the `--debug` flag, optionally writing the stdout to a file:
+
+    bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --debug > bf2raw.log
+
+The `--log-level` option takes an [slf4j logging level](https://www.slf4j.org/faq.html#fatal) for additional simple logging configuration.
+`--log-level DEBUG` is equivalent to `--debug`. For even more verbose logging:
+
+    bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --log-level TRACE
+
 Eclipse Configuration
 =====================
 
 1. Run the Gradle Eclipse task:
 
     ./gradlew eclipse
+
+2. Add the logback configuration in `src/dist/lib/config/` to your CLASSPATH.
 
 Usage
 =====
@@ -76,7 +97,8 @@ Alternatively, the `--resolutions` options can be passed to specify the exact nu
 
 
 Maximum tile dimensions can be configured with the `--tile_width` and `--tile_height` options.  Defaults can be viewed with
-`bioformats2raw --help`.
+`bioformats2raw --help`. Be mindful of the downstream workflow when selecting a tile size other than the default.
+A smaller than default tile size is rarely recommended.
 
 If the input file has multiple series, a subset of the series can be converted by specifying a comma-separated list of indexes:
 
@@ -242,6 +264,11 @@ the layout of the top-level Zarr group is now part of the upstream specification
 https://ngff.openmicroscopy.org/0.4/#bf2raw and the `OME` directory containing the
 `METADATA.ome.xml` file is now a Zarr group.
 
+Versions 0.5.0 and later write [OMERO rendering metadata](https://ngff.openmicroscopy.org/0.4/#omero-md)
+by default. This includes calculating the minimum and maximum pixel values for the entire image.
+We recommend keeping this metadata for maximum compatibility with downstream applications, but it can
+be omitted by using the `--no-minmax` option.
+
 Performance
 ===========
 
@@ -256,7 +283,7 @@ On systems with significant I/O bandwidth, particularly SATA or
 NVMe based storage, you may find sharply diminishing returns with high
 worker counts.  There are significant performance gains to be had utilizing
 larger tile sizes but be mindful of the consequences on the downstream
-workflow.
+workflow. Smaller tile sizes than the default are rarely recommended.
 
 The worker count defaults to the number of detected CPUs.  This may or may not be appropriate for the chosen input data.
 If reading a single tile from the input data requires a lot of memory, decreasing the worker count will be necessary
@@ -267,6 +294,19 @@ This is not a common case, but is a known issue with Imaris HDF data in particul
 
 In general, expect to need to tune the above settings and measure
 relative performance.
+
+Metadata caching
+================
+
+During conversion, a temporary `.*.bfmemo` file will be created. By default, this file is in the same directory as the input data
+and will be removed after the conversion finishes. The location of the `.*.bfmemo` file can be configured using the `--memo-directory` option:
+
+    bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --memo-directory /tmp/
+
+This is particularly helpful if you do not have write permissions in the input data directory.
+
+As of version 0.5.0, `.*.bfmemo` files are deleted at the end of conversion by default. We do not recommend keeping these files for normal
+conversions, but if they are needed for troubleshooting then the `--keep-memo-files` option can be used.
 
 License
 =======

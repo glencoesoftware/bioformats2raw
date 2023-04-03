@@ -35,6 +35,7 @@ public class Colors {
   /**
    * Determine which color to use for the given channel.
    * If a channel color is already set, that will be returned.
+   * If there is only one channel, it will be set to grey.
    * If a channel emission wavelength is set, that will be used
    * to determine the color; red, green, or blue based on the
    * wavelength in nm.
@@ -52,6 +53,10 @@ public class Colors {
     Color color = meta.getChannelColor(series, c);
     if (color != null) {
       return color;
+    }
+    // default to grey for single channel data
+    if (meta.getChannelCount(series) == 1) {
+      return new Color(128, 128, 128, 255);
     }
 
     Length emWave = meta.getChannelEmissionWavelength(series, c);

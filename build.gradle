@@ -6,7 +6,7 @@ plugins {
 }
 
 group = 'com.glencoesoftware'
-version = '0.6.0-SNAPSHOT'
+version = '0.7.0-SNAPSHOT'
 
 mainClassName = 'com.glencoesoftware.bioformats2raw.Converter'
 sourceCompatibility = 1.8
@@ -46,7 +46,7 @@ configurations.all {
 
 dependencies {
     implementation 'net.java.dev.jna:jna:5.10.0'
-    implementation 'ome:formats-gpl:6.10.1'
+    implementation 'ome:formats-gpl:6.12.0'
     implementation 'info.picocli:picocli:4.6.1'
     implementation 'com.univocity:univocity-parsers:2.8.4'
     implementation 'com.bc.zarr:jzarr:0.3.5'
@@ -54,6 +54,8 @@ dependencies {
     // implementation 'io.nextflow:nxf-s3fs:1.1.0'
     implementation 'org.lasersonlab:s3fs:2.2.3'
     implementation 'javax.xml.bind:jaxb-api:2.3.0'
+    implementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.3.4'
+    implementation group: 'ch.qos.logback', name: 'logback-core', version: '1.3.4'
 
 
     implementation 'org.openpnp:opencv:3.4.2-1'
@@ -93,6 +95,18 @@ distributions {
             }
         }
     }
+}
+
+startScripts {
+  // placing logback.xml somewhere under src/dist/lib/ keeps it out of
+  // bioformats2raw-*.jar but automatically includes it in the distribution zip
+  // the directory containing logback.xml must be explicitly added to the
+  // startup scripts' classpath, otherwise it will not be detected
+
+  // a subdirectory of 'src/dist/lib/' (not just 'src/dist/') is necessary,
+  // likely due to https://issues.gradle.org/browse/GRADLE-2991
+  // see also discussion in https://github.com/glencoesoftware/bioformats2raw/pull/169
+  classpath += files('src/dist/lib/config/')
 }
 
 publishing {

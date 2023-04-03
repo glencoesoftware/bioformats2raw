@@ -16,6 +16,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.List;
@@ -235,6 +236,14 @@ public class ZarrTest {
     List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
             series0.getAttributes().get("multiscales");
     assertEquals(1, multiscales.size());
+
+    Map<String, Object> multiscale = multiscales.get(0);
+    List<Map<String, Object>> datasets =
+            (List<Map<String, Object>>) multiscale.get("datasets");
+    assertTrue(datasets.size() > 0);
+    for (int i=0; i<datasets.size(); i++) {
+      assertEquals(String.valueOf(i), datasets.get(i).get("path"));
+    }
   }
 
   /**
@@ -1125,26 +1134,29 @@ public class ZarrTest {
     input = getTestFile("colors.ome.xml");
     assertTool();
 
-    String[] names = {"orange", "green", "blue"};
-    String[] colors = {"FF7F00", "00FF00", "0000FF"};
+    String[][] names = {{"orange"}, {"green", "blue"}, {"blue"}};
+    String[][] colors = {{"FF7F00"}, {"00FF00", "0000FF"}, {"808080"}};
 
-    for (int i=0; i<3; i++) {
+    for (int i=0; i<names.length; i++) {
       ZarrGroup z =
         ZarrGroup.open(output.resolve(String.valueOf(i)).toString());
       Map<String, Object> omero =
             (Map<String, Object>) z.getAttributes().get("omero");
 
       Map<String, Object> rdefs = (Map<String, Object>) omero.get("rdefs");
-      assertEquals("greyscale", rdefs.get("model"));
+      assertEquals(
+        names[i].length == 1 ? "greyscale" : "color", rdefs.get("model"));
 
       List<Map<String, Object>> channels =
             (List<Map<String, Object>>) omero.get("channels");
-      assertEquals(1, channels.size());
+      assertEquals(names[i].length, channels.size());
 
-      Map<String, Object> channel = channels.get(0);
-      assertEquals(names[i], channel.get("label"));
-      assertEquals(colors[i], channel.get("color"));
-      assertEquals(true, channel.get("active"));
+      for (int c=0; c<names[i].length; c++) {
+        Map<String, Object> channel = channels.get(c);
+        assertEquals(names[i][c], channel.get("label"));
+        assertEquals(colors[i][c], channel.get("color"));
+        assertEquals(true, channel.get("active"));
+      }
     }
   }
 
@@ -1883,6 +1895,60 @@ public class ZarrTest {
     memoFile.delete();
     assertTool("--overwrite");
     assertFalse(memoFile.exists());
+  }
+
+  /**
+   * Check that setting options via API instead of command line arguments
+   * works as expected.
+   */
+  @Test
+  public void testOptionsAPI() throws Exception {
+    input = fake("series", "2", "sizeX", "4096", "sizeY", "4096");
+
+    Converter apiConverter = new Converter();
+    apiConverter.setInputPath(input.toString());
+    apiConverter.setOutputPath(output.toString());
+    apiConverter.setSeriesList(Collections.singletonList(1));
+    apiConverter.setTileWidth(128);
+    apiConverter.setTileHeight(128);
+
+    apiConverter.call();
+
+    ZarrGroup z = ZarrGroup.open(output.toString());
+
+    Path omePath = output.resolve("OME");
+    ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
+    List<String> groupMap =
+      (List<String>) omeGroup.getAttributes().get("series");
+    assertEquals(groupMap.size(), 1);
+    assertEquals(groupMap.get(0), "0");
+
+    OME ome = getOMEMetadata();
+    assertEquals(1, ome.sizeOfImageList());
+
+    // Check series 1 dimensions and special pixels
+    ZarrArray series0 = z.openArray("0/0");
+    int[] shape = new int[] {1, 1, 1, 4096, 4096};
+    assertArrayEquals(shape, series0.getShape());
+    assertArrayEquals(
+      new int[] {1, 1, 1,
+      apiConverter.getTileHeight(),
+      apiConverter.getTileWidth()},
+      series0.getChunks());
+    byte[] tile =
+      new byte[apiConverter.getTileWidth() * apiConverter.getTileHeight()];
+    shape[3] = 128;
+    shape[4] = 128;
+    series0.read(tile, shape);
+    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
+    assertArrayEquals(new int[] {1, 0, 0, 0, 0}, seriesPlaneNumberZCT);
+    try {
+      z.openArray("1/0");
+      fail("Array exists!");
+    }
+    catch (IOException e) {
+      // Pass
+    }
   }
 
   /**
