@@ -97,13 +97,6 @@ public class OpenCVTools {
     byte[] tile, int pixelType, int width, int height, int scale,
     Downsampling downsampling)
   {
-    if (pixelType == FormatTools.INT8 || pixelType == FormatTools.INT32) {
-      String type = FormatTools.getPixelTypeString(pixelType);
-      throw new UnsupportedOperationException(
-        "OpenCV does not support downsampling " + type + " data. " +
-        "See https://github.com/opencv/opencv/issues/7862");
-    }
-
     boolean floatingPoint = FormatTools.isFloatingPoint(pixelType);
     int bytesPerPixel = FormatTools.getBytesPerPixel(pixelType);
     Object pixels =
