@@ -1296,8 +1296,8 @@ public class Converter implements Callable<Integer> {
 
           List<MapPair> annotation = new ArrayList<MapPair>();
           annotation.add(new MapPair("input_path", inputPath.toString()));
-          annotation.add(new MapPair("bioformats2raw", getVersion()));
-          annotation.add(new MapPair("bioformats", FormatTools.VERSION));
+          annotation.add(new MapPair("application", "bioformats2raw"));
+          annotation.add(new MapPair("version", getVersion()));
 
           int annotationIndex = 0;
           try {
