@@ -1898,6 +1898,7 @@ public class ZarrTest {
     assertEquals(groupMap.size(), 1);
     assertEquals(groupMap.get(0), "0");
 
+    converter = apiConverter;
     OME ome = getOMEMetadata();
     assertEquals(1, ome.sizeOfImageList());
 
