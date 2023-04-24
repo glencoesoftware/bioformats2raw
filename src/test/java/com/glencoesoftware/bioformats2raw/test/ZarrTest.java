@@ -686,6 +686,33 @@ public class ZarrTest {
     assertArrayEquals(new int[] {0, 1, 0, 0, 1}, seriesPlaneNumberZCT);
   }
 
+  /**
+   * Test the progress listener API.
+   */
+  @Test
+  public void testProgressListener() throws Exception {
+    input = fake("sizeX", "8192", "sizeY", "8192", "sizeZ", "5");
+
+    Converter progressConverter = new Converter();
+    TestProgressListener listener = new TestProgressListener();
+    progressConverter.setProgressListener(listener);
+
+    try {
+      CommandLine.call(progressConverter,
+        new String[] {input.toString(), output.toString()});
+    }
+    catch (RuntimeException rt) {
+      throw rt;
+    }
+    catch (Throwable t) {
+      throw new RuntimeException(t);
+    }
+
+    Integer[] expectedTileCounts = new Integer[] {320, 80, 20, 5, 5, 5};
+    Integer[] tileCounts = listener.getTileCounts();
+    assertArrayEquals(expectedTileCounts, tileCounts);
+  }
+
   private int bytesPerPixel(DataType dataType) {
     switch (dataType) {
       case i1:

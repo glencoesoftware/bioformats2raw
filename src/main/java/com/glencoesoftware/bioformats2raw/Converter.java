@@ -93,9 +93,6 @@ import com.univocity.parsers.csv.CsvParser;
 import com.univocity.parsers.csv.CsvParserSettings;
 
 import ch.qos.logback.classic.Level;
-import me.tongfei.progressbar.DelegatingProgressBarConsumer;
-import me.tongfei.progressbar.ProgressBar;
-import me.tongfei.progressbar.ProgressBarBuilder;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -210,6 +207,8 @@ public class Converter implements Callable<Integer> {
 
   /** Calculated from outputLocation. */
   private volatile Path outputPath;
+
+  private IProgressListener progressListener;
 
   // Option setters
 
@@ -1084,6 +1083,10 @@ public class Converter implements Callable<Integer> {
         LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
     root.setLevel(Level.toLevel(logLevel));
 
+    if (progressBars) {
+      setProgressListener(new ProgressBarListener(logLevel));
+    }
+
     if (outputLocation.contains("://")) {
 
       LOGGER.info("*** experimental remote filesystem support ***");
@@ -1782,6 +1785,8 @@ public class Converter implements Callable<Integer> {
     finally {
       readers.put(reader);
     }
+    getProgressListener().notifyChunkStart(
+      plane, offset[4], offset[3], zOffset);
     Slf4JStopWatch t0 = new Slf4JStopWatch("getChunk");
     try {
       for (int z = zOffset; z < zOffset + zShape; z++) {
@@ -1813,6 +1818,7 @@ public class Converter implements Callable<Integer> {
         littleEndian ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN);
     }
     writeBytes(zarr, shape, offset, tileBuffer);
+    getProgressListener().notifyChunkEnd(plane, offset[4], offset[3], zOffset);
   }
 
   /**
@@ -1829,6 +1835,7 @@ public class Converter implements Callable<Integer> {
     throws FormatException, IOException, InterruptedException,
            EnumerationException
   {
+    getProgressListener().notifySeriesStart(series);
     IFormatReader workingReader = readers.take();
     int resolutions = 1;
     int sizeX;
@@ -1950,24 +1957,7 @@ public class Converter implements Callable<Integer> {
       List<CompletableFuture<Void>> futures =
         new ArrayList<CompletableFuture<Void>>();
 
-      final ProgressBar pb;
-      if (progressBars) {
-        ProgressBarBuilder builder = new ProgressBarBuilder()
-          .setInitialMax(tileCount)
-          .setTaskName(String.format("[%d/%d]", series, resolution));
-
-        if (!(logLevel.equals("OFF") ||
-          logLevel.equals("ERROR") ||
-          logLevel.equals("WARN")))
-        {
-          builder.setConsumer(new DelegatingProgressBarConsumer(LOGGER::trace));
-        }
-
-        pb = builder.build();
-      }
-      else {
-        pb = null;
-      }
+      getProgressListener().notifyResolutionStart(resolution, tileCount);
 
       try {
         for (int j=0; j<scaledHeight; j+=tileHeight) {
@@ -2016,11 +2006,6 @@ public class Converter implements Callable<Integer> {
                         "xx={} yy={} zz={} width={} height={} depth={}",
                         resolution, plane, xx, yy, zz, width, height, depth, t);
                     }
-                    finally {
-                      if (pb != null) {
-                        pb.step();
-                      }
-                    }
                   });
                 }
               }
@@ -2038,9 +2023,7 @@ public class Converter implements Callable<Integer> {
 
       }
       finally {
-        if (pb != null) {
-          pb.close();
-        }
+        getProgressListener().notifyResolutionEnd(resolution);
       }
     }
 
@@ -2048,6 +2031,7 @@ public class Converter implements Callable<Integer> {
     // do this after pixels are written, otherwise
     // min/max calculation won't have been performed
     setSeriesLevelMetadata(series, resolutions);
+    getProgressListener().notifySeriesEnd(series);
   }
 
   private void saveHCSMetadata(IMetadata meta) throws IOException {
@@ -2800,6 +2784,29 @@ public class Converter implements Callable<Integer> {
 
   private static Slf4JStopWatch stopWatch() {
     return new Slf4JStopWatch(LOGGER, Slf4JStopWatch.DEBUG_LEVEL);
+  }
+
+  /**
+   * Set a listener for tile processing events.
+   * Intended to be used to show a status bar.
+   *
+   * @param listener a progress event listener
+   */
+  public void setProgressListener(IProgressListener listener) {
+    progressListener = listener;
+  }
+
+  /**
+   * Get the currrent listener for tile processing events.
+   * If no listener was set, a no-op listener is returned.
+   *
+   * @return the current progress listener
+   */
+  public IProgressListener getProgressListener() {
+    if (progressListener == null) {
+      setProgressListener(new NoOpProgressListener());
+    }
+    return progressListener;
   }
 
   /**
