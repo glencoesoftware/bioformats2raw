@@ -116,7 +116,7 @@ startScripts {
   classpath += files('src/dist/lib/config/')
 
   doLast {
-    windowsScript.text = windowsScript.text.replaceAll('set CLASSPATH=.*', 'set CLASSPATH=.;%APP_HOME%/lib/*')
+    windowsScript.text = windowsScript.text.replaceAll('set CLASSPATH=.*', 'set CLASSPATH=.;%APP_HOME%\\\\lib\\\\*')
   }
 }
 
