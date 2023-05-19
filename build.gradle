@@ -19,9 +19,6 @@ repositories {
         url 'https://artifacts.glencoesoftware.com/artifactory/ome.releases'
     }
     maven {
-        url 'https://repo.glencoesoftware.com/repository/n5-zarr-snapshots/'
-    }
-    maven {
         url 'https://artifacts.glencoesoftware.com/artifactory/ome.external'
     }
     maven {
