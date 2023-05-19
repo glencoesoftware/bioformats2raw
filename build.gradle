@@ -22,16 +22,10 @@ repositories {
         url 'https://repo.glencoesoftware.com/repository/n5-zarr-snapshots/'
     }
     maven {
-        url 'https://repo.glencoesoftware.com/repository/jzarr-snapshots'
-    }
-    maven {
         url 'https://artifacts.glencoesoftware.com/artifactory/ome.external'
     }
     maven {
         url 'https://artifacts.glencoesoftware.com/artifactory/scijava-thirdparty'
-    }
-    maven {
-        url 'https://artifacts.glencoesoftware.com/artifactory/jzarr-releases'
     }
     maven {
         name 'Unidata'
