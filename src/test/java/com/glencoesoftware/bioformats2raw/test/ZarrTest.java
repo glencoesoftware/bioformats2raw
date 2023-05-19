@@ -973,6 +973,38 @@ public class ZarrTest {
   }
 
   /**
+   * Make sure an informative exception is thrown when trying to use
+   * OpenCV to downsample int8 data.
+   * See https://github.com/opencv/opencv/issues/7862
+   */
+  @Test
+  public void testUnsupportedOpenCVType() throws Exception {
+    input = fake("pixelType", "int8");
+    assertThrows(ExecutionException.class, () -> {
+      assertTool("--downsample-type", "LINEAR");
+    });
+  }
+
+  /**
+   * Make sure an informative exception is thrown when trying to use
+   * OpenCV to downsample int32 data. Uses the API instead of
+   * command line arguments.
+   * See https://github.com/opencv/opencv/issues/7862
+   */
+  @Test
+  public void testUnsupportedOpenCVTypeAPI() throws Exception {
+    input = fake("pixelType", "int32");
+    Converter apiConverter = new Converter();
+    apiConverter.setInputPath(input.toString());
+    apiConverter.setOutputPath(output.toString());
+    apiConverter.setDownsampling(Downsampling.AREA);
+
+    assertThrows(UnsupportedOperationException.class, () -> {
+      apiConverter.call();
+    });
+  }
+
+  /**
    * Test that nested storage works equivalently.
    *
    * @param nested whether to use "/" or "." as the chunk separator.

@@ -1883,6 +1883,15 @@ public class Converter implements Callable<Integer> {
       readers.put(workingReader);
     }
 
+    if ((pixelType == FormatTools.INT8 || pixelType == FormatTools.INT32) &&
+      getDownsampling() != Downsampling.SIMPLE && resolutions > 0)
+    {
+      String type = FormatTools.getPixelTypeString(pixelType);
+      throw new UnsupportedOperationException(
+        "OpenCV does not support downsampling " + type + " data. " +
+        "See https://github.com/opencv/opencv/issues/7862");
+    }
+
     LOGGER.info(
       "Preparing to write pyramid sizeX {} (tileWidth: {}) " +
       "sizeY {} (tileWidth: {}) sizeZ {} (tileDepth: {}) imageCount {}",
