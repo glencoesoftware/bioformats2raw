@@ -114,6 +114,10 @@ startScripts {
   // likely due to https://issues.gradle.org/browse/GRADLE-2991
   // see also discussion in https://github.com/glencoesoftware/bioformats2raw/pull/169
   classpath += files('src/dist/lib/config/')
+
+  doLast {
+    windowsScript.text = windowsScript.text.replaceAll('set CLASSPATH=.*', 'set CLASSPATH=.;%APP_HOME%\\\\lib\\\\*')
+  }
 }
 
 publishing {
