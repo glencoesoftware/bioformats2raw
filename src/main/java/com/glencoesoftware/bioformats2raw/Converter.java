@@ -150,7 +150,8 @@ public class Converter implements Callable<Integer> {
     new HashMap<String, Object>();;
   private volatile Class<?>[] extraReaders = new Class[] {
     PyramidTiffReader.class, MiraxReader.class,
-    BioTekReader.class, ND2PlateReader.class
+    BioTekReader.class, ND2PlateReader.class,
+    MetaxpressReader.class
   };
   private volatile boolean omeroMetadata = true;
   private volatile boolean nested = true;
