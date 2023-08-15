@@ -24,7 +24,7 @@ import loci.formats.FormatReader;
 import loci.formats.FormatTools;
 import loci.formats.MetadataTools;
 
-import loci.formats.in.NativeND2Reader;
+import loci.formats.in.ND2Reader;
 
 import loci.formats.meta.MetadataStore;
 import loci.formats.ome.OMEXMLMetadata;
@@ -37,14 +37,14 @@ import ome.xml.model.primitives.PositiveInteger;
 
 /**
  *
- * @see NativeND2Reader
+ * @see ND2Reader
  */
 public class ND2PlateReader extends FormatReader {
 
   private static final String PLATE_REGEX =
     "(.*_?)Well([A-Z])(\\d{2})_Channel(.*)_Seq(\\d{4}).nd2";
 
-  private transient NativeND2Reader reader = new NativeND2Reader();
+  private transient ND2Reader reader = new ND2Reader();
   private transient Pattern platePattern;
   private String[] files;
   private Integer[] fieldCount;
