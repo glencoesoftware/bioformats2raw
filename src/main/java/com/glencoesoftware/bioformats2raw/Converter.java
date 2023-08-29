@@ -1656,10 +1656,30 @@ public class Converter implements Callable<Integer> {
         String.format(scaleFormatString,
             getScaleFormatStringArgs(series, resolution - 1));
     final ZarrArray zarr = ZarrArray.open(getRootPath().resolve(pathName));
+
     int[] dimensions = zarr.getShape();
     int[] blockSizes = zarr.getChunks();
-    int activeTileWidth = blockSizes[blockSizes.length - 1];
-    int activeTileHeight = blockSizes[blockSizes.length - 2];
+
+    boolean interleaved = false;
+    IFormatReader r = readers.take();
+    try {
+      interleaved = r.isInterleaved();
+    }
+    finally {
+      readers.put(r);
+    }
+
+    int xIndex = blockSizes.length - 1;
+    int yIndex = blockSizes.length - 2;
+    int channels = 1;
+    if (getKeepRGB() && interleaved) {
+      xIndex--;
+      yIndex--;
+      channels = blockSizes[blockSizes.length - 1];
+    }
+
+    int activeTileWidth = blockSizes[xIndex];
+    int activeTileHeight = blockSizes[yIndex];
 
     // Upscale our base X and Y offsets, and sizes to the previous resolution
     // based on the pyramid scaling factor
@@ -1667,10 +1687,10 @@ public class Converter implements Callable<Integer> {
     yy *= PYRAMID_SCALE;
     width = (int) Math.min(
         activeTileWidth * PYRAMID_SCALE,
-        dimensions[dimensions.length - 1] - xx);
+        dimensions[xIndex] - xx);
     height = (int) Math.min(
         activeTileHeight * PYRAMID_SCALE,
-        dimensions[dimensions.length - 2] - yy);
+        dimensions[yIndex] - yy);
 
     IFormatReader reader = readers.take();
     int[] offset;
@@ -1683,14 +1703,18 @@ public class Converter implements Callable<Integer> {
 
     int bytesPerPixel = FormatTools.getBytesPerPixel(pixelType);
     int[] shape = new int[] {1, 1, 1, height, width};
-    // TODO: fix shape and downsampling for RGB
+    if (getKeepRGB() && interleaved) {
+      shape[2] = height;
+      shape[3] = width;
+      shape[4] = channels;
+    }
     byte[] tileAsBytes = readAsBytes(zarr, shape, offset);
 
     if (downsampling == Downsampling.SIMPLE) {
       return scaler.downsample(tileAsBytes, width, height,
         PYRAMID_SCALE, bytesPerPixel, false,
         FormatTools.isFloatingPoint(pixelType),
-        1, false);
+        channels, interleaved);
     }
 
     return OpenCVTools.downsample(
@@ -1943,13 +1967,18 @@ public class Converter implements Callable<Integer> {
       readers.put(workingReader);
     }
 
+    boolean opencv = getDownsampling() != Downsampling.SIMPLE;
     if ((pixelType == FormatTools.INT8 || pixelType == FormatTools.INT32) &&
-      getDownsampling() != Downsampling.SIMPLE && resolutions > 0)
+      opencv && resolutions > 0)
     {
       String type = FormatTools.getPixelTypeString(pixelType);
       throw new UnsupportedOperationException(
         "OpenCV does not support downsampling " + type + " data. " +
         "See https://github.com/opencv/opencv/issues/7862");
+    }
+    else if (interleaved && rgbChannels > 1 && opencv) {
+      throw new UnsupportedOperationException(
+        "Downsampling RGB data with OpenCV not supported");
     }
 
     LOGGER.info(
