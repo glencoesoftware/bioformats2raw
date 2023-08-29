@@ -210,6 +210,9 @@ public class Converter implements Callable<Integer> {
 
   private IProgressListener progressListener;
 
+  /** Whether or not to preserve channel storage for RGB data. */
+  private boolean keepRGB = false;
+
   // Option setters
 
   /**
@@ -799,6 +802,21 @@ public class Converter implements Callable<Integer> {
     dimensionOrder = order;
   }
 
+  /**
+   * Set whether or not to preserve channel ordering for input RGB data.
+   * False by default, so channels will be separated.
+   *
+   * @param keep true if RGB storage should be preserved
+   */
+  @Option(
+          names = "--keep-rgb",
+          description = "Keep RGB data (if present) as RGB",
+          defaultValue = "false"
+  )
+  public void setKeepRGB(boolean keep) {
+    keepRGB = keep;
+  }
+
   // Option getters
 
   /**
@@ -1036,10 +1054,17 @@ public class Converter implements Callable<Integer> {
   }
 
   /**
-   * @return current dimension roder
+   * @return current dimension order
    */
   public DimensionOrder getDimensionOrder() {
     return dimensionOrder;
+  }
+
+  /**
+   * @return whether or not to preserve RGB data
+   */
+  public boolean getKeepRGB() {
+    return keepRGB;
   }
 
   // Conversion methods
@@ -1198,17 +1223,20 @@ public class Converter implements Callable<Integer> {
       memoizer.setFlattenedResolutions(false);
       memoizer.setMetadataFiltered(true);
       memoizer.setMetadataStore(createMetadata());
-      ChannelSeparator separator = new ChannelSeparator(memoizer);
-      separator.setId(inputPath.toString());
-      separator.setResolution(0);
+      IFormatReader wrappedReader = memoizer;
+      if (!getKeepRGB()) {
+        wrappedReader = new ChannelSeparator(wrappedReader);
+      }
+      wrappedReader.setId(inputPath.toString());
+      wrappedReader.setResolution(0);
       if (reader instanceof MiraxReader) {
         ((MiraxReader) reader).setTileCache(tileCache);
       }
       if (omeroMetadata) {
-        readers.add(new MinMaxCalculator(separator));
+        readers.add(new MinMaxCalculator(wrappedReader));
       }
       else {
-        readers.add(separator);
+        readers.add(wrappedReader);
       }
       savedMemoFile = savedMemoFile || memoizer.isSavedToMemo();
     }
@@ -1655,6 +1683,7 @@ public class Converter implements Callable<Integer> {
 
     int bytesPerPixel = FormatTools.getBytesPerPixel(pixelType);
     int[] shape = new int[] {1, 1, 1, height, width};
+    // TODO: fix shape and downsampling for RGB
     byte[] tileAsBytes = readAsBytes(zarr, shape, offset);
 
     if (downsampling == Downsampling.SIMPLE) {
@@ -1729,6 +1758,19 @@ public class Converter implements Callable<Integer> {
     dimensions[o.indexOf("Z")] = sizeZ;
     dimensions[o.indexOf("C")] = sizeC;
     dimensions[o.indexOf("T")] = sizeT;
+
+    if (getKeepRGB() && reader.getRGBChannelCount() > 1) {
+      if (reader.isInterleaved()) {
+        dimensions[1] = scaledDepth;
+        dimensions[2] = scaledHeight;
+        dimensions[3] = scaledWidth;
+        dimensions[4] = reader.getRGBChannelCount();
+      }
+      else {
+        dimensions[1] = scaledDepth;
+        dimensions[2] = reader.getRGBChannelCount();
+      }
+    }
     return dimensions;
   }
 
@@ -1753,6 +1795,14 @@ public class Converter implements Callable<Integer> {
     offset[o.indexOf("Z")] = zct[0];
     offset[o.indexOf("C")] = zct[1];
     offset[o.indexOf("T")] = zct[2];
+
+    if (getKeepRGB() && reader.getRGBChannelCount() > 1) {
+      if (reader.isInterleaved()) {
+        offset[2] = y;
+        offset[3] = x;
+        offset[4] = 0;
+      }
+    }
     return offset;
   }
 
@@ -1845,6 +1895,8 @@ public class Converter implements Callable<Integer> {
     int sizeC;
     int imageCount;
     String readerDimensionOrder;
+    int rgbChannels;
+    boolean interleaved;
     try {
       // calculate a reasonable pyramid depth if not specified as an argument
       sizeX = workingReader.getSizeX();
@@ -1874,10 +1926,18 @@ public class Converter implements Callable<Integer> {
       LOGGER.info("Using {} pyramid resolutions", resolutions);
       sizeZ = workingReader.getSizeZ();
       sizeT = workingReader.getSizeT();
-      sizeC = workingReader.getSizeC();
+      sizeC = workingReader.getEffectiveSizeC();
       readerDimensionOrder = workingReader.getDimensionOrder();
       imageCount = workingReader.getImageCount();
       pixelType = workingReader.getPixelType();
+
+      rgbChannels = workingReader.getRGBChannelCount();
+      interleaved = workingReader.isInterleaved();
+
+      if (rgbChannels != workingReader.getSizeC() && getKeepRGB()) {
+        throw new UnsupportedOperationException(
+          "Mixed channel types not supported with '--keep-rgb'");
+      }
     }
     finally {
       readers.put(workingReader);
@@ -1943,14 +2003,27 @@ public class Converter implements Callable<Integer> {
         activeChunkDepth = scaledDepth;
       }
 
+      int[] chunkSize = new int[] {
+        1, 1, activeChunkDepth, activeTileHeight, activeTileWidth};
+      if (getKeepRGB() && rgbChannels > 1) {
+        chunkSize[1] = activeChunkDepth;
+        if (interleaved) {
+          chunkSize[2] = activeTileHeight;
+          chunkSize[3] = activeTileWidth;
+          chunkSize[4] = rgbChannels;
+        }
+        else {
+          chunkSize[2] = rgbChannels;
+        }
+      }
+
       DataType dataType = getZarrType(pixelType);
       String resolutionString = String.format(
               scaleFormatString, getScaleFormatStringArgs(series, resolution));
       ArrayParams arrayParams = new ArrayParams()
           .shape(getDimensions(
               workingReader, scaledWidth, scaledHeight, scaledDepth))
-          .chunks(new int[] {1, 1, activeChunkDepth, activeTileHeight,
-            activeTileWidth})
+          .chunks(chunkSize)
           .dataType(dataType)
           .dimensionSeparator(getDimensionSeparator())
           .compressor(CompressorFactory.create(
@@ -1989,6 +2062,14 @@ public class Converter implements Callable<Integer> {
                   executor.execute(() -> {
                     try {
                       int[] shape = {1, 1, 1, height, width};
+                      if (getKeepRGB() && rgbChannels > 1) {
+                        if (interleaved) {
+                          shape = new int[] {1, 1, height, width, rgbChannels};
+                        }
+                        else {
+                          shape = new int[] {1, 1, rgbChannels, height, width};
+                        }
+                      }
                       int[] offset;
                       IFormatReader reader = readers.take();
                       try {
@@ -2255,6 +2336,9 @@ public class Converter implements Callable<Integer> {
       }
       else {
         axisOrder = v.getDimensionOrder();
+      }
+      if (getKeepRGB() && v.isInterleaved()) {
+        axisOrder = "C" + axisOrder.replaceAll("[Cc]", "");
       }
     }
     finally {
