@@ -328,7 +328,7 @@ MiraxReader
 Supports 3D HISTECH .mrxs data. Only the full-resolution image is read; bioformats2raw will generate a pyramid from
 the full-resolution image, but will not read the original pyramid for this format. Datasets in this format include
 a .mrxs file (which is a JPEG thumbnail), along with a similarly-named directory containing a `Slidedat.ini`, `Index.dat`,
-and many `Data*.dat` files. The .mrxs file alone contains does not contain anything apart from the thumbnail;
+and many `Data*.dat` files. The .mrxs file alone does not contain anything apart from the thumbnail;
 it is very important to include the entire corresponding directory when transferring these datasets.
 
 The `mirax.use_metadata_dimensions` reader option can be used change how XY dimensions are calculated.
@@ -346,7 +346,7 @@ the same folder as the selected bioformats2raw input file. File names must match
   - Examples:
     - `A1_01_1_1_Phase Contrast_001.tif` (well A1, field 1, `Phase Contrast` channel)
     - `P24_01_1_9_DAPI_002.tif` (well P24, field 9, `DAPI` channel)
-    - `A1_-2_1_1_Tsf[Stitched[Channel1 300,400]]_001.tif` (well A1, field 1, `Tsf[Stitched][Channel 1 300,400]]` channel)
+    - `A1_-2_1_1_Tsf[Stitched[Channel1 300,400]]_001.tif` (well A1, field 1, `Tsf[Stitched[Channel1 300,400]]` channel)
 * `([A-Z]{1,2})(\\d{1,2})_(-?\\d+)(Z(\\d+))?_([A-Za-z0-9 ,\\[\\]]+)_(\\d+)_(\\d+)_(\\d+)?.tif[f]?`
   - This corresponds to: `<well row letter><well column index>_<field index><optional 'Z' and index>_<channel name>_<ignored index>_<t index>_<optional ignored index>`
   - Examples:
