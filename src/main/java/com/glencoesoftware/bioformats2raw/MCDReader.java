@@ -84,7 +84,7 @@ public class MCDReader extends FormatReader {
     // channels are stored interleaved, so reading requires
     // a lot of skipping through the pixel data block
 
-    in.skipBytes(bpp * no);
+    in.skipBytes(bpp * getReversePlaneIndex(no));
     int skip = bpp * (getImageCount() - 1);
 
     in.skipBytes(y * (skip + bpp) * getSizeX());
@@ -258,6 +258,8 @@ public class MCDReader extends FormatReader {
     }
     for (int a=0; a<acquisitions.size(); a++) {
       int imageIndex = a + panoramas.size();
+      setSeries(imageIndex);
+
       Acquisition acq = acquisitions.get(a);
       store.setImageName(acq.description, imageIndex);
 
@@ -267,10 +269,12 @@ public class MCDReader extends FormatReader {
         // this is kind of wrong, but the reference viewer
         // exposes both the name and label (which are often slightly different)
         // and this is the easiest way to do that in OME/OMERO model
-        store.setChannelName(channel.name, imageIndex, c);
-        store.setChannelFluor(channel.label, imageIndex, c);
+        int channelIndex = getPlaneIndex(c);
+        store.setChannelName(channel.name, imageIndex, channelIndex);
+        store.setChannelFluor(channel.label, imageIndex, channelIndex);
       }
     }
+    setSeries(0);
   }
 
   // -- Helper methods --
@@ -305,6 +309,41 @@ public class MCDReader extends FormatReader {
   {
     int len = s.readInt();
     return s.readString(len);
+  }
+
+  /**
+   * Calculate internal plane index.
+   * Allows moving the XYZ channels to the end of the channel list.
+   *
+   * @param no original plane index
+   * @return adjusted plane index
+   */
+  private int getPlaneIndex(int no) {
+    if (getImageCount() <= 3) {
+      return no;
+    }
+    if (no < 3) {
+      return (getImageCount() - 3) + no;
+    }
+    return no - 3;
+  }
+
+  /**
+   * Calculate internal plane index.
+   * Allows moving the XYZ channels to the end of the channel list.
+   *
+   * @param no original plane index
+   * @return adjusted plane index
+   */
+  private int getReversePlaneIndex(int no) {
+    if (getImageCount() <= 3) {
+      return no;
+    }
+    int threshold = getImageCount() - 3;
+    if (no < threshold) {
+      return no + 3;
+    }
+    return no - threshold;
   }
 
   // -- Helper class --
