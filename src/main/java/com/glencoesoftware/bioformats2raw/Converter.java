@@ -799,6 +799,249 @@ public class Converter implements Callable<Integer> {
     dimensionOrder = order;
   }
 
+  // Option resetters - reset to defaults
+
+  /**
+   * Reset all options to their default values.
+   */
+  public void resetOptions() {
+    resetInputPath();
+    resetOutputPath();
+    resetOutputOptions();
+    resetResolutions();
+    resetSeriesList();
+    resetTileWidth();
+    resetTileHeight();
+    resetChunkDepth();
+    resetLogLevel();
+    resetProgressBars();
+    resetPrintVersionOnly();
+    resetMaxWorkers();
+    resetMaxCachedTiles();
+    resetCompression();
+    resetCompressionProperties();
+    resetExtraReaders();
+    resetCalculateOMEROMetadata();
+    resetNested();
+    resetPyramidName();
+    resetScaleFormat();
+    resetAdditionalScaleFormatCSV();
+    resetMemoDirectory();
+    resetKeepMemoFiles();
+    resetDownsampling();
+    resetOverwrite();
+    resetFillValue();
+    resetReaderOptions();
+    resetNoHCS();
+    resetNoOMEMeta();
+    resetNoRootGroup();
+    resetReuseExistingResolutions();
+    resetMinImageSize();
+    resetDimensionOrder();
+  }
+
+  /**
+   */
+  public void resetInputPath() {
+    inputPath = null;
+  }
+
+  /**
+   */
+  public void resetOutputPath() {
+    outputLocation = null;
+  }
+
+  /**
+   */
+  public void resetOutputOptions() {
+    outputOptions = null;
+  }
+
+  /**
+   */
+  public void resetResolutions() {
+    pyramidResolutions = null;
+  }
+
+  /**
+   */
+  public void resetSeriesList() {
+    seriesList.clear();
+  }
+
+  /**
+   */
+  public void resetTileWidth() {
+    tileWidth = 1024;
+  }
+
+  /**
+   */
+  public void resetTileHeight() {
+    tileHeight = 1024;
+  }
+
+  /**
+   */
+  public void resetChunkDepth() {
+    chunkDepth = 1;
+  }
+
+  /**
+   */
+  public void resetLogLevel() {
+    logLevel = "WARN";
+  }
+
+  /**
+   */
+  public void resetProgressBars() {
+    progressBars = false;
+  }
+
+  /**
+   */
+  public void resetPrintVersionOnly() {
+    printVersion = false;
+  }
+
+  /**
+   */
+  public void resetMaxWorkers() {
+    maxWorkers = (int) Math.min(4, Runtime.getRuntime().availableProcessors());
+  }
+
+  /**
+   */
+  public void resetMaxCachedTiles() {
+    maxCachedTiles = 64;
+  }
+
+  /**
+   */
+  public void resetCompression() {
+    compressionType = ZarrCompression.blosc;
+  }
+
+  /**
+   */
+  public void resetCompressionProperties() {
+    compressionProperties.clear();
+  }
+
+  /**
+   */
+  public void resetExtraReaders() {
+    extraReaders = new Class[] {
+      PyramidTiffReader.class, MiraxReader.class,
+      BioTekReader.class, ND2PlateReader.class
+    };
+  }
+
+  /**
+   */
+  public void resetCalculateOMEROMetadata() {
+    omeroMetadata = true;
+  }
+
+  /**
+   */
+  public void resetNested() {
+    nested = true;
+  }
+
+  /**
+   */
+  public void resetPyramidName() {
+    pyramidName = null;
+  }
+
+  /**
+   */
+  public void resetScaleFormat() {
+    scaleFormatString = "%d/%d";
+  }
+
+  /**
+   */
+  public void resetAdditionalScaleFormatCSV() {
+    additionalScaleFormatStringArgsCsv = null;
+    additionalScaleFormatStringArgs = null;
+  }
+
+  /**
+   */
+  public void resetMemoDirectory() {
+    memoDirectory = null;
+  }
+
+  /**
+   */
+  public void resetKeepMemoFiles() {
+    keepMemoFiles = false;
+  }
+
+  /**
+   */
+  public void resetDownsampling() {
+    downsampling = Downsampling.SIMPLE;
+  }
+
+  /**
+   */
+  public void resetOverwrite() {
+    overwrite = false;
+  }
+
+  /**
+   */
+  public void resetFillValue() {
+    fillValue = null;
+  }
+
+  /**
+   */
+  public void resetReaderOptions() {
+    readerOptions.clear();
+  }
+
+  /**
+   */
+  public void resetNoHCS() {
+    noHCS = false;
+  }
+
+  /**
+   */
+  public void resetNoOMEMeta() {
+    noOMEMeta = false;
+  }
+
+  /**
+   */
+  public void resetNoRootGroup() {
+    noRootGroup = false;
+  }
+
+  /**
+   */
+  public void resetReuseExistingResolutions() {
+    reuseExistingResolutions = false;
+  }
+
+  /**
+   */
+  public void resetMinImageSize() {
+    minSize = MIN_SIZE;
+  }
+
+  /**
+   */
+  public void resetDimensionOrder() {
+    dimensionOrder = DimensionOrder.XYZCT;
+  }
+
   // Option getters
 
   /**
