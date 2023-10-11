@@ -307,7 +307,7 @@ public class Converter implements Callable<Integer> {
    * @param width tile width
    */
   @Option(
-    names = {"-w", "--tile_width"},
+    names = {"-w", "--tile-width", "--tile_width"},
     description = "Maximum tile width (default: ${DEFAULT-VALUE}). " +
       "This is both the chunk size (in X) when writing Zarr and the tile " +
       "size used for reading from the original data. Changing the tile " +
@@ -329,7 +329,7 @@ public class Converter implements Callable<Integer> {
    * @param height tile height
    */
   @Option(
-    names = {"-h", "--tile_height"},
+    names = {"-h", "--tile-height", "--tile_height"},
     description = "Maximum tile height (default: ${DEFAULT-VALUE}). " +
       "This is both the chunk size (in Y) when writing Zarr and the tile " +
       "size used for reading from the original data. Changing the tile " +
@@ -351,7 +351,7 @@ public class Converter implements Callable<Integer> {
    * @param depth Z chunk size
    */
   @Option(
-    names = {"-z", "--chunk_depth"},
+    names = {"-z", "--chunk-depth", "--chunk_depth"},
     description = "Maximum chunk depth to read (default: ${DEFAULT-VALUE}) ",
     defaultValue = "1"
   )
@@ -421,7 +421,7 @@ public class Converter implements Callable<Integer> {
    * @param workers maximum worker count
    */
   @Option(
-    names = "--max_workers",
+    names = {"--max-workers", "--max_workers"},
     description = "Maximum number of workers (default: ${DEFAULT-VALUE})"
   )
   public void setMaxWorkers(int workers) {
@@ -441,7 +441,7 @@ public class Converter implements Callable<Integer> {
    * @param maxTiles maximum number of cached tiles
    */
   @Option(
-    names = "--max_cached_tiles",
+    names = {"--max-cached-tiles", "--max_cached_tiles"},
     description =
       "Maximum number of tiles that will be cached across all "
       + "workers (default: ${DEFAULT-VALUE})",
