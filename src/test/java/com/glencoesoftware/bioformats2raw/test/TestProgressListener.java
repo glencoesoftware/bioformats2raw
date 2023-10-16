@@ -18,9 +18,17 @@ public class TestProgressListener implements IProgressListener {
   private int startedTiles = 0;
   private int completedTiles = 0;
   private int expectedTileCount = 0;
+  private int seriesTiles = 0;
+  private long totalTiles = 0;
 
   @Override
-  public void notifySeriesStart(int series) {
+  public void notifyTotalTileCount(long tileCount) {
+    totalTiles = tileCount;
+  }
+
+  @Override
+  public void notifySeriesStart(int series, int res, int tiles) {
+    seriesTiles = tiles;
   }
 
   @Override
@@ -62,6 +70,20 @@ public class TestProgressListener implements IProgressListener {
    */
   public Integer[] getTileCounts() {
     return finishedResolutions.toArray(new Integer[finishedResolutions.size()]);
+  }
+
+  /**
+   * @return the reported number of tiles for the most recent series
+   */
+  public int getSeriesTileCount() {
+    return seriesTiles;
+  }
+
+  /**
+   * @return the reported number of total tiles for the conversion
+   */
+  public long getTotalTileCount() {
+    return totalTiles;
   }
 
 }

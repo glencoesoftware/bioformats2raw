@@ -711,6 +711,12 @@ public class ZarrTest {
     Integer[] expectedTileCounts = new Integer[] {320, 80, 20, 5, 5, 5};
     Integer[] tileCounts = listener.getTileCounts();
     assertArrayEquals(expectedTileCounts, tileCounts);
+    long totalTileCount = 0;
+    for (Integer t : expectedTileCounts) {
+      totalTileCount += t;
+    }
+    assertEquals(totalTileCount, listener.getTotalTileCount());
+    assertEquals(totalTileCount, listener.getSeriesTileCount());
   }
 
   private int bytesPerPixel(DataType dataType) {

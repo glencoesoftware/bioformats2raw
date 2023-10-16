@@ -10,7 +10,13 @@ package com.glencoesoftware.bioformats2raw;
 public class NoOpProgressListener implements IProgressListener {
 
   @Override
-  public void notifySeriesStart(int series) {
+  public void notifyTotalTileCount(long tileCount) {
+  }
+
+  @Override
+  public void notifySeriesStart(int series, int resolutionCount,
+    int tileCount)
+  {
   }
 
   @Override

@@ -12,11 +12,21 @@ import java.util.EventListener;
 public interface IProgressListener extends EventListener {
 
   /**
+   * Indicates the total number of tiles in this conversion operation.
+   * Includes all resolutions in all series.
+   *
+   * @param tileCount total number of tiles
+   */
+  void notifyTotalTileCount(long tileCount);
+
+  /**
    * Indicates the beginning of processing a particular series.
    *
    * @param series the series index being processed
+   * @param resolutionCount total number of resolutions in this series
+   * @param tileCount total number of tiles for all resolutions in this series
    */
-  void notifySeriesStart(int series);
+  void notifySeriesStart(int series, int resolutionCount, int tileCount);
 
   /**
    * Indicates the end of processing a particular series.

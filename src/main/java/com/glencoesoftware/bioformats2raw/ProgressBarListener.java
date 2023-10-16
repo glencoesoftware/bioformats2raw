@@ -32,14 +32,21 @@ public class ProgressBarListener implements IProgressListener {
     logLevel = level;
   }
 
+  @Override
+  public void notifyTotalTileCount(long tileCount) {
+    // intentional no-op
+  }
 
   @Override
-  public void notifySeriesStart(int series) {
+  public void notifySeriesStart(int series, int resolutionCount,
+    int tileCount)
+  {
     currentSeries = series;
   }
 
   @Override
   public void notifySeriesEnd(int series) {
+    // intentional no-op
   }
 
   @Override
