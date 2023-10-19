@@ -33,13 +33,13 @@ public class ProgressBarListener implements IProgressListener {
   }
 
   @Override
-  public void notifyTotalTileCount(long tileCount) {
+  public void notifyTotalCounts(int seriesCount, long chunkCount) {
     // intentional no-op
   }
 
   @Override
   public void notifySeriesStart(int series, int resolutionCount,
-    int tileCount)
+    int chunkCount)
   {
     currentSeries = series;
   }
@@ -50,9 +50,9 @@ public class ProgressBarListener implements IProgressListener {
   }
 
   @Override
-  public void notifyResolutionStart(int resolution, int tileCount) {
+  public void notifyResolutionStart(int resolution, int chunkCount) {
     ProgressBarBuilder builder = new ProgressBarBuilder()
-      .setInitialMax(tileCount)
+      .setInitialMax(chunkCount)
       .setTaskName(String.format("[%d/%d]", currentSeries, resolution));
 
     if (!(logLevel.equals("OFF") ||

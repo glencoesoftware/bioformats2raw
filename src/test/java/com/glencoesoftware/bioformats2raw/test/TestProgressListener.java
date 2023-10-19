@@ -22,7 +22,7 @@ public class TestProgressListener implements IProgressListener {
   private long totalTiles = 0;
 
   @Override
-  public void notifyTotalTileCount(long tileCount) {
+  public void notifyTotalCounts(int seriesCount, long tileCount) {
     totalTiles = tileCount;
   }
 
@@ -68,21 +68,21 @@ public class TestProgressListener implements IProgressListener {
    *
    * @return an array with one element per resolution
    */
-  public Integer[] getTileCounts() {
+  public Integer[] getChunkCounts() {
     return finishedResolutions.toArray(new Integer[finishedResolutions.size()]);
   }
 
   /**
    * @return the reported number of tiles for the most recent series
    */
-  public int getSeriesTileCount() {
+  public int getSeriesChunkCount() {
     return seriesTiles;
   }
 
   /**
    * @return the reported number of total tiles for the conversion
    */
-  public long getTotalTileCount() {
+  public long getTotalChunkCount() {
     return totalTiles;
   }
 
