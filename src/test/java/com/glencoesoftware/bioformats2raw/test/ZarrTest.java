@@ -1984,6 +1984,40 @@ public class ZarrTest {
   }
 
   /**
+   * Check that setting and resetting options via API will reset options to
+   * their default values.
+   */
+  @Test
+  public void testResetOptions() throws Exception {
+    input = fake("series", "2", "sizeX", "4096", "sizeY", "4096");
+
+    Converter apiConverter = new Converter();
+    apiConverter.setInputPath(input.toString());
+    apiConverter.setOutputPath(output.toString());
+    apiConverter.setSeriesList(Collections.singletonList(1));
+    apiConverter.setTileWidth(128);
+    apiConverter.setTileHeight(128);
+
+    assertEquals(apiConverter.getInputPath(), input.toString());
+    assertEquals(apiConverter.getOutputPath(), output.toString());
+    assertEquals(apiConverter.getSeriesList(), Collections.singletonList(1));
+    assertEquals(apiConverter.getTileWidth(), 128);
+    assertEquals(apiConverter.getTileHeight(), 128);
+
+    apiConverter.resetInputPath();
+    assertEquals(apiConverter.getInputPath(), null);
+
+    apiConverter.setInputPath(input.toString());
+
+    apiConverter.resetOptions();
+    assertEquals(apiConverter.getInputPath(), null);
+    assertEquals(apiConverter.getOutputPath(), null);
+    assertEquals(apiConverter.getSeriesList().size(), 0);
+    assertEquals(apiConverter.getTileWidth(), 1024);
+    assertEquals(apiConverter.getTileHeight(), 1024);
+  }
+
+  /**
    * @param root dataset root path
    * @param rowCount total rows the plate could contain
    * @param colCount total columns the plate could contain

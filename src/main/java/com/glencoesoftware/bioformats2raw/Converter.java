@@ -867,7 +867,7 @@ public class Converter implements Callable<Integer> {
   /**
    */
   public void resetSeriesList() {
-    seriesList.clear();
+    seriesList = new ArrayList<Integer>();
   }
 
   /**
@@ -927,7 +927,7 @@ public class Converter implements Callable<Integer> {
   /**
    */
   public void resetCompressionProperties() {
-    compressionProperties.clear();
+    compressionProperties = new HashMap<String, Object>();
   }
 
   /**
@@ -1003,7 +1003,7 @@ public class Converter implements Callable<Integer> {
   /**
    */
   public void resetReaderOptions() {
-    readerOptions.clear();
+    readerOptions = new ArrayList<String>();
   }
 
   /**
@@ -1048,7 +1048,7 @@ public class Converter implements Callable<Integer> {
    * @return path to input data
    */
   public String getInputPath() {
-    return inputPath.toString();
+    return inputPath == null ? null : inputPath.toString();
   }
 
   /**
