@@ -130,49 +130,41 @@ public class Converter implements Callable<Integer> {
 
   private Map<String, String> outputOptions;
   private volatile Integer pyramidResolutions;
-  private volatile List<Integer> seriesList = new ArrayList<Integer>();
+  private volatile List<Integer> seriesList;
 
-  private volatile int tileWidth = 1024;
-  private volatile int tileHeight = 1024;
-  private volatile int chunkDepth = 1;
-  private volatile String logLevel = "WARN";
+  private volatile int tileWidth;
+  private volatile int tileHeight;
+  private volatile int chunkDepth;
+  private volatile String logLevel;
   private volatile boolean progressBars = false;
   private volatile boolean printVersion = false;
 
-  // cap the default worker count at 4, to prevent problems with
-  // large images that are not tiled
-  private volatile int maxWorkers =
-      (int) Math.min(4, Runtime.getRuntime().availableProcessors());
-
-  private volatile int maxCachedTiles = 64;
-  private volatile ZarrCompression compressionType = ZarrCompression.blosc;
-  private volatile Map<String, Object> compressionProperties =
-    new HashMap<String, Object>();;
-  private volatile Class<?>[] extraReaders = new Class[] {
-    PyramidTiffReader.class, MiraxReader.class,
-    BioTekReader.class, ND2PlateReader.class
-  };
+  private volatile int maxWorkers;
+  private volatile int maxCachedTiles;
+  private volatile ZarrCompression compressionType;
+  private volatile Map<String, Object> compressionProperties;
+  private volatile Class<?>[] extraReaders;
   private volatile boolean omeroMetadata = true;
   private volatile boolean nested = true;
   private volatile String pyramidName = null;
-  private volatile String scaleFormatString = "%d/%d";
+  private volatile String scaleFormatString;
   private volatile Path additionalScaleFormatStringArgsCsv;
 
   /** Additional scale format string arguments after parsing. */
   private volatile List<String[]> additionalScaleFormatStringArgs;
 
-  private volatile DimensionOrder dimensionOrder = DimensionOrder.XYZCT;
+  private volatile DimensionOrder dimensionOrder;
   private volatile File memoDirectory;
   private volatile boolean keepMemoFiles = false;
-  private volatile Downsampling downsampling = Downsampling.SIMPLE;
+  private volatile Downsampling downsampling;
   private volatile boolean overwrite = false;
   private volatile Short fillValue = null;
-  private volatile List<String> readerOptions = new ArrayList<String>();
+  private volatile List<String> readerOptions;
   private volatile boolean noHCS = false;
   private volatile boolean noOMEMeta = false;
   private volatile boolean noRootGroup = false;
   private volatile boolean reuseExistingResolutions = false;
-  private volatile int minSize = MIN_SIZE;
+  private volatile int minSize;
 
   /** Scaling implementation that will be used during downsampling. */
   private volatile IImageScaler scaler = new SimpleImageScaler();
@@ -218,11 +210,17 @@ public class Converter implements Callable<Integer> {
   @Parameters(
     index = "0",
     arity = "1",
-    description = "file to convert"
+    description = "file to convert",
+    defaultValue = Option.NULL_VALUE
   )
   public void setInputPath(String input) {
-    // this could be expanded later to support files not on disk
-    inputPath = Paths.get(input);
+    if (input != null) {
+      // this could be expanded later to support files not on disk
+      inputPath = Paths.get(input);
+    }
+    else {
+      inputPath = null;
+    }
   }
 
   /**
@@ -237,7 +235,8 @@ public class Converter implements Callable<Integer> {
       "Filesystems. For example, if the output path given " +
       "is 's3://my-bucket/some-path' *and* you have an "+
       "S3FileSystem implementation in your classpath, then " +
-      "all files will be written to S3."
+      "all files will be written to S3.",
+    defaultValue = Option.NULL_VALUE
   )
   public void setOutputPath(String output) {
     outputLocation = output;
@@ -255,7 +254,8 @@ public class Converter implements Callable<Integer> {
       "to be used as an additional argument to Filesystem " +
       "implementations if used. For example, " +
       "--output-options=s3fs_path_style_access=true|... " +
-      "might be useful for connecting to minio."
+      "might be useful for connecting to minio.",
+    defaultValue = Option.NULL_VALUE
   )
   public void setOutputOptions(Map<String, String> options) {
     outputOptions = options;
@@ -265,16 +265,19 @@ public class Converter implements Callable<Integer> {
    * Define the number of resolutions in the generated pyramid.
    * By default, the resolution count is calculated based upon
    * the input image size. The resolution count includes the
-   * full-resolution image, so must be greater than 0.
+   * full-resolution image. If the resolution count is null,
+   * then the number of resolutions will be calculated automatically.
+   * If not null, it must be greater than 0.
    *
    * @param resolutions pyramid resolution count
    */
   @Option(
     names = {"-r", "--resolutions"},
-    description = "Number of pyramid resolutions to generate"
+    description = "Number of pyramid resolutions to generate",
+    defaultValue = Option.NULL_VALUE
   )
-  public void setResolutions(int resolutions) {
-    if (resolutions > 0) {
+  public void setResolutions(Integer resolutions) {
+    if (resolutions == null || resolutions > 0) {
       pyramidResolutions = resolutions;
     }
     else {
@@ -293,11 +296,15 @@ public class Converter implements Callable<Integer> {
     names = {"-s", "--series"},
     arity = "0..1",
     split = ",",
-    description = "Comma-separated list of series indexes to convert"
+    description = "Comma-separated list of series indexes to convert",
+    defaultValue = Option.NULL_VALUE
   )
   public void setSeriesList(List<Integer> seriesToConvert) {
     if (seriesToConvert != null) {
       seriesList = seriesToConvert;
+    }
+    else {
+      seriesList = new ArrayList<Integer>();
     }
   }
 
@@ -393,7 +400,8 @@ public class Converter implements Callable<Integer> {
   @Option(
     names = {"-p", "--progress"},
     description = "Print progress bars during conversion",
-    help = true
+    help = true,
+    defaultValue = "false"
   )
   public void setProgressBars(boolean useProgressBars) {
     progressBars = useProgressBars;
@@ -408,7 +416,8 @@ public class Converter implements Callable<Integer> {
   @Option(
     names = "--version",
     description = "Print version information and exit",
-    help = true
+    help = true,
+    defaultValue = "false"
   )
   public void setPrintVersionOnly(boolean versionOnly) {
     printVersion = versionOnly;
@@ -422,10 +431,15 @@ public class Converter implements Callable<Integer> {
    */
   @Option(
     names = "--max_workers",
-    description = "Maximum number of workers (default: ${DEFAULT-VALUE})"
+    description = "Maximum number of workers (default: ${DEFAULT-VALUE})",
+    defaultValue = "4"
   )
   public void setMaxWorkers(int workers) {
-    if (workers > 0) {
+    int availableProcessors = Runtime.getRuntime().availableProcessors();
+    if (workers > availableProcessors) {
+      maxWorkers = availableProcessors;
+    }
+    else if (workers > 0) {
       maxWorkers = workers;
     }
     else {
@@ -477,11 +491,15 @@ public class Converter implements Callable<Integer> {
           names = {"--compression-properties"},
           description = "Properties for the chosen compression (see " +
             "https://jzarr.readthedocs.io/en/latest/tutorial.html#compressors" +
-            " )"
+            " )",
+          defaultValue = Option.NULL_VALUE
   )
   public void setCompressionProperties(Map<String, Object> properties) {
     if (properties != null) {
       compressionProperties = properties;
+    }
+    else {
+      compressionProperties = new HashMap<String, Object>();
     }
   }
 
@@ -497,7 +515,12 @@ public class Converter implements Callable<Integer> {
           arity = "0..1",
           split = ",",
           description = "Separate set of readers to include; " +
-                  "(default: ${DEFAULT-VALUE})"
+                  "(default: ${DEFAULT-VALUE})",
+          defaultValue =
+            "com.glencoesoftware.bioformats2raw.PyramidTiffReader," +
+            "com.glencoesoftware.bioformats2raw.MiraxReader," +
+            "com.glencoesoftware.bioformats2raw.BioTekReader," +
+            "com.glencoesoftware.bioformats2raw.ND2PlateReader"
   )
   public void setExtraReaders(Class<?>[] extraReaderList) {
     if (extraReaderList != null) {
@@ -517,7 +540,8 @@ public class Converter implements Callable<Integer> {
           description = "Whether to calculate minimum and maximum pixel " +
                         "values. Min/max calculation can result in slower " +
                         "conversions. If true, min/max values are saved as " +
-                        "OMERO rendering metadata (true by default)"
+                        "OMERO rendering metadata (true by default)",
+          defaultValue = "false"
   )
   public void setCalculateOMEROMetadata(boolean noMinMax) {
     omeroMetadata = !noMinMax;
@@ -532,7 +556,8 @@ public class Converter implements Callable<Integer> {
   @Option(
           names = "--no-nested", negatable=true,
           description = "Whether to use '/' as the chunk path separator " +
-                  "(true by default)"
+                  "(true by default)",
+          defaultValue = "false"
   )
   public void setUnnested(boolean unnested) {
     nested = !unnested;
@@ -549,7 +574,8 @@ public class Converter implements Callable<Integer> {
   @Option(
           names = "--pyramid-name",
           description = "Name of pyramid (default: ${DEFAULT-VALUE}) " +
-                  "[Can break compatibility with raw2ometiff]"
+                  "[Can break compatibility with raw2ometiff]",
+          defaultValue = Option.NULL_VALUE
   )
   public void setPyramidName(String pyramid) {
     pyramidName = pyramid;
@@ -567,7 +593,8 @@ public class Converter implements Callable<Integer> {
                   "by any additional arguments brought in from " +
                   "`--additional-scale-format-string-args` " +
                   "[Can break compatibility with raw2ometiff] " +
-                  "(default: ${DEFAULT-VALUE})"
+                  "(default: ${DEFAULT-VALUE})",
+          defaultValue = "%d/%d"
   )
   public void setScaleFormat(String formatString) {
     if (formatString != null) {
@@ -587,7 +614,8 @@ public class Converter implements Callable<Integer> {
                   "scale format string mapping the at the corresponding CSV " +
                   "row index.  It is expected that the CSV file contain " +
                   "exactly the same number of rows as the input file has " +
-                  "series"
+                  "series",
+          defaultValue = Option.NULL_VALUE
   )
   public void setAdditionalScaleFormatCSV(Path scaleFormatCSV) {
     additionalScaleFormatStringArgsCsv = scaleFormatCSV;
@@ -600,7 +628,8 @@ public class Converter implements Callable<Integer> {
    */
   @Option(
           names = "--memo-directory",
-          description = "Directory used to store .bfmemo cache files"
+          description = "Directory used to store .bfmemo cache files",
+          defaultValue = Option.NULL_VALUE
   )
   public void setMemoDirectory(File memoDir) {
     memoDirectory = memoDir;
@@ -614,7 +643,8 @@ public class Converter implements Callable<Integer> {
    */
   @Option(
           names = "--keep-memo-files",
-          description = "Do not delete .bfmemo files created during conversion"
+          description = "Do not delete .bfmemo files created during conversion",
+          defaultValue = "false"
   )
   public void setKeepMemoFiles(boolean keepMemos) {
     keepMemoFiles = keepMemos;
@@ -644,7 +674,8 @@ public class Converter implements Callable<Integer> {
    */
   @Option(
           names = "--overwrite",
-          description = "Overwrite the output directory if it exists"
+          description = "Overwrite the output directory if it exists",
+          defaultValue = "false"
   )
   public void setOverwrite(boolean canOverwrite) {
     overwrite = canOverwrite;
@@ -659,7 +690,8 @@ public class Converter implements Callable<Integer> {
   @Option(
           names = "--fill-value",
           description = "Default value to fill in for missing tiles (0-255)" +
-                        " (currently .mrxs only)"
+                        " (currently .mrxs only)",
+          defaultValue = Option.NULL_VALUE
   )
   public void setFillValue(Short tileFill) {
     if (tileFill == null || (tileFill >= 0 && tileFill <= 255)) {
@@ -681,11 +713,15 @@ public class Converter implements Callable<Integer> {
           names = "--options",
           split = ",",
           description =
-            "Reader-specific options, in format key=value[,key2=value2]"
+            "Reader-specific options, in format key=value[,key2=value2]",
+          defaultValue = Option.NULL_VALUE
   )
   public void setReaderOptions(List<String> readerOpts) {
     if (readerOpts != null) {
       readerOptions = readerOpts;
+    }
+    else {
+      readerOptions = new ArrayList<String>();
     }
   }
 
@@ -699,7 +735,8 @@ public class Converter implements Callable<Integer> {
    */
   @Option(
           names = "--no-hcs",
-          description = "Turn off HCS writing"
+          description = "Turn off HCS writing",
+          defaultValue = "false"
   )
   public void setNoHCS(boolean noHCSWriting) {
     noHCS = noHCSWriting;
@@ -715,7 +752,8 @@ public class Converter implements Callable<Integer> {
   @Option(
           names = "--no-ome-meta-export",
           description = "Turn off OME metadata exporting " +
-                        "[Will break compatibility with raw2ometiff]"
+                        "[Will break compatibility with raw2ometiff]",
+          defaultValue = "false"
   )
   public void setNoOMEMeta(boolean noOMEMetaWriting) {
     noOMEMeta = noOMEMetaWriting;
@@ -730,8 +768,8 @@ public class Converter implements Callable<Integer> {
   @Option(
           names = "--no-root-group",
           description = "Turn off creation of root group and corresponding " +
-                        "metadata [Will break compatibility with raw2ometiff]"
-
+                        "metadata [Will break compatibility with raw2ometiff]",
+          defaultValue = "false"
   )
   public void setNoRootGroup(boolean noRootGroupWriting) {
     noRootGroup = noRootGroupWriting;
@@ -748,8 +786,8 @@ public class Converter implements Callable<Integer> {
   @Option(
       names = "--use-existing-resolutions",
       description = "Use existing sub resolutions from original input format" +
-          "[Will break compatibility with raw2ometiff]"
-
+          "[Will break compatibility with raw2ometiff]",
+      defaultValue = "false"
   )
   public void setReuseExistingResolutions(boolean reuse) {
     reuseExistingResolutions = reuse;
@@ -797,249 +835,6 @@ public class Converter implements Callable<Integer> {
   )
   public void setDimensionOrder(DimensionOrder order) {
     dimensionOrder = order;
-  }
-
-  // Option resetters - reset to defaults
-
-  /**
-   * Reset all options to their default values.
-   */
-  public void resetOptions() {
-    resetInputPath();
-    resetOutputPath();
-    resetOutputOptions();
-    resetResolutions();
-    resetSeriesList();
-    resetTileWidth();
-    resetTileHeight();
-    resetChunkDepth();
-    resetLogLevel();
-    resetProgressBars();
-    resetPrintVersionOnly();
-    resetMaxWorkers();
-    resetMaxCachedTiles();
-    resetCompression();
-    resetCompressionProperties();
-    resetExtraReaders();
-    resetCalculateOMEROMetadata();
-    resetNested();
-    resetPyramidName();
-    resetScaleFormat();
-    resetAdditionalScaleFormatCSV();
-    resetMemoDirectory();
-    resetKeepMemoFiles();
-    resetDownsampling();
-    resetOverwrite();
-    resetFillValue();
-    resetReaderOptions();
-    resetNoHCS();
-    resetNoOMEMeta();
-    resetNoRootGroup();
-    resetReuseExistingResolutions();
-    resetMinImageSize();
-    resetDimensionOrder();
-  }
-
-  /**
-   */
-  public void resetInputPath() {
-    inputPath = null;
-  }
-
-  /**
-   */
-  public void resetOutputPath() {
-    outputLocation = null;
-  }
-
-  /**
-   */
-  public void resetOutputOptions() {
-    outputOptions = null;
-  }
-
-  /**
-   */
-  public void resetResolutions() {
-    pyramidResolutions = null;
-  }
-
-  /**
-   */
-  public void resetSeriesList() {
-    seriesList = new ArrayList<Integer>();
-  }
-
-  /**
-   */
-  public void resetTileWidth() {
-    tileWidth = 1024;
-  }
-
-  /**
-   */
-  public void resetTileHeight() {
-    tileHeight = 1024;
-  }
-
-  /**
-   */
-  public void resetChunkDepth() {
-    chunkDepth = 1;
-  }
-
-  /**
-   */
-  public void resetLogLevel() {
-    logLevel = "WARN";
-  }
-
-  /**
-   */
-  public void resetProgressBars() {
-    progressBars = false;
-  }
-
-  /**
-   */
-  public void resetPrintVersionOnly() {
-    printVersion = false;
-  }
-
-  /**
-   */
-  public void resetMaxWorkers() {
-    maxWorkers = (int) Math.min(4, Runtime.getRuntime().availableProcessors());
-  }
-
-  /**
-   */
-  public void resetMaxCachedTiles() {
-    maxCachedTiles = 64;
-  }
-
-  /**
-   */
-  public void resetCompression() {
-    compressionType = ZarrCompression.blosc;
-  }
-
-  /**
-   */
-  public void resetCompressionProperties() {
-    compressionProperties = new HashMap<String, Object>();
-  }
-
-  /**
-   */
-  public void resetExtraReaders() {
-    extraReaders = new Class[] {
-      PyramidTiffReader.class, MiraxReader.class,
-      BioTekReader.class, ND2PlateReader.class
-    };
-  }
-
-  /**
-   */
-  public void resetCalculateOMEROMetadata() {
-    omeroMetadata = true;
-  }
-
-  /**
-   */
-  public void resetNested() {
-    nested = true;
-  }
-
-  /**
-   */
-  public void resetPyramidName() {
-    pyramidName = null;
-  }
-
-  /**
-   */
-  public void resetScaleFormat() {
-    scaleFormatString = "%d/%d";
-  }
-
-  /**
-   */
-  public void resetAdditionalScaleFormatCSV() {
-    additionalScaleFormatStringArgsCsv = null;
-    additionalScaleFormatStringArgs = null;
-  }
-
-  /**
-   */
-  public void resetMemoDirectory() {
-    memoDirectory = null;
-  }
-
-  /**
-   */
-  public void resetKeepMemoFiles() {
-    keepMemoFiles = false;
-  }
-
-  /**
-   */
-  public void resetDownsampling() {
-    downsampling = Downsampling.SIMPLE;
-  }
-
-  /**
-   */
-  public void resetOverwrite() {
-    overwrite = false;
-  }
-
-  /**
-   */
-  public void resetFillValue() {
-    fillValue = null;
-  }
-
-  /**
-   */
-  public void resetReaderOptions() {
-    readerOptions = new ArrayList<String>();
-  }
-
-  /**
-   */
-  public void resetNoHCS() {
-    noHCS = false;
-  }
-
-  /**
-   */
-  public void resetNoOMEMeta() {
-    noOMEMeta = false;
-  }
-
-  /**
-   */
-  public void resetNoRootGroup() {
-    noRootGroup = false;
-  }
-
-  /**
-   */
-  public void resetReuseExistingResolutions() {
-    reuseExistingResolutions = false;
-  }
-
-  /**
-   */
-  public void resetMinImageSize() {
-    minSize = MIN_SIZE;
-  }
-
-  /**
-   */
-  public void resetDimensionOrder() {
-    dimensionOrder = DimensionOrder.XYZCT;
   }
 
   // Option getters

@@ -47,7 +47,7 @@ configurations.all {
 dependencies {
     implementation 'net.java.dev.jna:jna:5.10.0'
     implementation 'ome:formats-gpl:7.0.0'
-    implementation 'info.picocli:picocli:4.6.1'
+    implementation 'info.picocli:picocli:4.7.5'
     implementation 'com.univocity:univocity-parsers:2.8.4'
     implementation 'com.bc.zarr:jzarr:0.3.5'
     // implementation 'org.carlspring.cloud.aws:s3fs-nio:1.0-SNAPSHOT'

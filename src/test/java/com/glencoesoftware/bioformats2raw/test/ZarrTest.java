@@ -995,6 +995,9 @@ public class ZarrTest {
   public void testUnsupportedOpenCVTypeAPI() throws Exception {
     input = fake("pixelType", "int32");
     Converter apiConverter = new Converter();
+    CommandLine cmd = new CommandLine(apiConverter);
+    cmd.parseArgs(); // this sets default values for all options
+
     apiConverter.setInputPath(input.toString());
     apiConverter.setOutputPath(output.toString());
     apiConverter.setDownsampling(Downsampling.AREA);
@@ -1938,6 +1941,9 @@ public class ZarrTest {
     input = fake("series", "2", "sizeX", "4096", "sizeY", "4096");
 
     Converter apiConverter = new Converter();
+    CommandLine cmd = new CommandLine(apiConverter);
+    cmd.parseArgs(); // this sets default values for all options
+
     apiConverter.setInputPath(input.toString());
     apiConverter.setOutputPath(output.toString());
     apiConverter.setSeriesList(Collections.singletonList(1));
@@ -1992,6 +1998,9 @@ public class ZarrTest {
     input = fake("series", "2", "sizeX", "4096", "sizeY", "4096");
 
     Converter apiConverter = new Converter();
+    CommandLine cmd = new CommandLine(apiConverter);
+    cmd.parseArgs(); // this sets default values for all options
+
     apiConverter.setInputPath(input.toString());
     apiConverter.setOutputPath(output.toString());
     apiConverter.setSeriesList(Collections.singletonList(1));
@@ -2004,13 +2013,15 @@ public class ZarrTest {
     assertEquals(apiConverter.getTileWidth(), 128);
     assertEquals(apiConverter.getTileHeight(), 128);
 
-    apiConverter.resetInputPath();
+    apiConverter.call(); // do a conversion
+
+    cmd.parseArgs(); // this should reset default values for all options
+
     assertEquals(apiConverter.getInputPath(), null);
 
     apiConverter.setInputPath(input.toString());
 
-    apiConverter.resetOptions();
-    assertEquals(apiConverter.getInputPath(), null);
+    assertEquals(apiConverter.getInputPath(), input.toString());
     assertEquals(apiConverter.getOutputPath(), null);
     assertEquals(apiConverter.getSeriesList().size(), 0);
     assertEquals(apiConverter.getTileWidth(), 1024);
