@@ -212,17 +212,53 @@ public class BioTekReader extends FormatReader {
 
     String[] files = parent.list(true);
     Arrays.sort(files);
+
+    // is there only one well in the directory?
+    // compare the well identifiers (relative file name up to first _)
+    boolean sameWell = true;
+    int endIndex = files[0].indexOf("_");
+    if (endIndex > 0) {
+      String wellCheck = files[0].substring(0, endIndex);
+      LOGGER.debug("well check string = {}", wellCheck);
+      for (int i=0; i<files.length; i++) {
+        if (!files[i].startsWith(wellCheck)) {
+          sameWell = false;
+          break;
+        }
+      }
+    }
+    LOGGER.debug("single well in {}: {}", parent, sameWell);
+    // if only one well exists, look in other subdirectories of the parent
+    if (sameWell) {
+      Location plateDir = parent.getParentFile();
+      LOGGER.debug("plate directory = {}", plateDir);
+      String[] wellDirs = plateDir.list(true);
+      ArrayList<String> allFiles = new ArrayList<String>();
+      for (String well : wellDirs) {
+        Location wellDir = new Location(plateDir, well).getAbsoluteFile();
+        LOGGER.debug("looking in well directory = {}", wellDir);
+        String[] f = wellDir.list(true);
+        for (String file : f) {
+          LOGGER.debug("  adding well file {}", file);
+          allFiles.add(new Location(wellDir, file).getAbsolutePath());
+        }
+      }
+      LOGGER.debug("found files = {}", allFiles);
+      files = allFiles.toArray(new String[allFiles.size()]);
+      Arrays.sort(files);
+    }
+
     Pattern regexA = Pattern.compile(TIFF_REGEX_A);
     Pattern regexB = Pattern.compile(TIFF_REGEX_B);
     Pattern regexZ = Pattern.compile(TIFF_REGEX_Z);
+    ArrayList<WellIndex> validWellRowCol = new ArrayList<WellIndex>();
     int maxRow = 0;
-    int minRow = Integer.MAX_VALUE;
     int maxCol = 0;
-    int minCol = Integer.MAX_VALUE;
     int maxPlateAcq = 0;
     Map<Integer, Integer> maxField = new HashMap<Integer, Integer>();
 
-    for (String f : files) {
+    for (String absolutePath : files) {
+      String f = new Location(absolutePath).getName();
       Matcher m = regexA.matcher(f);
       int rowIndex = -1;
       int colIndex = -1;
@@ -269,20 +305,17 @@ public class BioTekReader extends FormatReader {
           well.setFieldCount(fieldIndex + 1);
         }
         int c = well.addChannelName(fieldIndex, channelName);
-        well.addFile(new PlaneIndex(fieldIndex, z, c, t),
-          new Location(parent, f).getAbsolutePath());
+        well.addFile(new PlaneIndex(fieldIndex, z, c, t), absolutePath);
 
         if (rowIndex > maxRow) {
           maxRow = rowIndex;
         }
-        if (rowIndex < minRow) {
-          minRow = rowIndex;
-        }
         if (colIndex > maxCol) {
           maxCol = colIndex;
         }
-        if (colIndex < minCol) {
-          minCol = colIndex;
+        WellIndex rowColPair = new WellIndex(rowIndex, colIndex);
+        if (!validWellRowCol.contains(rowColPair)) {
+          validWellRowCol.add(rowColPair);
         }
         Integer maxFieldIndex = maxField.get(0);
         if (maxFieldIndex == null) {
@@ -292,6 +325,7 @@ public class BioTekReader extends FormatReader {
       }
     }
     wells.sort(null);
+    validWellRowCol.sort(null);
 
     // split brightfield channels into a separate plate acquisition
     maxField.put(1, -1);
@@ -443,12 +477,14 @@ public class BioTekReader extends FormatReader {
 
     int nextImage = 0;
     int[] nextWellSample = new int[(maxRow + 1) * (maxCol + 1)];
-    int totalColumns = (maxCol - minCol) + 1;
     for (int w=0; w<wells.size(); w++) {
       BioTekWell well = wells.get(w);
-      int effectiveRow = well.getRowIndex() - minRow;
-      int effectiveColumn = well.getColumnIndex() - minCol;
-      int wellIndex = effectiveRow * totalColumns + effectiveColumn;
+      int wellIndex = validWellRowCol.indexOf(
+        new WellIndex(well.getRowIndex(), well.getColumnIndex()));
+      LOGGER.debug(
+        "well #{}, row = {}, col = {}, index = {}",
+        w, well.getRowIndex(), well.getColumnIndex(), wellIndex);
+
       well.fillMetadataStore(store, 0, well.getPlateAcquisition(), wellIndex,
         nextWellSample[wellIndex], nextImage);
 
@@ -973,6 +1009,38 @@ public class BioTekReader extends FormatReader {
 
     public Channel(String name) {
       this.name = name;
+    }
+  }
+
+  class WellIndex implements Comparable<WellIndex> {
+    public int row;
+    public int col;
+
+    public WellIndex(int r, int c) {
+      this.row = r;
+      this.col = c;
+    }
+
+    @Override
+    public int compareTo(WellIndex w) {
+      if (this.row != w.row) {
+        return this.row - w.row;
+      }
+      return this.col - w.col;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (!(o instanceof WellIndex)) {
+        return false;
+      }
+      return compareTo((WellIndex) o) == 0;
+    }
+
+    @Override
+    public int hashCode() {
+      // this would need fixing if we had more than 65535 rows or columns
+      return (row & 0xffff) << 16 | (col & 0xffff);
     }
   }
 
