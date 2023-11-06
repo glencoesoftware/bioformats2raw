@@ -33,7 +33,7 @@ public class ProgressBarListener implements IProgressListener {
   }
 
   @Override
-  public void notifyTotalCounts(int seriesCount, long chunkCount) {
+  public void notifyStart(int seriesCount, long chunkCount) {
     // intentional no-op
   }
 

@@ -22,7 +22,7 @@ public class TestProgressListener implements IProgressListener {
   private long totalTiles = 0;
 
   @Override
-  public void notifyTotalCounts(int seriesCount, long tileCount) {
+  public void notifyStart(int seriesCount, long tileCount) {
     totalTiles = tileCount;
   }
 

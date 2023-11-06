@@ -1347,7 +1347,7 @@ public class Converter implements Callable<Integer> {
           totalTiles += count;
         }
       }
-      getProgressListener().notifyTotalCounts(seriesList.size(), totalTiles);
+      getProgressListener().notifyStart(seriesList.size(), totalTiles);
 
       for (Integer index : seriesList) {
         try {

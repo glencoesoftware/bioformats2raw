@@ -18,7 +18,7 @@ public interface IProgressListener extends EventListener {
    * @param seriesCount total number of series
    * @param chunkCount total number of chunks
    */
-  void notifyTotalCounts(int seriesCount, long chunkCount);
+  void notifyStart(int seriesCount, long chunkCount);
 
   /**
    * Indicates the beginning of processing a particular series.
