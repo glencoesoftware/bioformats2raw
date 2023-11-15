@@ -96,7 +96,7 @@ Alternatively, the `--resolutions` options can be passed to specify the exact nu
     bioformats2raw /path/to/file.svs /path/to/zarr-pyramid --resolutions 6
 
 
-Maximum tile dimensions can be configured with the `--tile_width` and `--tile_height` options.  Defaults can be viewed with
+Maximum tile dimensions can be configured with the `--tile-width` and `--tile-height` options.  Defaults can be viewed with
 `bioformats2raw --help`. Be mindful of the downstream workflow when selecting a tile size other than the default.
 A smaller than default tile size is rarely recommended.
 
@@ -104,8 +104,9 @@ If the input file has multiple series, a subset of the series can be converted b
 
     bioformats2raw /path/to/file.scn /path/to/zarr-pyramid --series 0,2,3,4
 
-By default, four additional readers (MiraxReader, PyramidTiffReader, BioTekReader, and ND2PlateReader) are added to the beginning of Bio-Formats' list of reader classes.
+By default, several additional readers are added to the beginning of Bio-Formats' list of reader classes.
 These readers are considered to be experimental and as a result only a limited range of input data is supported.
+See the [Additional readers](#additional-readers) section below for more information.
 
 Any of these readers can be excluded with the `--extra-readers` option:
 
@@ -275,9 +276,9 @@ Performance
 This package is __highly__ sensitive to underlying hardware as well as
 the following configuration options:
 
- * `--max_workers`
- * `--tile_width`
- * `--tile_height`
+ * `--max-workers`
+ * `--tile-width`
+ * `--tile-height`
 
 On systems with significant I/O bandwidth, particularly SATA or
 NVMe based storage, you may find sharply diminishing returns with high
@@ -307,6 +308,77 @@ This is particularly helpful if you do not have write permissions in the input d
 
 As of version 0.5.0, `.*.bfmemo` files are deleted at the end of conversion by default. We do not recommend keeping these files for normal
 conversions, but if they are needed for troubleshooting then the `--keep-memo-files` option can be used.
+
+Additional readers
+==================
+
+Readers are listed here in the order in which they appear on the reader list.
+
+PyramidTiffReader
+-----------------
+
+Supports TIFF files that contain a pyramid, with one pyramid resolution per IFD. While this is different from standard pyramid OME-TIFF files,
+any OME-XML stored in the first IFD's `ImageDescription` tag will be used to set the number of channels, timepoints, and Z sections.
+If no OME-XML is present, each IFD is assumed to represent one channel at a particular resolution; multiple IFDs at the same resolution
+therefore indicates multiple channels.
+
+MiraxReader
+-----------
+
+Supports 3D HISTECH .mrxs data. Only the full-resolution image is read; bioformats2raw will generate a pyramid from
+the full-resolution image, but will not read the original pyramid for this format. Datasets in this format include
+a .mrxs file (which is a JPEG thumbnail), along with a similarly-named directory containing a `Slidedat.ini`, `Index.dat`,
+and many `Data*.dat` files. The .mrxs file alone does not contain anything apart from the thumbnail;
+it is very important to include the entire corresponding directory when transferring these datasets.
+
+The `mirax.use_metadata_dimensions` reader option can be used change how XY dimensions are calculated.
+By default, this option is `true`, but setting it to `false` may be helpful if the image size appears incorrect.
+
+BioTekReader
+------------
+
+Supports BioTek Cytation 5 plates. Plates in this format consist of .tif files that follow a specific naming scheme;
+unlike most other plate formats, there are no metadata files that describe the whole plate. All files for a plate must be in
+the same folder as the selected bioformats2raw input file. File names must match one of a limited set of regular expressions:
+
+* `([A-Z]{1,2})(\\d{1,2})_(-?\\d+)_(\\d+)_(\\d+)_([A-Za-z0-9 ,\\[\\]]+)_(\\d+).tif[f]?`
+  - This corresponds to: `<well row letter><well column index>_<ignored index>_<ignored index>_<field index>_<channel name>_<ignored index>`
+  - Examples:
+    - `A1_01_1_1_Phase Contrast_001.tif` (well A1, field 1, `Phase Contrast` channel)
+    - `P24_01_1_9_DAPI_002.tif` (well P24, field 9, `DAPI` channel)
+    - `A1_-2_1_1_Tsf[Stitched[Channel1 300,400]]_001.tif` (well A1, field 1, `Tsf[Stitched[Channel1 300,400]]` channel)
+* `([A-Z]{1,2})(\\d{1,2})_(-?\\d+)(Z(\\d+))?_([A-Za-z0-9 ,\\[\\]]+)_(\\d+)_(\\d+)_(\\d+)?.tif[f]?`
+  - This corresponds to: `<well row letter><well column index>_<field index><optional 'Z' and index>_<channel name>_<ignored index>_<t index>_<optional ignored index>`
+  - Examples:
+    - `A1_1Z0_DAPI_1_001_.tif` (well A1, field 1, Z slice 0, `DAPI` channel, timepoint 1)
+    - `A1_1Z4_DAPI_1_003_.tif` (well A1, field 1, Z slice 4, `DAPI` channel, timepoint 3)
+    - `B2_1_Bright Field_1_001_02.tif` (well B2, field 1, `Bright Field` channel, timepoint 1)
+* `([A-Z]{1,2})(\\d{1,2})_(-?\\d+)_.+\\[(.+)_([A-Za-z0-9 ,\\[\\]]+)\\]_(\\d+)_(\\d+)_([0-9-]+)?.tif[f]?`
+  - This corresponds to: `<well row letter><well column index>_<field index>_<optional ignored data>[<ignored data>_<channel name>]_<ignored index>_<t index>_<optional ignored index>`
+  - Example:
+    - `H10_1_Stitched[AandB_Phase Contrast]_1_001_-1.tif` (well H10, field 1, `Phase Contrast` channel, timepoint 1)
+
+If the input file does not match the given regular expression, then the basic TIFF reader will be used to convert the
+single input file without looking for other .tif files. It is especially important to check the conversion output when
+working with BioTek plates for the first time or after any acquisition system updates, as there will not be an error in
+the logs if the file name does not match any of the above regular expressions.
+
+ND2PlateReader
+--------------
+
+Supports grouping multiple .nd2 files into a single HCS plate. To our knowledge, .nd2 files contain no HCS metadata or
+awareness that multiple files are part of the same acquisition. This reader relies entirely upon the file name structure
+to group .nd2 files in the same directory into a plate. Each file is assumed to represent one well, which may contain
+multiple fields. All files for a plate must be in the same folder as the selected bioformats2raw input file.
+
+File names must match the regular expression `(.*_?)Well([A-Z])(\\d{2})_Channel(.*)_Seq(\\d{4}).nd2`, e.g.
+`Plate000_WellB02_ChannelDAPI,CY5,CY3_Seq0000.nd2`. In this case, `Plate000` is the plate name; only files with the
+same plate name will be grouped together.
+
+If the input file does not match the given regular expression, then the base `ND2Reader` will be used to convert the
+single input file without looking for other .nd2 files. It is especially important to check the conversion output when
+working with ND2 plates for the first time or after any acquisition system updates, as there will not be an error in
+the logs if the file name does not match `ND2PlateReader`'s expectations.
 
 License
 =======

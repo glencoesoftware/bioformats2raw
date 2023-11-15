@@ -201,6 +201,7 @@ public class Converter implements Callable<Integer> {
   private volatile Path outputPath;
 
   private IProgressListener progressListener;
+  private Map<Integer, int[]> tileCounts = new HashMap<Integer, int[]>();
 
   // Option setters
 
@@ -314,7 +315,7 @@ public class Converter implements Callable<Integer> {
    * @param width tile width
    */
   @Option(
-    names = {"-w", "--tile_width"},
+    names = {"-w", "--tile-width", "--tile_width"},
     description = "Maximum tile width (default: ${DEFAULT-VALUE}). " +
       "This is both the chunk size (in X) when writing Zarr and the tile " +
       "size used for reading from the original data. Changing the tile " +
@@ -336,7 +337,7 @@ public class Converter implements Callable<Integer> {
    * @param height tile height
    */
   @Option(
-    names = {"-h", "--tile_height"},
+    names = {"-h", "--tile-height", "--tile_height"},
     description = "Maximum tile height (default: ${DEFAULT-VALUE}). " +
       "This is both the chunk size (in Y) when writing Zarr and the tile " +
       "size used for reading from the original data. Changing the tile " +
@@ -358,7 +359,7 @@ public class Converter implements Callable<Integer> {
    * @param depth Z chunk size
    */
   @Option(
-    names = {"-z", "--chunk_depth"},
+    names = {"-z", "--chunk-depth", "--chunk_depth"},
     description = "Maximum chunk depth to read (default: ${DEFAULT-VALUE}) ",
     defaultValue = "1"
   )
@@ -430,7 +431,7 @@ public class Converter implements Callable<Integer> {
    * @param workers maximum worker count
    */
   @Option(
-    names = "--max_workers",
+    names = {"--max-workers", "--max_workers"},
     description = "Maximum number of workers (default: ${DEFAULT-VALUE})",
     defaultValue = "4"
   )
@@ -455,7 +456,7 @@ public class Converter implements Callable<Integer> {
    * @param maxTiles maximum number of cached tiles
    */
   @Option(
-    names = "--max_cached_tiles",
+    names = {"--max-cached-tiles", "--max_cached_tiles"},
     description =
       "Maximum number of tiles that will be cached across all "
       + "workers (default: ${DEFAULT-VALUE})",
@@ -1375,6 +1376,17 @@ public class Converter implements Callable<Integer> {
         root.writeAttributes(attributes);
       }
 
+      // pre-calculate resolution and tile counts
+      long totalTiles = 0;
+      for (Integer index : seriesList) {
+        int[] counts = calculateTileCounts(index);
+        tileCounts.put(index, counts);
+        for (int count : counts) {
+          totalTiles += count;
+        }
+      }
+      getProgressListener().notifyStart(seriesList.size(), totalTiles);
+
       for (Integer index : seriesList) {
         try {
           write(index);
@@ -1411,6 +1423,105 @@ public class Converter implements Callable<Integer> {
       File memoFile = createMemoizer(null).getMemoFile(inputPath.toString());
       memoFile.delete();
     }
+  }
+
+  /**
+   * Pre-calculate the number of resolutions and tiles for the
+   * given series index. This is useful for accurate progress reporting
+   * and failing faster for incompatible pixel/downsampling combinations.
+   *
+   * @param series series index
+   * @return array of tile counts; the array length is the number of resolutions
+   */
+  private int[] calculateTileCounts(int series)
+    throws FormatException, IOException, InterruptedException,
+           EnumerationException
+  {
+    readers.forEach((reader) -> {
+      reader.setSeries(series);
+    });
+
+    IFormatReader workingReader = readers.take();
+    int resolutions = 1;
+    int sizeX;
+    int sizeY;
+    int sizeZ;
+    int imageCount;
+    try {
+      // calculate a reasonable pyramid depth if not specified as an argument
+      sizeX = workingReader.getSizeX();
+      sizeY = workingReader.getSizeY();
+      if (pyramidResolutions == null) {
+        if (workingReader.getResolutionCount() > 1
+            && reuseExistingResolutions)
+        {
+          resolutions = workingReader.getResolutionCount();
+        }
+        else {
+          resolutions = calculateResolutions(sizeX, sizeY);
+        }
+      }
+      else {
+        resolutions = pyramidResolutions;
+
+        // check to make sure too many resolutions aren't being used
+        if ((int) (sizeX / Math.pow(PYRAMID_SCALE, resolutions)) == 0 ||
+          (int) (sizeY / Math.pow(PYRAMID_SCALE, resolutions)) == 0)
+        {
+          resolutions = calculateResolutions(sizeX, sizeY);
+          LOGGER.warn("Too many resolutions specified; reducing to {}",
+            resolutions);
+        }
+      }
+      LOGGER.info("Using {} pyramid resolutions", resolutions);
+      sizeZ = workingReader.getSizeZ();
+      imageCount = workingReader.getImageCount();
+      pixelType = workingReader.getPixelType();
+    }
+    finally {
+      readers.put(workingReader);
+    }
+
+    int[] resTileCounts = new int[resolutions];
+
+    if ((pixelType == FormatTools.INT8 || pixelType == FormatTools.INT32) &&
+      getDownsampling() != Downsampling.SIMPLE && resolutions > 0)
+    {
+      String type = FormatTools.getPixelTypeString(pixelType);
+      throw new UnsupportedOperationException(
+        "OpenCV does not support downsampling " + type + " data. " +
+        "See https://github.com/opencv/opencv/issues/7862");
+    }
+
+    for (int resCounter=0; resCounter<resolutions; resCounter++) {
+      final int resolution = resCounter;
+      int scale = (int) Math.pow(PYRAMID_SCALE, resolution);
+      int scaledWidth = sizeX / scale;
+      int scaledHeight = sizeY / scale;
+      int scaledDepth = sizeZ;
+
+      workingReader = readers.take();
+      try {
+        if (workingReader.getResolutionCount() > 1
+            && reuseExistingResolutions)
+        {
+          workingReader.setResolution(resCounter);
+          scaledWidth = workingReader.getSizeX();
+          scaledHeight = workingReader.getSizeY();
+          scaledDepth = workingReader.getSizeZ();
+        }
+      }
+      finally {
+        readers.put(workingReader);
+      }
+
+      resTileCounts[resCounter] =
+          (int) Math.ceil((double) scaledWidth / tileWidth)
+          * (int) Math.ceil((double) scaledHeight / tileHeight)
+          * (int) Math.ceil((double) scaledDepth / chunkDepth)
+          * (imageCount / sizeZ);
+    }
+    return resTileCounts;
   }
 
   /**
@@ -1873,9 +1984,15 @@ public class Converter implements Callable<Integer> {
     throws FormatException, IOException, InterruptedException,
            EnumerationException
   {
-    getProgressListener().notifySeriesStart(series);
+    int[] resTileCounts = tileCounts.get(series);
+    int resolutions = resTileCounts.length;
+    int seriesTiles = 0;
+    for (int t : resTileCounts) {
+      seriesTiles += t;
+    }
+    getProgressListener().notifySeriesStart(series, resolutions, seriesTiles);
+
     IFormatReader workingReader = readers.take();
-    int resolutions = 1;
     int sizeX;
     int sizeY;
     int sizeZ;
@@ -1887,29 +2004,6 @@ public class Converter implements Callable<Integer> {
       // calculate a reasonable pyramid depth if not specified as an argument
       sizeX = workingReader.getSizeX();
       sizeY = workingReader.getSizeY();
-      if (pyramidResolutions == null) {
-        if (workingReader.getResolutionCount() > 1
-            && reuseExistingResolutions)
-        {
-          resolutions = workingReader.getResolutionCount();
-        }
-        else {
-          resolutions = calculateResolutions(sizeX, sizeY);
-        }
-      }
-      else {
-        resolutions = pyramidResolutions;
-
-        // check to make sure too many resolutions aren't being used
-        if ((int) (sizeX / Math.pow(PYRAMID_SCALE, resolutions)) == 0 ||
-          (int) (sizeY / Math.pow(PYRAMID_SCALE, resolutions)) == 0)
-        {
-          resolutions = calculateResolutions(sizeX, sizeY);
-          LOGGER.warn("Too many resolutions specified; reducing to {}",
-            resolutions);
-        }
-      }
-      LOGGER.info("Using {} pyramid resolutions", resolutions);
       sizeZ = workingReader.getSizeZ();
       sizeT = workingReader.getSizeT();
       sizeC = workingReader.getSizeC();
@@ -1919,15 +2013,6 @@ public class Converter implements Callable<Integer> {
     }
     finally {
       readers.put(workingReader);
-    }
-
-    if ((pixelType == FormatTools.INT8 || pixelType == FormatTools.INT32) &&
-      getDownsampling() != Downsampling.SIMPLE && resolutions > 0)
-    {
-      String type = FormatTools.getPixelTypeString(pixelType);
-      throw new UnsupportedOperationException(
-        "OpenCV does not support downsampling " + type + " data. " +
-        "See https://github.com/opencv/opencv/issues/7862");
     }
 
     LOGGER.info(
@@ -1996,10 +2081,7 @@ public class Converter implements Callable<Integer> {
       ZarrArray.create(getRootPath().resolve(resolutionString), arrayParams);
 
       nTile = new AtomicInteger(0);
-      tileCount = (int) Math.ceil((double) scaledWidth / tileWidth)
-          * (int) Math.ceil((double) scaledHeight / tileHeight)
-          * (int) Math.ceil((double) scaledDepth / chunkDepth)
-          * (imageCount / sizeZ);
+      tileCount = resTileCounts[resolution];
 
       List<CompletableFuture<Void>> futures =
         new ArrayList<CompletableFuture<Void>>();
