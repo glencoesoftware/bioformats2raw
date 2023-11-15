@@ -708,9 +708,15 @@ public class ZarrTest {
       throw new RuntimeException(t);
     }
 
-    Integer[] expectedTileCounts = new Integer[] {320, 80, 20, 5, 5, 5};
-    Integer[] tileCounts = listener.getTileCounts();
-    assertArrayEquals(expectedTileCounts, tileCounts);
+    Integer[] expectedChunkCounts = new Integer[] {320, 80, 20, 5, 5, 5};
+    Integer[] chunkCounts = listener.getChunkCounts();
+    assertArrayEquals(expectedChunkCounts, chunkCounts);
+    long totalChunkCount = 0;
+    for (Integer t : expectedChunkCounts) {
+      totalChunkCount += t;
+    }
+    assertEquals(totalChunkCount, listener.getTotalChunkCount());
+    assertEquals(totalChunkCount, listener.getSeriesChunkCount());
   }
 
   private int bytesPerPixel(DataType dataType) {
