@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 import com.bc.zarr.DataType;
+import com.bc.zarr.DimensionSeparator;
 import com.bc.zarr.ZarrArray;
 import com.bc.zarr.ZarrGroup;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -267,10 +268,8 @@ public class ZarrTest {
 
     ZarrArray series0 = ZarrGroup.open(output.resolve("0")).openArray("0");
 
-    // no getter for DimensionSeparator in ZarrArray
-    // check that the correct separator was used by checking
-    // that the expected first chunk file exists
-    assertTrue(output.resolve("0/0/0/0/0/0/0").toFile().exists());
+    // check that the correct separator was used
+    assertEquals(series0.getDimensionSeparator(), DimensionSeparator.SLASH);
 
     // Also ensure we're using the latest .zarray metadata
     ObjectMapper objectMapper = new ObjectMapper();
