@@ -6,7 +6,7 @@ plugins {
 }
 
 group = 'com.glencoesoftware'
-version = '0.7.1-SNAPSHOT'
+version = '0.8.0-SNAPSHOT'
 
 mainClassName = 'com.glencoesoftware.bioformats2raw.Converter'
 sourceCompatibility = 1.8
@@ -19,19 +19,10 @@ repositories {
         url 'https://artifacts.glencoesoftware.com/artifactory/ome.releases'
     }
     maven {
-        url 'https://repo.glencoesoftware.com/repository/n5-zarr-snapshots/'
-    }
-    maven {
-        url 'https://repo.glencoesoftware.com/repository/jzarr-snapshots'
-    }
-    maven {
         url 'https://artifacts.glencoesoftware.com/artifactory/ome.external'
     }
     maven {
         url 'https://artifacts.glencoesoftware.com/artifactory/scijava-thirdparty'
-    }
-    maven {
-        url 'https://artifacts.glencoesoftware.com/artifactory/jzarr-releases'
     }
     maven {
         name 'Unidata'
@@ -46,10 +37,10 @@ configurations.all {
 
 dependencies {
     implementation 'net.java.dev.jna:jna:5.10.0'
-    implementation 'ome:formats-gpl:6.13.0'
-    implementation 'info.picocli:picocli:4.6.1'
+    implementation 'ome:formats-gpl:7.0.1'
+    implementation 'info.picocli:picocli:4.7.5'
     implementation 'com.univocity:univocity-parsers:2.8.4'
-    implementation 'com.bc.zarr:jzarr:0.3.5'
+    implementation 'dev.zarr:jzarr:0.4.2'
     // implementation 'org.carlspring.cloud.aws:s3fs-nio:1.0-SNAPSHOT'
     // implementation 'io.nextflow:nxf-s3fs:1.1.0'
     implementation 'org.lasersonlab:s3fs:2.2.3'
@@ -58,7 +49,7 @@ dependencies {
     implementation group: 'ch.qos.logback', name: 'logback-core', version: '1.3.4'
 
 
-    implementation 'org.openpnp:opencv:3.4.2-1'
+    implementation 'org.openpnp:opencv:4.7.0-0'
     implementation 'me.tongfei:progressbar:0.9.0'
 
     // https://github.com/junit-team/junit5-samples/blob/master/junit5-migration-gradle/build.gradle
@@ -124,6 +115,14 @@ publishing {
     publications {
         bioformats2raw(MavenPublication) {
             from components.java
+            pom {
+                licenses {
+                    license {
+                        name = 'GNU General Public License version 2'
+                        url = 'http://www.gnu.org/licenses/gpl-2.0.txt'
+                    }
+                }
+            }
         }
     }
 
