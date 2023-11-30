@@ -45,8 +45,8 @@ dependencies {
     // implementation 'io.nextflow:nxf-s3fs:1.1.0'
     implementation 'org.lasersonlab:s3fs:2.2.3'
     implementation 'javax.xml.bind:jaxb-api:2.3.0'
-    implementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.3.4'
-    implementation group: 'ch.qos.logback', name: 'logback-core', version: '1.3.4'
+    implementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.3.13'
+    implementation group: 'ch.qos.logback', name: 'logback-core', version: '1.3.13'
 
 
     implementation 'org.openpnp:opencv:4.7.0-0'
