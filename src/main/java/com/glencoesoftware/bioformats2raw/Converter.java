@@ -435,6 +435,7 @@ public class Converter implements Callable<Integer> {
     defaultValue = "4"
   )
   public void setMaxWorkers(int workers) {
+    int prevMaxWorkers = getMaxWorkers();
     int availableProcessors = Runtime.getRuntime().availableProcessors();
     if (workers > availableProcessors) {
       maxWorkers = availableProcessors;
@@ -444,6 +445,11 @@ public class Converter implements Callable<Integer> {
     }
     else {
       LOGGER.warn("Ignoring invalid worker count: {}", workers);
+    }
+    if (maxWorkers != prevMaxWorkers) {
+      queue = new LimitedQueue<Runnable>(maxWorkers);
+      executor = new ThreadPoolExecutor(
+        maxWorkers, maxWorkers, 0L, TimeUnit.MILLISECONDS, queue);
     }
   }
 
@@ -1169,9 +1175,6 @@ public class Converter implements Callable<Integer> {
     }
 
     readers = new ArrayBlockingQueue<IFormatReader>(maxWorkers);
-    queue = new LimitedQueue<Runnable>(maxWorkers);
-    executor = new ThreadPoolExecutor(
-      maxWorkers, maxWorkers, 0L, TimeUnit.MILLISECONDS, queue);
     convert();
     return 0;
   }
