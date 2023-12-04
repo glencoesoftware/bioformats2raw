@@ -2011,12 +2011,15 @@ public class ZarrTest {
     apiConverter.setSeriesList(Collections.singletonList(1));
     apiConverter.setTileWidth(128);
     apiConverter.setTileHeight(128);
+    apiConverter.setMaxWorkers(1);
 
     assertEquals(apiConverter.getInputPath(), input.toString());
     assertEquals(apiConverter.getOutputPath(), output.toString());
     assertEquals(apiConverter.getSeriesList(), Collections.singletonList(1));
     assertEquals(apiConverter.getTileWidth(), 128);
     assertEquals(apiConverter.getTileHeight(), 128);
+    assertNotNull(apiConverter.getTileExecutor());
+    assertEquals(apiConverter.getTileExecutor().getCorePoolSize(), 1);
 
     apiConverter.call(); // do a conversion
 
@@ -2031,6 +2034,10 @@ public class ZarrTest {
     assertEquals(apiConverter.getSeriesList().size(), 0);
     assertEquals(apiConverter.getTileWidth(), 1024);
     assertEquals(apiConverter.getTileHeight(), 1024);
+    assertNotNull(apiConverter.getTileExecutor());
+    assertEquals(
+      apiConverter.getTileExecutor().getCorePoolSize(),
+      Math.min(4, Runtime.getRuntime().availableProcessors()));
   }
 
   /**
