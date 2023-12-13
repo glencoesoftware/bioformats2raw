@@ -32,20 +32,27 @@ public class ProgressBarListener implements IProgressListener {
     logLevel = level;
   }
 
+  @Override
+  public void notifyStart(int seriesCount, long chunkCount) {
+    // intentional no-op
+  }
 
   @Override
-  public void notifySeriesStart(int series) {
+  public void notifySeriesStart(int series, int resolutionCount,
+    int chunkCount)
+  {
     currentSeries = series;
   }
 
   @Override
   public void notifySeriesEnd(int series) {
+    // intentional no-op
   }
 
   @Override
-  public void notifyResolutionStart(int resolution, int tileCount) {
+  public void notifyResolutionStart(int resolution, int chunkCount) {
     ProgressBarBuilder builder = new ProgressBarBuilder()
-      .setInitialMax(tileCount)
+      .setInitialMax(chunkCount)
       .setTaskName(String.format("[%d/%d]", currentSeries, resolution));
 
     if (!(logLevel.equals("OFF") ||
