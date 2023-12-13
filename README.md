@@ -96,7 +96,7 @@ Alternatively, the `--resolutions` options can be passed to specify the exact nu
     bioformats2raw /path/to/file.svs /path/to/zarr-pyramid --resolutions 6
 
 
-Maximum tile dimensions can be configured with the `--tile_width` and `--tile_height` options.  Defaults can be viewed with
+Maximum tile dimensions can be configured with the `--tile-width` and `--tile-height` options.  Defaults can be viewed with
 `bioformats2raw --help`. Be mindful of the downstream workflow when selecting a tile size other than the default.
 A smaller than default tile size is rarely recommended.
 
@@ -276,9 +276,9 @@ Performance
 This package is __highly__ sensitive to underlying hardware as well as
 the following configuration options:
 
- * `--max_workers`
- * `--tile_width`
- * `--tile_height`
+ * `--max-workers`
+ * `--tile-width`
+ * `--tile-height`
 
 On systems with significant I/O bandwidth, particularly SATA or
 NVMe based storage, you may find sharply diminishing returns with high

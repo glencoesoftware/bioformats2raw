@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 import com.bc.zarr.DataType;
+import com.bc.zarr.DimensionSeparator;
 import com.bc.zarr.ZarrArray;
 import com.bc.zarr.ZarrGroup;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -267,10 +268,8 @@ public class ZarrTest {
 
     ZarrArray series0 = ZarrGroup.open(output.resolve("0")).openArray("0");
 
-    // no getter for DimensionSeparator in ZarrArray
-    // check that the correct separator was used by checking
-    // that the expected first chunk file exists
-    assertTrue(output.resolve("0/0/0/0/0/0/0").toFile().exists());
+    // check that the correct separator was used
+    assertEquals(series0.getDimensionSeparator(), DimensionSeparator.SLASH);
 
     // Also ensure we're using the latest .zarray metadata
     ObjectMapper objectMapper = new ObjectMapper();
@@ -708,9 +707,15 @@ public class ZarrTest {
       throw new RuntimeException(t);
     }
 
-    Integer[] expectedTileCounts = new Integer[] {320, 80, 20, 5, 5, 5};
-    Integer[] tileCounts = listener.getTileCounts();
-    assertArrayEquals(expectedTileCounts, tileCounts);
+    Integer[] expectedChunkCounts = new Integer[] {320, 80, 20, 5, 5, 5};
+    Integer[] chunkCounts = listener.getChunkCounts();
+    assertArrayEquals(expectedChunkCounts, chunkCounts);
+    long totalChunkCount = 0;
+    for (Integer t : expectedChunkCounts) {
+      totalChunkCount += t;
+    }
+    assertEquals(totalChunkCount, listener.getTotalChunkCount());
+    assertEquals(totalChunkCount, listener.getSeriesChunkCount());
   }
 
   private int bytesPerPixel(DataType dataType) {
@@ -995,6 +1000,9 @@ public class ZarrTest {
   public void testUnsupportedOpenCVTypeAPI() throws Exception {
     input = fake("pixelType", "int32");
     Converter apiConverter = new Converter();
+    CommandLine cmd = new CommandLine(apiConverter);
+    cmd.parseArgs(); // this sets default values for all options
+
     apiConverter.setInputPath(input.toString());
     apiConverter.setOutputPath(output.toString());
     apiConverter.setDownsampling(Downsampling.AREA);
@@ -1938,6 +1946,9 @@ public class ZarrTest {
     input = fake("series", "2", "sizeX", "4096", "sizeY", "4096");
 
     Converter apiConverter = new Converter();
+    CommandLine cmd = new CommandLine(apiConverter);
+    cmd.parseArgs(); // this sets default values for all options
+
     apiConverter.setInputPath(input.toString());
     apiConverter.setOutputPath(output.toString());
     apiConverter.setSeriesList(Collections.singletonList(1));
@@ -1981,6 +1992,45 @@ public class ZarrTest {
     catch (IOException e) {
       // Pass
     }
+  }
+
+  /**
+   * Check that setting and resetting options via API will reset options to
+   * their default values.
+   */
+  @Test
+  public void testResetOptions() throws Exception {
+    input = fake("series", "2", "sizeX", "4096", "sizeY", "4096");
+
+    Converter apiConverter = new Converter();
+    CommandLine cmd = new CommandLine(apiConverter);
+    cmd.parseArgs(); // this sets default values for all options
+
+    apiConverter.setInputPath(input.toString());
+    apiConverter.setOutputPath(output.toString());
+    apiConverter.setSeriesList(Collections.singletonList(1));
+    apiConverter.setTileWidth(128);
+    apiConverter.setTileHeight(128);
+
+    assertEquals(apiConverter.getInputPath(), input.toString());
+    assertEquals(apiConverter.getOutputPath(), output.toString());
+    assertEquals(apiConverter.getSeriesList(), Collections.singletonList(1));
+    assertEquals(apiConverter.getTileWidth(), 128);
+    assertEquals(apiConverter.getTileHeight(), 128);
+
+    apiConverter.call(); // do a conversion
+
+    cmd.parseArgs(); // this should reset default values for all options
+
+    assertEquals(apiConverter.getInputPath(), null);
+
+    apiConverter.setInputPath(input.toString());
+
+    assertEquals(apiConverter.getInputPath(), input.toString());
+    assertEquals(apiConverter.getOutputPath(), null);
+    assertEquals(apiConverter.getSeriesList().size(), 0);
+    assertEquals(apiConverter.getTileWidth(), 1024);
+    assertEquals(apiConverter.getTileHeight(), 1024);
   }
 
   /**
