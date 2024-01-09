@@ -1090,6 +1090,10 @@ public class Converter implements Callable<Integer> {
    */
   @Override
   public Integer call() throws Exception {
+    ch.qos.logback.classic.Logger root = (ch.qos.logback.classic.Logger)
+        LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
+    root.setLevel(Level.toLevel(logLevel));
+
     if (printVersion) {
       String version = Optional.ofNullable(
         this.getClass().getPackage().getImplementationVersion()
@@ -1117,10 +1121,6 @@ public class Converter implements Callable<Integer> {
     }
 
     OpenCVTools.loadOpenCV();
-
-    ch.qos.logback.classic.Logger root = (ch.qos.logback.classic.Logger)
-        LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
-    root.setLevel(Level.toLevel(logLevel));
 
     if (progressBars) {
       setProgressListener(new ProgressBarListener(logLevel));
