@@ -96,6 +96,8 @@ distributions {
 }
 
 startScripts {
+  defaultJvmOpts = ['--add-opens', 'java.base/java.lang=ALL-UNNAMED']
+
   // placing logback.xml somewhere under src/dist/lib/ keeps it out of
   // bioformats2raw-*.jar but automatically includes it in the distribution zip
   // the directory containing logback.xml must be explicitly added to the
