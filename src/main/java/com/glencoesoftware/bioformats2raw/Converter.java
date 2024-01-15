@@ -401,7 +401,6 @@ public class Converter implements Callable<Integer> {
   @Option(
     names = {"-p", "--progress"},
     description = "Print progress bars during conversion",
-    help = true,
     defaultValue = "false"
   )
   public void setProgressBars(boolean useProgressBars) {
