@@ -24,6 +24,13 @@ The native libraries are not packaged with any relevant jars.  See also note in 
  * Ubuntu 18.04+: `apt-get install libblosc1`
  * conda: Installing `bioformats2raw` via conda (see below) will include `blosc` as a dependency.
 
+If using features that rely on OpenCV (see the [Downsampling type](#downsampling-type) section below), minimum supported versions are:
+
+ * Ubuntu 18.04
+ * RHEL 8
+ * Windows 10
+  - expect to see warnings as described in https://github.com/opencv/opencv/issues/20113; these can be ignored
+
 __NOTE:__ If you are setting `jna.library.path` via the `JAVA_OPTS` environment variable, make sure the path is to the folder __containing__ the library not path to the library itself.
 
 Installation
@@ -308,6 +315,17 @@ This is particularly helpful if you do not have write permissions in the input d
 
 As of version 0.5.0, `.*.bfmemo` files are deleted at the end of conversion by default. We do not recommend keeping these files for normal
 conversions, but if they are needed for troubleshooting then the `--keep-memo-files` option can be used.
+
+Downsampling type
+=================
+
+By default, pyramid resolutions are generated using a [very simple downsampling algorithm](https://github.com/ome/ome-common-java/blob/master/src/main/java/loci/common/image/SimpleImageScaler.java).
+For some input data types, this may not be ideal. The `--downsample-type` option can be used to specify an alternative algorithm.
+Supported values are `SIMPLE` (default), `GAUSSIAN`, `AREA`, `LINEAR`, `CUBIC`, and `LANCZOS`, as declared in the [Downsampling enum](https://github.com/glencoesoftware/bioformats2raw/blob/master/src/main/java/com/glencoesoftware/bioformats2raw/Downsampling.java).
+No additional downsampling algorithms are directly implemented in bioformats2raw; OpenCV is used to for any value of `--downsample-type` other than the default.
+
+If the minimum system requirements (see above) are not met, or the input data type is int8 or int32 (see https://github.com/glencoesoftware/bioformats2raw/pull/199),
+then any value of `--downsample-type` other than the default is expected to throw an exception.
 
 Additional readers
 ==================
