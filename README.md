@@ -380,6 +380,15 @@ single input file without looking for other .nd2 files. It is especially importa
 working with ND2 plates for the first time or after any acquisition system updates, as there will not be an error in
 the logs if the file name does not match `ND2PlateReader`'s expectations.
 
+MCDReader
+---------
+
+Supports Fluidigm Hyperion .mcd data. Both raw data and panorama images are read. The raw data typically has a small XY size,
+but most panorama images are large enough that a pyramid will be generated.
+
+Note that the `X`, `Y`, and `Z` channels in the raw data are calibration images. While these 3 channels appear first
+in the .mcd file, `MCDReader` moves them to the end of the channel list for a better viewing experience in OMERO.
+
 License
 =======
 

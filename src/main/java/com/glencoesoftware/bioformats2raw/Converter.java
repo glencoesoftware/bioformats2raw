@@ -522,7 +522,8 @@ public class Converter implements Callable<Integer> {
             "com.glencoesoftware.bioformats2raw.MiraxReader," +
             "com.glencoesoftware.bioformats2raw.BioTekReader," +
             "com.glencoesoftware.bioformats2raw.ND2PlateReader," +
-            "com.glencoesoftware.bioformats2raw.MetaxpressReader"
+            "com.glencoesoftware.bioformats2raw.MetaxpressReader," +
+            "com.glencoesoftware.bioformats2raw.MCDReader"
   )
   public void setExtraReaders(Class<?>[] extraReaderList) {
     if (extraReaderList != null) {
