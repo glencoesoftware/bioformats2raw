@@ -29,7 +29,7 @@ If using features that rely on OpenCV (see the [Downsampling type](#downsampling
  * Ubuntu 18.04
  * RHEL 8
  * Windows 10
-  - expect to see warnings as described in https://github.com/opencv/opencv/issues/20113; these can be ignored
+   - expect to see warnings as described in https://github.com/opencv/opencv/issues/20113; these can be ignored
 
 __NOTE:__ If you are setting `jna.library.path` via the `JAVA_OPTS` environment variable, make sure the path is to the folder __containing__ the library not path to the library itself.
 
