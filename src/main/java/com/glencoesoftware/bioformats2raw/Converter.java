@@ -138,6 +138,7 @@ public class Converter implements Callable<Integer> {
   private volatile String logLevel;
   private volatile boolean progressBars = false;
   private volatile boolean printVersion = false;
+  private volatile boolean help = false;
 
   private volatile int maxWorkers;
   private volatile int maxCachedTiles;
@@ -401,7 +402,6 @@ public class Converter implements Callable<Integer> {
   @Option(
     names = {"-p", "--progress"},
     description = "Print progress bars during conversion",
-    help = true,
     defaultValue = "false"
   )
   public void setProgressBars(boolean useProgressBars) {
@@ -422,6 +422,21 @@ public class Converter implements Callable<Integer> {
   )
   public void setPrintVersionOnly(boolean versionOnly) {
     printVersion = versionOnly;
+  }
+
+  /**
+   * Configure whether to print help and exit without converting.
+   *
+   * @param helpOnly whether or not to print help and exit
+   */
+  @Option(
+    names = "--help",
+    description = "Print usage information and exit",
+    usageHelp = true,
+    defaultValue = "false"
+  )
+  public void setHelp(boolean helpOnly) {
+    help = helpOnly;
   }
 
   /**
@@ -920,6 +935,13 @@ public class Converter implements Callable<Integer> {
   }
 
   /**
+   * @return true if only usage info is displayed
+   */
+  public boolean getHelp() {
+    return help;
+  }
+
+  /**
    * @return maximum number of worker threads
    */
   public int getMaxWorkers() {
@@ -1095,6 +1117,10 @@ public class Converter implements Callable<Integer> {
     ch.qos.logback.classic.Logger root = (ch.qos.logback.classic.Logger)
         LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
     root.setLevel(Level.toLevel(logLevel));
+
+    if (help) {
+      return -1;
+    }
 
     if (printVersion) {
       String version = Optional.ofNullable(
