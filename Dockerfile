@@ -9,7 +9,7 @@
 
 # Similarly, the BUILD_IMAGE argument can be overwritten
 # but this is generally not needed.
-ARG BUILD_IMAGE=gradle:6.9-jdk8
+ARG BUILD_IMAGE=gradle:8.5-jdk8
 
 #
 # Build phase: Use the gradle image for building.
@@ -28,7 +28,7 @@ RUN gradle build
 RUN cd build/distributions && rm bioformats2raw*tar && unzip bioformats2raw*zip && rm -rf bioformats2raw*zip
 
 
-FROM openjdk:8 as final
+FROM eclipse-temurin:17-jdk as final
 
 RUN DEBIAN_FRONTEND=noninteractive \
     apt-get update -y -q \
