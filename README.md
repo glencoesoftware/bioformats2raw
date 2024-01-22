@@ -306,7 +306,7 @@ relative performance.
 Metadata caching
 ================
 
-During conversion, a temporary `.*.bfmemo` file will be created. By default, this file is in the same directory as the input data
+During conversion, a temporary `.*.bfmemo` file may be created. By default, this file is in the same directory as the input data
 and will be removed after the conversion finishes. The location of the `.*.bfmemo` file can be configured using the `--memo-directory` option:
 
     bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --memo-directory /tmp/
@@ -314,7 +314,9 @@ and will be removed after the conversion finishes. The location of the `.*.bfmem
 This is particularly helpful if you do not have write permissions in the input data directory.
 
 As of version 0.5.0, `.*.bfmemo` files are deleted at the end of conversion by default. We do not recommend keeping these files for normal
-conversions, but if they are needed for troubleshooting then the `--keep-memo-files` option can be used.
+conversions, but if they are needed for troubleshooting then the `--keep-memo-files` option can be used. Note that if a memo file did not
+need to be created, `--keep-memo-files` will still result in no `.*.bfmemo` files at the end of conversion. This is particularly common
+for small datasets that can be read very quickly.
 
 Downsampling type
 =================
