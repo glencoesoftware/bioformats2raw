@@ -337,6 +337,8 @@ public class BioTekReader extends FormatReader {
       for (int f=0; f<w.getFieldCount(); f++) {
         String[] fieldFiles = w.getFiles(f);
         for (String file : fieldFiles) {
+          LOGGER.trace("found file {} for well index {}, field index {}",
+            file, well, f);
           Element root = getXMLRoot(file);
           boolean brightfield = isBrightField(root);
 
