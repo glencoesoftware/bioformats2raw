@@ -70,6 +70,9 @@ public class BioTekReader extends FormatReader {
   private static final String TIFF_REGEX_Z =
     WELL_REGEX + "_.+\\[(.+)_" +
     ALPHANUM + "\\]_(\\d+)_(\\d+)_([0-9-]+)?" + SUFFIX;
+  private static final String TIFF_REGEX_ROI =
+    "([A-Z]{1,2})(\\d{1,2})ROI(\\d+)_(\\d+)_(\\d+)_(\\d+)(Z(\\d+))?_" +
+    ALPHANUM + "_(-?\\d+)" + SUFFIX;
   private static final String DATE_FORMAT = "MM/dd/yy HH:mm:ss";
 
   // -- Fields --
@@ -211,6 +214,9 @@ public class BioTekReader extends FormatReader {
     findXPTFiles(parent);
 
     String[] files = parent.list(true);
+    for (int i=0; i<files.length; i++) {
+      files[i] = new Location(parent, files[i]).getAbsolutePath();
+    }
     Arrays.sort(files);
 
     // is there only one well in the directory?
@@ -251,11 +257,16 @@ public class BioTekReader extends FormatReader {
     Pattern regexA = Pattern.compile(TIFF_REGEX_A);
     Pattern regexB = Pattern.compile(TIFF_REGEX_B);
     Pattern regexZ = Pattern.compile(TIFF_REGEX_Z);
+    Pattern regexROI = Pattern.compile(TIFF_REGEX_ROI);
     ArrayList<WellIndex> validWellRowCol = new ArrayList<WellIndex>();
     int maxRow = 0;
     int maxCol = 0;
     int maxPlateAcq = 0;
     Map<Integer, Integer> maxField = new HashMap<Integer, Integer>();
+
+    int matchingROI = -1;
+    String matchingPath = new Location(currentId).getAbsolutePath();
+    LOGGER.trace("matching path = {}", matchingPath);
 
     for (String absolutePath : files) {
       String f = new Location(absolutePath).getName();
@@ -263,6 +274,7 @@ public class BioTekReader extends FormatReader {
       int rowIndex = -1;
       int colIndex = -1;
       int fieldIndex = -1;
+      int roiIndex = -1;
       int z = 0;
       int t = 0;
       String channelName = "";
@@ -297,9 +309,41 @@ public class BioTekReader extends FormatReader {
           t = (int) Math.max(0, Integer.parseInt(m.group(8)) - 1);
           channelName += m.group(6);
         }
+        else {
+          m = regexROI.matcher(f);
+          if (m.matches()) {
+            rowIndex = getWellRow(m.group(1));
+            colIndex = Integer.parseInt(m.group(2)) - 1;
+            roiIndex = Integer.parseInt(m.group(3)) - 1;
+
+            LOGGER.trace("absolutePath = {}, roiIndex = {}",
+              absolutePath, roiIndex);
+            if (matchingROI < 0 && absolutePath.equals(matchingPath)) {
+              matchingROI = roiIndex;
+              LOGGER.trace("matchingROI = {}, absolutePath = {}",
+                matchingROI, absolutePath);
+            }
+
+            int channelIndex = Integer.parseInt(m.group(5)) - 1;
+            fieldIndex = Integer.parseInt(m.group(6)) - 1;
+            try {
+              z = Integer.parseInt(m.group(8));
+              // can have two channels with same name
+              // one with Z stack and one without
+              channelName = "Z";
+            }
+            catch (NumberFormatException e) {
+            }
+            channelName += m.group(9);
+            // recorded T index may be negative if no timepoints
+            t = (int) Math.max(0, Integer.parseInt(m.group(10)) - 1);
+          }
+        }
       }
 
-      if (rowIndex >= 0 && colIndex >= 0 && fieldIndex >= 0) {
+      if (rowIndex >= 0 && colIndex >= 0 && fieldIndex >= 0 &&
+        matchingROI == roiIndex)
+      {
         BioTekWell well = lookupWell(0, rowIndex, colIndex);
         if (fieldIndex >= well.getFieldCount()) {
           well.setFieldCount(fieldIndex + 1);
