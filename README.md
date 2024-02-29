@@ -400,6 +400,27 @@ single input file without looking for other .nd2 files. It is especially importa
 working with ND2 plates for the first time or after any acquisition system updates, as there will not be an error in
 the logs if the file name does not match `ND2PlateReader`'s expectations.
 
+Object Storage
+==============
+
+Support for object storage is handled through Java NIO2.
+Currently, only the output can be on cloud storage, and `--overwrite` is not supported.
+
+AWS S3
+------
+
+S3 support is provided by [s3fs](https://github.com/lasersonlab/Amazon-S3-FileSystem-NIO2/).
+Various parameters can be specified through `--output-options`.
+
+Google Cloud Storage (GCS)
+--------------------------
+
+Credentials are handled through [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials).
+The credentials used require read/write access to the bucket. (Minimally, this can be `Storage Object Creator`,
+`Storage Object Viewer` and `Storage Object Delete`).
+
+`--output-options` are *not* currently supported with GCS.
+=======
 MCDReader
 ---------
 
