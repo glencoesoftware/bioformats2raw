@@ -341,6 +341,9 @@ public class MetaxpressReader extends FormatReader {
           store.setPixelsPhysicalSizeX(physicalSizeX, image);
           store.setPixelsPhysicalSizeY(physicalSizeY, image);
 
+          // update series before checking effective SizeC and image count
+          // otherwise plane counts are assumed to be the same for all wells
+          setSeries(image);
           for (int c=0; c<getEffectiveSizeC(); c++) {
             int cIndex = getIndex(0, c, 0);
             if (cIndex < site.channelNames.size()) {
@@ -364,6 +367,7 @@ public class MetaxpressReader extends FormatReader {
         well++;
       }
     }
+    setSeries(0);
     watch.stop("populated well metadata");
   }
 
