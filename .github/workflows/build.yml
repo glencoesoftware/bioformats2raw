@@ -11,15 +11,15 @@ jobs:
   build:
     strategy:
       matrix:
-        java: [8, 11, 17]
+        java: [8, 11, 17, 21]
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     env:
       gradle_commands: --stacktrace build
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Set up JDK ${{ matrix.java }}
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           java-version: ${{ matrix.java }}
           distribution: 'zulu'
@@ -31,7 +31,7 @@ jobs:
         run: |
           ./gradlew ${{ env.gradle_commands }}
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: bioformats2raw ${{ matrix.java }}
           path: build/distributions/*.zip
