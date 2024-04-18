@@ -895,7 +895,7 @@ public class MiraxReader extends FormatReader {
       if (objectiveMag != null) {
         try {
           store.setObjectiveNominalMagnification(
-            new Double(objectiveMag), 0, 0);
+            DataTools.parseDouble(objectiveMag), 0, 0);
         }
         catch (NumberFormatException e) {
           LOGGER.debug(
@@ -1043,7 +1043,7 @@ public class MiraxReader extends FormatReader {
         store.setDetectorSettingsID(detector, 0, c);
         if (gain != null) {
           try {
-            store.setDetectorSettingsGain(new Double(gain), 0, c);
+            store.setDetectorSettingsGain(DataTools.parseDouble(gain), 0, c);
           }
           catch (NumberFormatException e) {
             LOGGER.debug("Could not parse channel gain {}", gain);
