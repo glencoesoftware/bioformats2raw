@@ -16,6 +16,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       gradle_commands: --stacktrace build
+      ArtifactoryUserName: ${{ secrets.JENKINS_USERNAME }}
+      ArtifactoryPassword: ${{ secrets.JENKINS_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - name: Set up JDK ${{ matrix.java }}
@@ -36,3 +38,7 @@ jobs:
           name: bioformats2raw ${{ matrix.java }}
           path: build/distributions/*.zip
           retention-days: 30
+      - name: Publish artifacts
+        if: github.event_name != 'pull_request' && matrix.java == 11
+        run: |
+          ./gradlew -PArtifactoryUserName=${ArtifactoryUserName} -PArtifactoryPassword=${ArtifactoryPassword} publish
