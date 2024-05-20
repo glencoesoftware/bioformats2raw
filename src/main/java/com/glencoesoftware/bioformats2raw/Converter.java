@@ -139,6 +139,7 @@ public class Converter implements Callable<Integer> {
   private volatile boolean progressBars = false;
   private volatile boolean printVersion = false;
   private volatile boolean help = false;
+  private volatile boolean originalMetadata = true;
 
   private volatile int maxWorkers;
   private volatile int maxCachedTiles;
@@ -778,6 +779,22 @@ public class Converter implements Callable<Integer> {
   }
 
   /**
+   * Set whether or not to write original metadata key/value pairs in
+   * OME-XML metadata.
+   * By default, original metadata is written.
+   *
+   * @param noOriginalMetadata true if original metadata should not be written
+   */
+  @Option(
+          names = "--no-original-metadata",
+          description = "Turn off original metadata exporting",
+          defaultValue = "false"
+  )
+  public void setNoOriginalMetadata(boolean noOriginalMetadata) {
+    originalMetadata = !noOriginalMetadata;
+  }
+
+  /**
    * Set whether or not to write a root Zarr group.
    * By default, the root group is written.
    *
@@ -1077,6 +1094,13 @@ public class Converter implements Callable<Integer> {
   }
 
   /**
+   * @return true if original metadata will be written in the OME-XML
+   */
+  public boolean getOriginalMetadata() {
+    return originalMetadata;
+  }
+
+  /**
    * @return true if a root Zarr group will not be written
    */
   public boolean getNoRootGroup() {
@@ -1261,7 +1285,7 @@ public class Converter implements Callable<Integer> {
         memoizer.setMetadataOptions(options);
       }
 
-      memoizer.setOriginalMetadataPopulated(!noOMEMeta);
+      memoizer.setOriginalMetadataPopulated(!noOMEMeta && originalMetadata);
       memoizer.setFlattenedResolutions(false);
       memoizer.setMetadataFiltered(true);
       memoizer.setMetadataStore(createMetadata());
