@@ -234,6 +234,12 @@ which can then be used to create a hierarchy by date, username, and ID:
 Prevents the input file's OME-XML metadata from being saved.  There will no longer be an `OME` directory
 under the top-level output directory.
 
+#### --no-original-metadata
+
+Prevents `OriginalMetadata` annotations from being written to `OME/METADATA.ome.xml`.
+This can reduce the size of the OME-XML, and as discussed in [#250](https://github.com/glencoesoftware/bioformats2raw/issues/250),
+is one way to guard against unwanted experimental metadata being included in the conversion.
+
 #### --no-root-group
 
 By default, a Zarr group (`.zgroup` file) is written in the top-level output directory.
