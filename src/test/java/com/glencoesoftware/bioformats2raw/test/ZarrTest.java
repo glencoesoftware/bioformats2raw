@@ -1659,6 +1659,32 @@ public class ZarrTest {
   }
 
   /**
+   * Convert with the "--no-original-metadata" option.
+   * Conversion should succeed and OME-XML should be written,
+   * but there should be no original metadata annotations despite
+   * original metadata being present in the input data.
+   */
+  @Test
+  public void testNoOriginalMetadata() throws Exception {
+    Map<String, String> originalMetadata = new HashMap<String, String>();
+    originalMetadata.put("key1", "value1");
+    originalMetadata.put("key2", "value2");
+
+    input = fake(null, null, originalMetadata);
+    assertTool("--no-original-metadata");
+    Path omexml = output.resolve("OME").resolve("METADATA.ome.xml");
+    StringBuilder xml = new StringBuilder();
+    Files.lines(omexml).forEach(v -> xml.append(v));
+
+    OMEXMLService service =
+      new ServiceFactory().getInstance(OMEXMLService.class);
+    OMEXMLMetadata retrieve =
+      (OMEXMLMetadata) service.createOMEXMLMetadata(xml.toString());
+    Hashtable convertedMetadata = service.getOriginalMetadata(retrieve);
+    assertEquals(convertedMetadata, null);
+  }
+
+  /**
    * Convert with the --use-existing-resolutions option.  Conversion should
    * produce multiscales matching the input resolution numbers and scale.
    */
