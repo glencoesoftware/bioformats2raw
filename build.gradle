@@ -6,7 +6,7 @@ plugins {
 }
 
 group = 'com.glencoesoftware'
-version = '0.9.3'
+version = '0.10.0-SNAPSHOT'
 
 mainClassName = 'com.glencoesoftware.bioformats2raw.Converter'
 sourceCompatibility = 1.8
