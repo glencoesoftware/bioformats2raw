@@ -1172,6 +1172,25 @@ public class Converter implements Callable<Integer> {
         tileWidth, tileHeight);
     }
 
+    // if the tmpdir is mounted as noexec, then any native library
+    // loading (OpenCV, turbojpeg, etc.) is expected to fail, which
+    // can cause conversion to fail with an exception that is not user friendly
+    //
+    // try to detect this case early and fail before the conversion begins,
+    // with a more informative message
+
+    // a temp file is created and set as executable
+    // in the noexec case, setting as executable is expected to silently fail
+    File tmpdirCheck = File.createTempFile("noexec-test", ".txt");
+    // expect 'success' to be true in the noexec case, even though
+    // the file will not actually be executable
+    boolean success = tmpdirCheck.setExecutable(true);
+    tmpdirCheck.deleteOnExit();
+    if (!success || !tmpdirCheck.canExecute()) {
+      throw new RuntimeException(System.getProperty("java.io.tmpdir") +
+        " is noexec; fix it or specify a different java.io.tmpdir");
+    }
+
     OpenCVTools.loadOpenCV();
 
     if (progressBars) {

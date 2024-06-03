@@ -33,6 +33,10 @@ If using features that rely on OpenCV (see the [Downsampling type](#downsampling
 
 __NOTE:__ If you are setting `jna.library.path` via the `JAVA_OPTS` environment variable, make sure the path is to the folder __containing__ the library not path to the library itself.
 
+If the default temporary directory (usually `/tmp/`) is mounted as `noexec`, conversion will fail.
+The easiest solution is to choose a different temporary directory by adding `-Djava.io.tmpdir=/path/to/alternate/tmp` to `JAVA_OPTS`.
+If multiple properties need to be set via `JAVA_OPTS`, separate them with a space, e.g. `JAVA_OPTS=-Djava.io.tmpdir/path/to/alternate/tmp -Djna.library.path=/path/to/blosc`.
+
 Installation
 ============
 
