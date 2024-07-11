@@ -37,7 +37,7 @@ configurations.all {
 
 dependencies {
     implementation 'net.java.dev.jna:jna:5.10.0'
-    implementation 'ome:formats-gpl:7.3.0'
+    implementation 'ome:formats-gpl:7.3.1'
     implementation 'info.picocli:picocli:4.7.5'
     implementation 'com.univocity:univocity-parsers:2.8.4'
     implementation 'dev.zarr:jzarr:0.4.2'
