@@ -128,6 +128,8 @@ public class Converter implements Callable<Integer> {
   private volatile Path inputPath;
   private volatile String outputLocation;
 
+  private volatile boolean warnNoExec = false;
+
   private Map<String, String> outputOptions;
   private volatile Integer pyramidResolutions;
   private volatile List<Integer> seriesList;
@@ -407,6 +409,23 @@ public class Converter implements Callable<Integer> {
   )
   public void setProgressBars(boolean useProgressBars) {
     progressBars = useProgressBars;
+  }
+
+  /**
+   * Configure whether to warn instead of throwing an exception
+   * if files created in the temporary directory
+   * ("java.io.tmpdir" system property) will not be executable.
+   *
+   * @param warnOnly true if a warning should be logged instead of an exception
+   */
+  @Option(
+    names = {"--warn-no-exec"},
+    description = "Warn instead of throwing an exception if " +
+                  "java.io.tmpdir is not executable",
+    defaultValue = "false"
+  )
+  public void setWarnOnNoExec(boolean warnOnly) {
+    warnNoExec = warnOnly;
   }
 
   /**
@@ -945,6 +964,14 @@ public class Converter implements Callable<Integer> {
   }
 
   /**
+   * @return true if a warning is logged instead of an exception when the tmp
+   *              directory is noexec
+   */
+  public boolean getWarnNoExec() {
+    return warnNoExec;
+  }
+
+  /**
    * @return true if only version info is displayed
    */
   public boolean getPrintVersionOnly() {
@@ -1186,8 +1213,14 @@ public class Converter implements Callable<Integer> {
     // the file will not actually be executable
     boolean success = tmpdirCheck.setExecutable(true);
     if (!success || !tmpdirCheck.canExecute()) {
-      throw new RuntimeException(System.getProperty("java.io.tmpdir") +
-        " is noexec; fix it or specify a different java.io.tmpdir");
+      String msg = System.getProperty("java.io.tmpdir") +
+        " is noexec; fix it or specify a different java.io.tmpdir";
+      if (getWarnNoExec()) {
+        LOGGER.warn(msg);
+      }
+      else {
+        throw new RuntimeException(msg);
+      }
     }
     tmpdirCheck.delete();
 
