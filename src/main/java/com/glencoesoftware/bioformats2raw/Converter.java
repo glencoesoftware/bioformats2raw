@@ -1185,11 +1185,11 @@ public class Converter implements Callable<Integer> {
     // expect 'success' to be true in the noexec case, even though
     // the file will not actually be executable
     boolean success = tmpdirCheck.setExecutable(true);
-    tmpdirCheck.deleteOnExit();
     if (!success || !tmpdirCheck.canExecute()) {
       throw new RuntimeException(System.getProperty("java.io.tmpdir") +
         " is noexec; fix it or specify a different java.io.tmpdir");
     }
+    tmpdirCheck.delete();
 
     OpenCVTools.loadOpenCV();
 
