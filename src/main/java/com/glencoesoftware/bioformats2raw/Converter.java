@@ -1209,20 +1209,24 @@ public class Converter implements Callable<Integer> {
     // a temp file is created and set as executable
     // in the noexec case, setting as executable is expected to silently fail
     File tmpdirCheck = File.createTempFile("noexec-test", ".txt");
-    // expect 'success' to be true in the noexec case, even though
-    // the file will not actually be executable
-    boolean success = tmpdirCheck.setExecutable(true);
-    if (!success || !tmpdirCheck.canExecute()) {
-      String msg = System.getProperty("java.io.tmpdir") +
-        " is noexec; fix it or specify a different java.io.tmpdir";
-      if (getWarnNoExec()) {
-        LOGGER.warn(msg);
-      }
-      else {
-        throw new RuntimeException(msg);
+    try {
+      // expect 'success' to be true in the noexec case, even though
+      // the file will not actually be executable
+      boolean success = tmpdirCheck.setExecutable(true);
+      if (!success || !tmpdirCheck.canExecute()) {
+        String msg = System.getProperty("java.io.tmpdir") +
+          " is noexec; fix it or specify a different java.io.tmpdir";
+        if (getWarnNoExec()) {
+          LOGGER.warn(msg);
+        }
+        else {
+          throw new RuntimeException(msg);
+        }
       }
     }
-    tmpdirCheck.delete();
+    finally {
+      tmpdirCheck.delete();
+    }
 
     OpenCVTools.loadOpenCV();
 
