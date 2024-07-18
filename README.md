@@ -43,7 +43,7 @@ to extract a native library from one or more jars to a temporary location. In th
 to read image data.
 
 The recommended solution is to choose a different temporary directory by adding `-Djava.io.tmpdir=/path/to/alternate/tmp` to `JAVA_OPTS`.
-If multiple properties need to be set via `JAVA_OPTS`, separate them with a space, e.g. `JAVA_OPTS=-Djava.io.tmpdir/path/to/alternate/tmp -Djna.library.path=/path/to/blosc`.
+If multiple properties need to be set via `JAVA_OPTS`, separate them with a space, e.g. `JAVA_OPTS="-Djava.io.tmpdir/path/to/alternate/tmp -Djna.library.path=/path/to/blosc"`.
 
 If you know this issue does not affect your input data and wish to warn instead of immediately stopping conversion, the `--warn-no-exec` option can be used.
 For input data that relies on native library loading (e.g. NDPI, JPEG-XR compression), using `--warn-no-exec` instead of specifying an alternate
