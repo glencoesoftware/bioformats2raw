@@ -1215,7 +1215,9 @@ public class Converter implements Callable<Integer> {
       boolean success = tmpdirCheck.setExecutable(true);
       if (!success || !tmpdirCheck.canExecute()) {
         String msg = System.getProperty("java.io.tmpdir") +
-          " is noexec; fix it or specify a different java.io.tmpdir";
+          " is noexec; fix it or specify a different java.io.tmpdir." +
+          " See https://github.com/glencoesoftware/bioformats2raw/" +
+          "blob/master/README.md#temporary-directory-usage for details";
         if (getWarnNoExec()) {
           LOGGER.warn(msg);
         }
