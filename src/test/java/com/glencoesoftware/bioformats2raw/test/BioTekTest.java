@@ -224,7 +224,21 @@ public class BioTekTest {
       Arguments.of(new String[] {
         "B2/B2_1_Bright Field_1_001_02.tif",
         "D3/D3_1_Bright Field_1_001_02.tif",
-      }, new int[] {1, 3}, new int[] {1, 2}, 1, 1, 1, 1)
+      }, new int[] {1, 3}, new int[] {1, 2}, 1, 1, 1, 1),
+      Arguments.of(new String[] {
+        "ID_A9 info/A9_-1_1_1_Phase Contrast_001.tif",
+        "ID_A9 info/A9_-1_2_1_GFP_001.tif",
+        "ID_A9 info/A9_-1_3_1_DAPI_001.tif",
+        "ID_A10 info/A10_-1_1_1_Phase Contrast_001.tif",
+        "ID_A10 info/A10_-1_2_1_GFP_001.tif",
+        "ID_A10 info/A10_-1_3_1_DAPI_001.tif",
+        "ID_E9 info/E9_-1_1_1_Phase Contrast_001.tif",
+        "ID_E9 info/E9_-1_2_1_GFP_001.tif",
+        "ID_E9 info/E9_-1_3_1_DAPI_001.tif",
+        "ID_E10 info/E10_-1_1_1_Phase Contrast_001.tif",
+        "ID_E10 info/E10_-1_2_1_GFP_001.tif",
+        "ID_E10 info/E10_-1_3_1_DAPI_001.tif",
+      }, new int[] {0, 0, 4, 4}, new int[] {8, 9, 8, 9}, 1, 1, 3, 1)
     );
   }
 

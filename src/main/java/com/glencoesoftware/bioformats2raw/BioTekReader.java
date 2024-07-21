@@ -240,18 +240,31 @@ public class BioTekReader extends FormatReader {
       LOGGER.debug("plate directory = {}", plateDir);
       String[] wellDirs = plateDir.list(true);
       ArrayList<String> allFiles = new ArrayList<String>();
+      boolean multipleDirs = true;
       for (String well : wellDirs) {
         Location wellDir = new Location(plateDir, well).getAbsoluteFile();
         LOGGER.debug("looking in well directory = {}", wellDir);
-        String[] f = wellDir.list(true);
-        for (String file : f) {
-          LOGGER.debug("  adding well file {}", file);
-          allFiles.add(new Location(wellDir, file).getAbsolutePath());
+        if (wellDir == null) {
+          multipleDirs = false;
+        }
+        else {
+          String[] f = wellDir.list(true);
+          if (f == null) {
+            multipleDirs = false;
+          }
+          else {
+            for (String file : f) {
+              LOGGER.debug("  adding well file {}", file);
+              allFiles.add(new Location(wellDir, file).getAbsolutePath());
+            }
+          }
         }
       }
-      LOGGER.debug("found files = {}", allFiles);
-      files = allFiles.toArray(new String[allFiles.size()]);
-      Arrays.sort(files);
+      if (multipleDirs) {
+        LOGGER.debug("found files = {}", allFiles);
+        files = allFiles.toArray(new String[allFiles.size()]);
+        Arrays.sort(files);
+      }
     }
 
     Pattern regexA = Pattern.compile(TIFF_REGEX_A);
