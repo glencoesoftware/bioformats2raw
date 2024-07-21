@@ -277,9 +277,10 @@ public class BioTekReader extends FormatReader {
     int maxPlateAcq = 0;
     Map<Integer, Integer> maxField = new HashMap<Integer, Integer>();
 
-    int matchingROI = -1;
     String matchingPath = new Location(currentId).getAbsolutePath();
     LOGGER.trace("matching path = {}", matchingPath);
+
+    ArrayList<String> foundWellSamples = new ArrayList<String>();
 
     for (String absolutePath : files) {
       String f = new Location(absolutePath).getName();
@@ -331,11 +332,6 @@ public class BioTekReader extends FormatReader {
 
             LOGGER.trace("absolutePath = {}, roiIndex = {}",
               absolutePath, roiIndex);
-            if (matchingROI < 0 && absolutePath.equals(matchingPath)) {
-              matchingROI = roiIndex;
-              LOGGER.trace("matchingROI = {}, absolutePath = {}",
-                matchingROI, absolutePath);
-            }
 
             int channelIndex = Integer.parseInt(m.group(5)) - 1;
             fieldIndex = Integer.parseInt(m.group(6)) - 1;
@@ -354,9 +350,25 @@ public class BioTekReader extends FormatReader {
         }
       }
 
-      if (rowIndex >= 0 && colIndex >= 0 && fieldIndex >= 0 &&
-        matchingROI == roiIndex)
+      if (rowIndex >= 0 && colIndex >= 0 &&
+        (fieldIndex >= 0 || roiIndex >= 0))
       {
+        // collapse field and ROI index into single field index
+        if (roiIndex >= 0) {
+          if (fieldIndex < 0) {
+            // only ROIs, no field
+            fieldIndex = roiIndex;
+          }
+          else {
+            // both fields and ROIs
+            String key = fieldIndex + "," + roiIndex;
+            if (!foundWellSamples.contains(key)) {
+              foundWellSamples.add(key);
+            }
+            fieldIndex = foundWellSamples.indexOf(key);
+          }
+        }
+
         BioTekWell well = lookupWell(0, rowIndex, colIndex);
         if (fieldIndex >= well.getFieldCount()) {
           well.setFieldCount(fieldIndex + 1);
@@ -494,14 +506,26 @@ public class BioTekReader extends FormatReader {
       setSeries(s);
 
       int wellIndex = getWellIndex(s);
-      int field = getFieldIndex(s) + 1;
+      int field = getFieldIndex(s);
       BioTekWell well = wells.get(wellIndex);
       int row = well.getRowIndex();
       int column = well.getColumnIndex();
-      store.setImageName(
-        getWellName(row, column) + " #" + field, s);
 
-      List<Channel> channels = well.getChannels(field - 1);
+      String fieldName = " #" + (field + 1);
+      if (field < foundWellSamples.size()) {
+        // unpack the field/ROI indexes and store both
+        // in the image name
+
+        String[] indexes = foundWellSamples.get(field).split(",");
+        if (indexes.length == 2) {
+          fieldName = " Field #" + (Integer.parseInt(indexes[0]) + 1) +
+            ", ROI #" + (Integer.parseInt(indexes[1]) + 1);
+        }
+      }
+
+      store.setImageName(getWellName(row, column) + fieldName, s);
+
+      List<Channel> channels = well.getChannels(field);
       for (int c=0; c<getEffectiveSizeC(); c++) {
         if (channels != null && c < channels.size()) {
           Channel channel = channels.get(c);

@@ -237,8 +237,34 @@ public class BioTekTest {
         "ID_E9 info/E9_-1_3_1_DAPI_001.tif",
         "ID_E10 info/E10_-1_1_1_Phase Contrast_001.tif",
         "ID_E10 info/E10_-1_2_1_GFP_001.tif",
-        "ID_E10 info/E10_-1_3_1_DAPI_001.tif",
-      }, new int[] {0, 0, 4, 4}, new int[] {8, 9, 8, 9}, 1, 1, 3, 1)
+        "ID_E10 info/E10_-1_3_1_DAPI_001.tif"
+      }, new int[] {0, 0, 4, 4}, new int[] {8, 9, 8, 9}, 1, 1, 3, 1),
+      Arguments.of(new String[] {
+        "A1ROI1_01_1_1Z0_Confocal DAPI_001.tif",
+        "A1ROI1_01_1_1Z1_Confocal DAPI_001.tif",
+        "A1ROI1_01_1_1Z2_Confocal DAPI_001.tif",
+        "A1ROI1_01_1_1Z0_Confocal RFP_001.tif",
+        "A1ROI1_01_1_1Z1_Confocal RFP_001.tif",
+        "A1ROI1_01_1_1Z2_Confocal RFP_001.tif",
+        "A1ROI1_01_1_2Z0_Confocal DAPI_001.tif",
+        "A1ROI1_01_1_2Z1_Confocal DAPI_001.tif",
+        "A1ROI1_01_1_2Z2_Confocal DAPI_001.tif",
+        "A1ROI1_01_1_2Z0_Confocal RFP_001.tif",
+        "A1ROI1_01_1_2Z1_Confocal RFP_001.tif",
+        "A1ROI1_01_1_2Z2_Confocal RFP_001.tif",
+        "A1ROI2_01_1_1Z0_Confocal DAPI_001.tif",
+        "A1ROI2_01_1_1Z1_Confocal DAPI_001.tif",
+        "A1ROI2_01_1_1Z2_Confocal DAPI_001.tif",
+        "A1ROI2_01_1_1Z0_Confocal RFP_001.tif",
+        "A1ROI2_01_1_1Z1_Confocal RFP_001.tif",
+        "A1ROI2_01_1_1Z2_Confocal RFP_001.tif",
+        "A1ROI2_01_1_2Z0_Confocal DAPI_001.tif",
+        "A1ROI2_01_1_2Z1_Confocal DAPI_001.tif",
+        "A1ROI2_01_1_2Z2_Confocal DAPI_001.tif",
+        "A1ROI2_01_1_2Z0_Confocal RFP_001.tif",
+        "A1ROI2_01_1_2Z1_Confocal RFP_001.tif",
+        "A1ROI2_01_1_2Z2_Confocal RFP_001.tif"
+      }, new int[] {0}, new int[] {0}, 4, 3, 2, 1)
     );
   }
 
