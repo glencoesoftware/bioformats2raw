@@ -264,7 +264,27 @@ public class BioTekTest {
         "A1ROI2_01_1_2Z0_Confocal RFP_001.tif",
         "A1ROI2_01_1_2Z1_Confocal RFP_001.tif",
         "A1ROI2_01_1_2Z2_Confocal RFP_001.tif"
-      }, new int[] {0}, new int[] {0}, 4, 3, 2, 1)
+      }, new int[] {0}, new int[] {0}, 4, 3, 2, 1),
+      Arguments.of(new String[] {
+        "A1ROI1_01_1_1Z0_Confocal DAPI_001.tif",
+        "A1ROI1_01_1_1Z1_Confocal DAPI_001.tif",
+        "A1ROI1_01_1_1Z2_Confocal DAPI_001.tif",
+        "A1ROI1_01_1_1Z0_Confocal RFP_001.tif",
+        "A1ROI1_01_1_1Z1_Confocal RFP_001.tif",
+        "A1ROI1_01_1_1Z2_Confocal RFP_001.tif",
+        "A1ROI2_01_1_1Z0_Confocal DAPI_001.tif",
+        "A1ROI2_01_1_1Z1_Confocal DAPI_001.tif",
+        "A1ROI2_01_1_1Z2_Confocal DAPI_001.tif",
+        "A1ROI2_01_1_1Z0_Confocal RFP_001.tif",
+        "A1ROI2_01_1_1Z1_Confocal RFP_001.tif",
+        "A1ROI2_01_1_1Z2_Confocal RFP_001.tif",
+        "A1ROI3_01_1_1Z0_Confocal DAPI_001.tif",
+        "A1ROI3_01_1_1Z1_Confocal DAPI_001.tif",
+        "A1ROI3_01_1_1Z2_Confocal DAPI_001.tif",
+        "A1ROI3_01_1_1Z0_Confocal RFP_001.tif",
+        "A1ROI3_01_1_1Z1_Confocal RFP_001.tif",
+        "A1ROI3_01_1_1Z2_Confocal RFP_001.tif",
+      }, new int[] {0}, new int[] {0}, 3, 3, 2, 1)
     );
   }
 
