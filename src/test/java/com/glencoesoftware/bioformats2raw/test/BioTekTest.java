@@ -284,7 +284,21 @@ public class BioTekTest {
         "A1ROI3_01_1_1Z0_Confocal RFP_001.tif",
         "A1ROI3_01_1_1Z1_Confocal RFP_001.tif",
         "A1ROI3_01_1_1Z2_Confocal RFP_001.tif",
-      }, new int[] {0}, new int[] {0}, 3, 3, 2, 1)
+      }, new int[] {0}, new int[] {0}, 3, 3, 2, 1),
+      Arguments.of(new String[] {
+        "A1_01_3_4_Blue_001.tif",
+        "A1_01_3_3_Blue_001.tif",
+        "A1_01_3_2_Blue_001.tif",
+        "A1_01_3_1_Blue_001.tif",
+        "A1_01_2_4_Green_001.tif",
+        "A1_01_2_3_Green_001.tif",
+        "A1_01_2_2_Green_001.tif",
+        "A1_01_2_1_Green_001.tif",
+        "A1_01_1_4_Red_001.tif",
+        "A1_01_1_3_Red_001.tif",
+        "A1_01_1_2_Red_001.tif",
+        "A1_01_1_1_Red_001.tif"
+      }, new int[] {0}, new int[] {0}, 4, 1, 3, 1)
     );
   }
 
