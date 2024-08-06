@@ -76,7 +76,8 @@ public class MCDReader extends FormatReader {
     }
 
     LOGGER.debug("Reading raw acquisition #{}", getSeries() - panoramas.size());
-    in.seek(acquisitions.get(getSeries() - panoramas.size()).start);
+    Acquisition currentAcq = acquisitions.get(getSeries() - panoramas.size());
+    in.seek(currentAcq.start);
     LOGGER.debug("File offset = {}", in.getFilePointer());
 
     int bpp = FormatTools.getBytesPerPixel(getPixelType());
@@ -91,10 +92,20 @@ public class MCDReader extends FormatReader {
     for (int row=0; row<h; row++) {
       in.skipBytes(x * (skip + bpp));
       for (int col=0; col<w; col++) {
-        in.read(buf, ((row * w) + col) * bpp, bpp);
-        in.skipBytes(skip);
+        // don't allow reading past the defined end of the pixel data
+        // for this acquisition (which may be in the middle of the file)
+        if (in.getFilePointer() < currentAcq.end) {
+          in.read(buf, ((row * w) + col) * bpp, bpp);
+          in.skipBytes(skip);
+        }
+        else {
+          break;
+        }
       }
       in.skipBytes((skip + bpp) * (getSizeX() - w - x));
+      if (in.getFilePointer() >= currentAcq.end) {
+        break;
+      }
     }
 
     return buf;
