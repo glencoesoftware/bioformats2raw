@@ -219,35 +219,48 @@ public class MCDReader extends FormatReader {
       m.sizeZ = 1;
       m.sizeT = 1;
 
+      LOGGER.debug("Acquisition size: {} x {}, {} bytes per pixel",
+        acq.sizeX, acq.sizeY, acq.bpp);
+
       int plane = acq.sizeX * acq.sizeY * acq.bpp;
       long totalBytes = acq.end - acq.start;
+      LOGGER.debug("Total pixel bytes: {}", totalBytes);
       if (totalBytes <= 0) {
         LOGGER.debug(
-          "Skipping acquistiion {} with 0 pixel bytes", acq.description);
+          "Skipping acquisition {} with 0 pixel bytes", acq.description);
         acquisitions.remove(acq);
         a--;
         continue;
       }
       long totalPlanes = totalBytes / plane;
+      LOGGER.debug("Detected {} planes in acquisition", totalPlanes);
       if (totalPlanes > Integer.MAX_VALUE) {
         throw new FormatException(
           "Too many channels (" + totalPlanes + ") for series " + core.size());
       }
-      m.sizeC = (int) totalPlanes;
-      m.imageCount = m.sizeC * m.sizeZ * m.sizeT;
-      m.dimensionOrder = "XYCZT";
-      m.littleEndian = true;
-      core.add(m);
 
       // the XML defines a big list of all channels across all acquisitions
       // map each channel to the correct location in the correct acquisition
-      acq.channelIndexes = new int[m.sizeC];
+      acq.channelIndexes = new ArrayList<Integer>();
       for (int c=0; c<channels.size(); c++) {
         Channel channel = channels.get(c);
         if (channel.acqID == acq.id) {
-          acq.channelIndexes[channel.index] = c;
+          while (channel.index >= acq.channelIndexes.size()) {
+            acq.channelIndexes.add(-1);
+          }
+          acq.channelIndexes.set(channel.index, c);
+          m.sizeC++;
         }
       }
+
+      m.imageCount = m.sizeC * m.sizeZ * m.sizeT;
+      if (totalPlanes < m.imageCount) {
+        LOGGER.warn("Not enough pixel bytes in file; images may be blank");
+      }
+
+      m.dimensionOrder = "XYCZT";
+      m.littleEndian = true;
+      core.add(m);
     }
 
     MetadataStore store = makeFilterMetadata();
@@ -263,8 +276,14 @@ public class MCDReader extends FormatReader {
       Acquisition acq = acquisitions.get(a);
       store.setImageName(acq.description, imageIndex);
 
-      for (int c=0; c<acq.channelIndexes.length; c++) {
-        Channel channel = channels.get(acq.channelIndexes[c]);
+      for (int c=0; c<acq.channelIndexes.size(); c++) {
+        int index = acq.channelIndexes.get(c);
+        if (index < 0) {
+          LOGGER.warn("Missing channel definition, channel #{}, image #{}",
+            c, imageIndex);
+          continue;
+        }
+        Channel channel = channels.get(index);
 
         // this is kind of wrong, but the reference viewer
         // exposes both the name and label (which are often slightly different)
@@ -542,7 +561,7 @@ public class MCDReader extends FormatReader {
     public int bpp;
 
     /** Indexes into list of channels; length matches SizeC. */
-    public int[] channelIndexes;
+    public List<Integer> channelIndexes;
   }
 
   /**
