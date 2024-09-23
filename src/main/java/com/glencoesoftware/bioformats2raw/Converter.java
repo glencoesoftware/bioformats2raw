@@ -708,8 +708,7 @@ public class Converter implements Callable<Integer> {
    */
   @Option(
           names = "--fill-value",
-          description = "Default value to fill in for missing tiles (0-255)" +
-                        " (currently .mrxs only)",
+          description = "Default value to fill in for missing tiles (0-255)",
           defaultValue = Option.NULL_VALUE
   )
   public void setFillValue(Short tileFill) {
@@ -1251,11 +1250,6 @@ public class Converter implements Callable<Integer> {
     // First find which reader class we need
     Class<?> readerClass = getBaseReaderClass();
 
-    if (!readerClass.equals(MiraxReader.class) && fillValue != null) {
-      throw new IllegalArgumentException(
-        "--fill-value not yet supported for " + readerClass);
-    }
-
     // Now with our found type instantiate our queue of readers for use
     // during conversion
     boolean savedMemoFile = false;
@@ -1264,8 +1258,8 @@ public class Converter implements Callable<Integer> {
       Memoizer memoizer;
       try {
         reader = (IFormatReader) readerClass.getConstructor().newInstance();
-        if (fillValue != null && reader instanceof MiraxReader) {
-          ((MiraxReader) reader).setFillValue(fillValue.byteValue());
+        if (fillValue != null) {
+          reader.setFillColor(fillValue.byteValue());
         }
         memoizer = createMemoizer(reader);
       }

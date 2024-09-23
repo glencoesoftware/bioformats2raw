@@ -131,7 +131,6 @@ public class MiraxReader extends FormatReader {
     JPEG2000CodecOptions.getDefaultOptions();
 
   private boolean fluorescence = false;
-  private Byte fillValue = null;
 
   private transient JPEGXRCodec jpegxrCodec = new JPEGXRCodec();
 
@@ -217,7 +216,7 @@ public class MiraxReader extends FormatReader {
 
     // set background color to black instead of the stored fill color
     // this is to match the default behavior of Pannoramic Viewer
-    Arrays.fill(buf, getFillValue());
+    Arrays.fill(buf, getFillColor());
 
     if (tileCache == null) {
       tileCache = CacheBuilder.newBuilder()
@@ -1057,9 +1056,10 @@ public class MiraxReader extends FormatReader {
    * Set the fill value for missing tiles.
    *
    * @param fill the fill value, or null to use the reader's default value
+   * @deprecated used setFillColor(Byte)
    */
   public void setFillValue(Byte fill) {
-    fillValue = fill;
+    setFillColor(fill);
   }
 
   /**
@@ -1069,10 +1069,17 @@ public class MiraxReader extends FormatReader {
    * for brightfield.
    *
    * @return fill value for missing tiles
+   * @deprecated use getFillColor()
    */
   public byte getFillValue() {
-    if (fillValue != null) {
-      return fillValue;
+    return getFillColor();
+  }
+
+  @Override
+  public Byte getFillColor() {
+    Byte color = getFillColor();
+    if (color != null) {
+      return color;
     }
     return fluorescence ? (byte) 0 : (byte) 255;
   }
