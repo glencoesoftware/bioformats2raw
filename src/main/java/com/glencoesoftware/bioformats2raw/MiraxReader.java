@@ -72,6 +72,7 @@ public class MiraxReader extends FormatReader {
   private static final int MAX_TILE_SIZE = 256;
 
   private static final String SLIDE_DATA = "Slidedat.ini";
+  private static final String FILTER_LEVEL = "Slide filter level";
 
   /**
    * Maximum number of channels in a tile.  The assembled slide can
@@ -755,7 +756,7 @@ public class MiraxReader extends FormatReader {
         Integer.parseInt(zoomLevel.get("IMAGE_FILL_COLOR_BGR"));
 
       CoreMetadata m = core.get(i);
-      m.sizeC = Integer.parseInt(hierarchy.get("HIER_1_COUNT"));
+      m.sizeC = getChannelCount(hierarchy);
       m.rgb = false;
       m.sizeZ = 1;
       m.sizeT = 1;
@@ -979,8 +980,10 @@ public class MiraxReader extends FormatReader {
 
       // parse channel data
 
+      int slideIndex = getSlideHierarchyIndex(hierarchy);
       for (int c=0; c<getSizeC(); c++) {
-        section = hierarchy.get("HIER_1_VAL_" + c + "_SECTION");
+        section =
+          hierarchy.get("HIER_" + slideIndex + "_VAL_" + c + "_SECTION");
         IniTable channelTable = data.getTable(section);
 
         if (channelTable == null) {
@@ -1222,6 +1225,29 @@ public class MiraxReader extends FormatReader {
       throw new FormatException("Unsupported tile format: " + tileFormat);
     }
     return tile;
+  }
+
+  private int getSlideHierarchyIndex(IniTable hierarchy) {
+    int hierarchyIndex = 1;
+    String nameKey = "HIER_%d_NAME";
+
+    int hierCount = Integer.parseInt(hierarchy.get("HIER_COUNT"));
+    for (int i=hierarchyIndex; i<hierCount; i++) {
+      if (hierarchy.get(String.format(nameKey, i)).equals(FILTER_LEVEL)) {
+        hierarchyIndex = i;
+        break;
+      }
+    }
+
+    return hierarchyIndex;
+  }
+
+  private int getChannelCount(IniTable hierarchy) {
+    int hierarchyIndex = getSlideHierarchyIndex(hierarchy);
+    String countKey = "HIER_%d_COUNT";
+
+    String channelKey = String.format(countKey, hierarchyIndex);
+    return Integer.parseInt(hierarchy.get(channelKey));
   }
 
   private TilePointer lookupTile(int resolution, int x, int y, int c) {
