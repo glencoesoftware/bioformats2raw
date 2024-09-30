@@ -1077,7 +1077,7 @@ public class MiraxReader extends FormatReader {
 
   @Override
   public Byte getFillColor() {
-    Byte color = getFillColor();
+    Byte color = super.getFillColor();
     if (color != null) {
       return color;
     }
