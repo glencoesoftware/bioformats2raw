@@ -114,12 +114,12 @@ public class MetaxpressReader extends FormatReader {
         planeReader.openBytes(0, buf, x, y, w, h);
       }
       catch (IOException e) {
-        Arrays.fill(buf, (byte) 0);
+        Arrays.fill(buf, getFillColor());
       }
       s.stop("openBytes(0) on " + file);
     }
     else {
-      Arrays.fill(buf, (byte) 0);
+      Arrays.fill(buf, getFillColor());
     }
 
     return buf;

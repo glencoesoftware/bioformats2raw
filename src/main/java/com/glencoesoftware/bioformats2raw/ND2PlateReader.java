@@ -90,7 +90,7 @@ public class ND2PlateReader extends FormatReader {
   public byte[] openBytes(int no, byte[] buf, int x, int y, int w, int h)
     throws FormatException, IOException
   {
-    Arrays.fill(buf, (byte) 0);
+    Arrays.fill(buf, getFillColor());
 
     int fileIndex = getFileIndex(getSeries());
     if (fileIndex >= 0 && fileIndex < files.length) {

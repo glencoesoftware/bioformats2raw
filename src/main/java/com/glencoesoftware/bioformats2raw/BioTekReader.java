@@ -176,7 +176,7 @@ public class BioTekReader extends FormatReader {
   {
     FormatTools.checkPlaneParameters(this, no, buf.length, x, y, w, h);
 
-    Arrays.fill(buf, (byte) 0);
+    Arrays.fill(buf, getFillColor());
 
     BioTekWell well = wells.get(getWellIndex(getSeries()));
     String file = well.getFile(getFieldIndex(getSeries()), getZCTCoords(no));
