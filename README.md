@@ -144,7 +144,7 @@ To change type-specific options, use `--compression-options <key=value>`.
 
 Supported options for `blosc` are:
 
-* `cname=<codec>`, where the default is `cname=lz4`. `zstd` and `zlib` are also valid values of `cname`.
+* `cname=<codec>`, where the default is `cname=lz4`. `zstd`, `zlib`, `blosclz`, and `lz4hc` are also valid values of `cname`.
 * `clevel=<level>`, where the default is `clevel=5`. Valid values are integers from 1 to 9 inclusive.
 
 Supported options for `zlib` are:
