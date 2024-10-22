@@ -133,6 +133,34 @@ The output in `/path/to/zarr-pyramid` can be passed to `raw2ometiff` to produce
 an OME-TIFF that can be opened in ImageJ, imported into OMERO, etc. See
 https://github.com/glencoesoftware/raw2ometiff for more information.
 
+Compression Options
+===================
+
+By default, output is compressed with Blosc using the `lz4` codec.
+
+To change the overall compression type, use `--compression <type>`. Supported types are `blosc`, `zlib`, and `null` (uncompressed).
+
+To change type-specific options, use `--compression-options <key=value>`.
+
+Supported options for `blosc` are:
+
+* `cname=<codec>`, where the default is `cname=lz4`. `zstd`, `zlib`, `blosclz`, and `lz4hc` are also valid values of `cname`.
+* `clevel=<level>`, where the default is `clevel=5`. Valid values are integers from 1 to 9 inclusive.
+
+Supported options for `zlib` are:
+
+* `level=<level>`, where the default is `level=1`. Valid values are integers from 1 to 9 inclusive.
+
+There are no supported compression options for type `null`, as this is uncompressed data.
+
+While `--compression blosc --compression-options cname=lz4 --compression-options clevel=5` is the default,
+some datasets perform better in time and/or space with different choices. For workflows where the size of the output Zarr,
+total conversion time, and/or time required to decompress a chunk are important, it is a good idea to
+benchmark several different options with the real input data being used. See also the [Performance](#performance) section below.
+
+In some tests, we have found that `--compression blosc --compression-options cname=zstd --compression-options clevel=3`
+may be a reasonable choice if compressed size is more important than conversion or decompression times.
+
 Output Formatting Options
 =========================
 
@@ -292,6 +320,8 @@ the following configuration options:
  * `--max-workers`
  * `--tile-width`
  * `--tile-height`
+ * `--compression`
+ * `--compression-options`
 
 On systems with significant I/O bandwidth, particularly SATA or
 NVMe based storage, you may find sharply diminishing returns with high
@@ -307,7 +337,7 @@ The worker count should be set to 1 if the input data requires a Bio-Formats rea
 This is not a common case, but is a known issue with Imaris HDF data in particular.
 
 In general, expect to need to tune the above settings and measure
-relative performance.
+relative performance. See the [Compression options section](#compression-options) above for more information on `--compression` and `--compression-options`.
 
 Metadata caching
 ================
