@@ -27,6 +27,7 @@ import com.bc.zarr.DataType;
 import com.bc.zarr.DimensionSeparator;
 import com.bc.zarr.ZarrArray;
 import com.bc.zarr.ZarrGroup;
+import com.bc.zarr.storage.FileSystemStore;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.glencoesoftware.bioformats2raw.Converter;
@@ -277,6 +278,11 @@ public class ZarrTest {
         output.resolve("0/0/.zarray").toFile());
     assertEquals("/", root.path("dimension_separator").asText());
     assertEquals(Converter.LAYOUT, layout);
+
+    // make sure pixel data was actually written
+    FileSystemStore store =
+      new FileSystemStore(output.resolve("0").resolve("0"));
+    assertEquals(store.getKeysEndingWith("").size(), 7);
   }
 
   /**
@@ -1271,6 +1277,46 @@ public class ZarrTest {
         ZarrGroup.open(output.resolve(String.valueOf(i)).toString());
       assertNull(z.getAttributes().get("omero"));
     }
+  }
+
+  /**
+   * Make sure no pixel data is written with the "--no-tiles" option.
+   */
+  @Test
+  public void testNoTiles() throws Exception {
+    // pick a large size, so test time will be affected if "--no-tiles"
+    // isn't working as expected
+    int x = 8192;
+    int y = x * 2;
+    input = fake("sizeX", String.valueOf(x), "sizeY", String.valueOf(y));
+    assertTool("--no-tiles");
+
+    ZarrGroup z = ZarrGroup.open(output.resolve("0").toString());
+
+    List<Map<String, Object>> multiscales =
+      (List<Map<String, Object>>) z.getAttributes().get("multiscales");
+
+    Map<String, Object> multiscale = multiscales.get(0);
+    List<Map<String, Object>> datasets =
+      (List<Map<String, Object>>) multiscale.get("datasets");
+
+    for (int i=0; i<datasets.size(); i++) {
+      String path = (String) datasets.get(i).get("path");
+      FileSystemStore store =
+        new FileSystemStore(output.resolve("0").resolve(path));
+
+      // empty key and .zarray
+      assertEquals(store.getKeysEndingWith("").size(), 2);
+
+      ZarrArray array = z.openArray(path);
+      assertArrayEquals(new int[] {1, 1, 1, y, x}, array.getShape());
+
+      y /= 2;
+      x /= 2;
+    }
+
+    OME ome = getOMEMetadata();
+    assertEquals(1, ome.sizeOfImageList());
   }
 
   /**
