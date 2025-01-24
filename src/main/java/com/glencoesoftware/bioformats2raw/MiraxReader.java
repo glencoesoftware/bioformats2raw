@@ -945,11 +945,18 @@ public class MiraxReader extends FormatReader {
       String sizeX = resTable.get("MICROMETER_PER_PIXEL_X");
       String sizeY = resTable.get("MICROMETER_PER_PIXEL_Y");
 
+      // store positions in pixels, but override with value in physical units
+      // if the physical pixel sizes are present and valid
+      store.setPlanePositionX(new Length(originX, UNITS.PIXEL), 0, 0);
+      store.setPlanePositionY(new Length(originY, UNITS.PIXEL), 0, 0);
+
       if (sizeX != null) {
         try {
           double x = Double.parseDouble(sizeX);
           if (x > 0) {
             store.setPixelsPhysicalSizeX(new Length(x, UNITS.MICROM), 0);
+            store.setPlanePositionX(
+              new Length(originX * x, UNITS.MICROM), 0, 0);
           }
         }
         catch (NumberFormatException e) {
@@ -961,15 +968,14 @@ public class MiraxReader extends FormatReader {
           double y = Double.parseDouble(sizeY);
           if (y > 0) {
             store.setPixelsPhysicalSizeY(new Length(y, UNITS.MICROM), 0);
+            store.setPlanePositionY(
+              new Length(originY * y, UNITS.MICROM), 0, 0);
           }
         }
         catch (NumberFormatException e) {
           LOGGER.debug("Could not parse physical pixel size Y {}", sizeY);
         }
       }
-
-      store.setPlanePositionX(new Length(originX, UNITS.PIXEL), 0, 0);
-      store.setPlanePositionY(new Length(originY, UNITS.PIXEL), 0, 0);
 
       // parse channel data
 
