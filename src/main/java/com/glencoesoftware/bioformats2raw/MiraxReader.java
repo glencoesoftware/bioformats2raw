@@ -91,7 +91,7 @@ public class MiraxReader extends FormatReader {
 
   // -- Fields --
 
-  private int fillColor;
+  private int channelFillColor;
   private int pyramidDepth;
   private List<String> files = new ArrayList<String>();
   private String iniPath;
@@ -344,7 +344,7 @@ public class MiraxReader extends FormatReader {
       xTiles = 0;
       yTiles = 0;
       divPerSide = 0;
-      fillColor = 0;
+      channelFillColor = 0;
       minColIndex = null;
       maxColIndex = null;
       minRowIndex = null;
@@ -751,7 +751,8 @@ public class MiraxReader extends FormatReader {
         Double.parseDouble(zoomLevel.get("MICROMETER_PER_PIXEL_Y"));
       format.set(i, zoomLevel.get("IMAGE_FORMAT"));
 
-      fillColor = Integer.parseInt(zoomLevel.get("IMAGE_FILL_COLOR_BGR"));
+      channelFillColor =
+        Integer.parseInt(zoomLevel.get("IMAGE_FILL_COLOR_BGR"));
 
       CoreMetadata m = core.get(i);
       m.sizeC = Integer.parseInt(hierarchy.get("HIER_1_COUNT"));
@@ -860,7 +861,7 @@ public class MiraxReader extends FormatReader {
       IMinMaxStore minMax = (IMinMaxStore) store;
       for (int series=0; series<core.get(0).resolutionCount; series++) {
         for (int c=0; c<getEffectiveSizeC(); c++) {
-          int color = (fillColor >> (8 * (c % MAX_CHANNELS))) & 0xff;
+          int color = (channelFillColor >> (8 * (c % MAX_CHANNELS))) & 0xff;
           double percentColor = color / 255.0;
           percentColor *=
             (Math.pow(2, FormatTools.getBytesPerPixel(getPixelType()) * 8) - 1);
@@ -1077,9 +1078,10 @@ public class MiraxReader extends FormatReader {
 
   @Override
   public Byte getFillColor() {
-    Byte color = super.getFillColor();
-    if (color != null) {
-      return color;
+    // don't check super.getFillColor() here, as that is expected to
+    // return 0 instead of null if a fill color was not set
+    if (fillColor != null) {
+      return super.getFillColor();
     }
     return fluorescence ? (byte) 0 : (byte) 255;
   }
