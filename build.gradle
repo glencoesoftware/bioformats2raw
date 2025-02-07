@@ -37,7 +37,7 @@ configurations.all {
 
 dependencies {
     implementation 'net.java.dev.jna:jna:5.10.0'
-    implementation 'ome:formats-gpl:8.0.1'
+    implementation 'ome:formats-gpl:8.1.0'
     implementation 'info.picocli:picocli:4.7.5'
     implementation 'com.univocity:univocity-parsers:2.8.4'
     implementation 'dev.zarr:jzarr:0.4.2'
@@ -45,8 +45,8 @@ dependencies {
     // implementation 'io.nextflow:nxf-s3fs:1.1.0'
     implementation 'org.lasersonlab:s3fs:2.2.3'
     implementation 'javax.xml.bind:jaxb-api:2.3.0'
-    implementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.3.14'
-    implementation group: 'ch.qos.logback', name: 'logback-core', version: '1.3.14'
+    implementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.3.15'
+    implementation group: 'ch.qos.logback', name: 'logback-core', version: '1.3.15'
 
 
     implementation 'org.openpnp:opencv:4.7.0-0'
