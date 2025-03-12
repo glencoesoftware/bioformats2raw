@@ -239,6 +239,7 @@ public class ZarrTest {
     assertEquals(1, multiscales.size());
 
     Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "image");
     List<Map<String, Object>> datasets =
             (List<Map<String, Object>>) multiscale.get("datasets");
     assertTrue(datasets.size() > 0);
@@ -286,14 +287,10 @@ public class ZarrTest {
   public void testMultiscalesMetadata() throws Exception {
     input = fake();
     assertTool();
-    ZarrGroup z =
-        ZarrGroup.open(output.resolve("0").toString());
-    List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
-            z.getAttributes().get("multiscales");
+    List<Map<String, Object>> multiscales = getMultiscales("0");
     assertEquals(1, multiscales.size());
     Map<String, Object> multiscale = multiscales.get(0);
-    assertEquals("0.4", multiscale.get("version"));
-    assertEquals("image", multiscale.get("name"));
+    checkMultiscale(multiscale, "image");
     List<Map<String, Object>> datasets =
             (List<Map<String, Object>>) multiscale.get("datasets");
     assertTrue(datasets.size() > 0);
@@ -344,9 +341,7 @@ public class ZarrTest {
     ZarrArray array = z.openArray("0/0");
     assertArrayEquals(new int[] {1, 1, 2, 512, 512}, array.getShape());
 
-    z = ZarrGroup.open(output.resolve("0").toString());
-    List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
-            z.getAttributes().get("multiscales");
+    List<Map<String, Object>> multiscales = getMultiscales("0");
     assertEquals(1, multiscales.size());
     Map<String, Object> multiscale = multiscales.get(0);
     List<Map<String, Object>> axes =
@@ -365,11 +360,10 @@ public class ZarrTest {
     ZarrArray array = z.openArray("0/0");
     assertArrayEquals(new int[] {1, 1, 2, 512, 512}, array.getShape());
 
-    z = ZarrGroup.open(output.resolve("0").toString());
-    List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
-            z.getAttributes().get("multiscales");
+    List<Map<String, Object>> multiscales = getMultiscales("0");
     assertEquals(1, multiscales.size());
     Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "image");
     List<Map<String, Object>> axes =
       (List<Map<String, Object>>) multiscale.get("axes");
     checkAxes(axes, "TZCYX", null);
@@ -385,11 +379,10 @@ public class ZarrTest {
       "physicalSizeZ", "2cm");
     assertTool();
 
-    ZarrGroup z = ZarrGroup.open(output.resolve("0").toString());
-    List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
-            z.getAttributes().get("multiscales");
+    List<Map<String, Object>> multiscales = getMultiscales("0");
     assertEquals(1, multiscales.size());
     Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "image");
     List<Map<String, Object>> axes =
       (List<Map<String, Object>>) multiscale.get("axes");
     checkAxes(axes, "TCZYX",
@@ -505,6 +498,12 @@ public class ZarrTest {
     OME ome = getOMEMetadata();
     assertEquals(1, ome.sizeOfImageList());
 
+    List<Map<String, Object>> multiscales = getMultiscales("0");
+    assertEquals(1, multiscales.size());
+    Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscales.get(0), "image");
+    assertEquals(ome.getImage(0).getName(), multiscales.get(0).get("name"));
+
     // Check series 0 dimensions and special pixels
     ZarrArray series0 = z.openArray("0/0");
     assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getShape());
@@ -541,6 +540,12 @@ public class ZarrTest {
 
     OME ome = getOMEMetadata();
     assertEquals(1, ome.sizeOfImageList());
+
+    List<Map<String, Object>> multiscales = getMultiscales("0");
+    assertEquals(1, multiscales.size());
+    Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscales.get(0), "image 2");
+    assertEquals(ome.getImage(0).getName(), multiscales.get(0).get("name"));
 
     // Check series 1 dimensions and special pixels
     ZarrArray series0 = z.openArray("0/0");
@@ -949,12 +954,10 @@ public class ZarrTest {
     input = fake();
     assertTool("--downsample-type", type.toString());
 
-    ZarrGroup z = ZarrGroup.open(output.resolve("0").toString());
-    List<Map<String, Object>> multiscales =
-          (List<Map<String, Object>>) z.getAttributes().get("multiscales");
+    List<Map<String, Object>> multiscales = getMultiscales("0");
     assertEquals(1, multiscales.size());
     Map<String, Object> multiscale = multiscales.get(0);
-    assertEquals("0.4", multiscale.get("version"));
+    checkMultiscale(multiscale, "image");
 
     Map<String, String> metadata =
       (Map<String, String>) multiscale.get("metadata");
@@ -1704,6 +1707,7 @@ public class ZarrTest {
             z.getAttributes().get("multiscales");
 
     Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "image");
     List<Map<String, Object>> datasets =
               (List<Map<String, Object>>) multiscale.get("datasets");
     assertEquals(resolutionCount, datasets.size());
@@ -1736,6 +1740,7 @@ public class ZarrTest {
             z.getAttributes().get("multiscales");
 
     Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "image");
     List<Map<String, Object>> datasets =
               (List<Map<String, Object>>) multiscale.get("datasets");
     assertEquals(4, datasets.size());
@@ -1768,6 +1773,7 @@ public class ZarrTest {
             z.getAttributes().get("multiscales");
 
     Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "image");
     List<Map<String, Object>> datasets =
               (List<Map<String, Object>>) multiscale.get("datasets");
     assertEquals(expectedResolutionCount, datasets.size());
@@ -1800,6 +1806,7 @@ public class ZarrTest {
             z.getAttributes().get("multiscales");
 
     Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "image");
     List<Map<String, Object>> datasets =
               (List<Map<String, Object>>) multiscale.get("datasets");
 
@@ -1832,6 +1839,7 @@ public class ZarrTest {
             z.getAttributes().get("multiscales");
 
     Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "image");
     List<Map<String, Object>> datasets =
               (List<Map<String, Object>>) multiscale.get("datasets");
 
@@ -1859,6 +1867,7 @@ public class ZarrTest {
             z.getAttributes().get("multiscales");
 
     Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "image");
     List<Map<String, Object>> datasets =
               (List<Map<String, Object>>) multiscale.get("datasets");
     assertEquals(datasets.size(), 5);
@@ -1882,6 +1891,7 @@ public class ZarrTest {
             z.getAttributes().get("multiscales");
 
     Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "image");
     List<Map<String, Object>> datasets =
               (List<Map<String, Object>>) multiscale.get("datasets");
     assertEquals(datasets.size(), 6);
@@ -1905,6 +1915,7 @@ public class ZarrTest {
             z.getAttributes().get("multiscales");
 
     Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "image");
     List<Map<String, Object>> datasets =
               (List<Map<String, Object>>) multiscale.get("datasets");
     assertEquals(datasets.size(), 6);
@@ -1928,6 +1939,7 @@ public class ZarrTest {
             z.getAttributes().get("multiscales");
 
     Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "image");
     List<Map<String, Object>> datasets =
               (List<Map<String, Object>>) multiscale.get("datasets");
     assertEquals(datasets.size(), 7);
@@ -2172,4 +2184,18 @@ public class ZarrTest {
     assertTrue(xmlService.validateOMEXML(omexml));
     return (OME) xmlService.createOMEXMLRoot(omexml);
   }
+
+  private List<Map<String, Object>> getMultiscales(String group)
+    throws IOException
+  {
+    ZarrGroup seriesGroup = ZarrGroup.open(output.resolve(group).toString());
+    return (List<Map<String, Object>>) seriesGroup.getAttributes().get(
+      "multiscales");
+  }
+
+  private void checkMultiscale(Map<String, Object> multiscale, String name) {
+    assertEquals("0.4", multiscale.get("version"));
+    assertEquals(name, multiscale.get("name"));
+  }
+
 }
