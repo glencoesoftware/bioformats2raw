@@ -616,6 +616,55 @@ public class ZarrTest {
   }
 
   /**
+   * Test last two series conversion.
+   */
+  @Test
+  public void testTwoLastSeries() throws Exception {
+    input = fake("series", "3", "sizeZ", "10");
+    assertTool("-s", "1,2");
+    ZarrGroup z = ZarrGroup.open(output.toString());
+
+    int seriesCount = 2;
+
+    Path omePath = output.resolve("OME");
+    ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
+    List<String> groupMap =
+      (List<String>) omeGroup.getAttributes().get("series");
+    assertEquals(groupMap.size(), seriesCount);
+
+    OME ome = getOMEMetadata();
+    assertEquals(seriesCount, ome.sizeOfImageList());
+
+    for (int i=0; i<seriesCount; i++) {
+      assertEquals(groupMap.get(i), String.valueOf(i));
+
+      List<Map<String, Object>> multiscales = getMultiscales(String.valueOf(i));
+      assertEquals(1, multiscales.size());
+
+      Map<String, Object> multiscale = multiscales.get(0);
+      checkMultiscale(multiscale, "image " + (i + 2));
+      assertEquals(ome.getImage(i).getName(), multiscale.get("name"));
+
+      // Check series dimensions and special pixels
+      ZarrArray series = z.openArray(i + "/0");
+      assertArrayEquals(new int[] {1, 1, 10, 512, 512}, series.getShape());
+      assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series.getChunks());
+      int[] shape = new int[] {1, 1, 1, 512, 512};
+      byte[] tile = new byte[512 * 512];
+      series.read(tile, shape);
+      int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
+      assertArrayEquals(new int[] {i + 1, 0, 0, 0, 0}, seriesPlaneNumberZCT);
+    }
+    try {
+      z.openArray("2/0");
+      fail("Array exists!");
+    }
+    catch (IOException e) {
+      // Pass
+    }
+  }
+
+  /**
    * Test more than one Z-section.
    */
   @Test
