@@ -570,7 +570,7 @@ public class ZarrTest {
    */
   @Test
   public void testSingleMiddleSeries() throws Exception {
-    input = fake("series", "3");
+    input = fake("series", "3", "sizeZ", "10");
     assertTool("-s", "1");
     ZarrGroup z = ZarrGroup.open(output.toString());
 
@@ -584,9 +584,15 @@ public class ZarrTest {
     OME ome = getOMEMetadata();
     assertEquals(1, ome.sizeOfImageList());
 
+    List<Map<String, Object>> multiscales = getMultiscales("0");
+    assertEquals(1, multiscales.size());
+    Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscales.get(0), "image 2");
+    assertEquals(ome.getImage(0).getName(), multiscales.get(0).get("name"));
+
     // Check series 1 dimensions and special pixels
     ZarrArray series0 = z.openArray("0/0");
-    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getShape());
+    assertArrayEquals(new int[] {1, 1, 10, 512, 512}, series0.getShape());
     assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getChunks());
     int[] shape = new int[] {1, 1, 1, 512, 512};
     byte[] tile = new byte[512 * 512];
