@@ -1407,6 +1407,13 @@ public class Converter implements Callable<Integer> {
       finally {
         readers.put(v);
       }
+      if (meta != null) {
+        final OMEXMLMetadataRoot root = (OMEXMLMetadataRoot) meta.getRoot();
+        readers.forEach((reader) -> {
+          IMetadata workerMeta = (IMetadata) reader.getMetadataStore();
+          workerMeta.setRoot(root);
+        });
+      }
 
       if (!noHCS) {
         scaleFormatString = "%s/%s/%d/%d";
