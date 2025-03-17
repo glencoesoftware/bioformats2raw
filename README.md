@@ -337,7 +337,7 @@ The worker count should be set to 1 if the input data requires a Bio-Formats rea
 This is not a common case, but is a known issue with Imaris HDF data in particular.
 
 In general, expect to need to tune the above settings and measure
-relative performance. See the [Compression options section](#compression-properties) above for more information on `--compression` and `--compression-properties`.
+relative performance. See the [Compression options section](#compression-options) above for more information on `--compression` and `--compression-properties`.
 
 Metadata caching
 ================
