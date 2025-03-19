@@ -33,6 +33,29 @@ If using features that rely on OpenCV (see the [Downsampling type](#downsampling
 
 __NOTE:__ If you are setting `jna.library.path` via the `JAVA_OPTS` environment variable, make sure the path is to the folder __containing__ the library not path to the library itself.
 
+Temporary directory usage
+=========================
+
+Beginning with 0.10.0, if the default temporary directory (usually `/tmp/`) is mounted as `noexec`, conversion will fail immediately by default.
+[CIS security benchmarks](https://www.cisecurity.org/benchmark) recommend that `/tmp/` be mounted as `noexec`; these standards are increasingly
+being adopted by major Linux distributions. For certain types of input data (e.g. NDPI, JPEG-XR compression), bioformats2raw needs
+to extract a native library from one or more jars to a temporary location. In these cases, the extracted native library must be executable in order
+to read image data.
+
+The recommended solution is to choose a different temporary directory by adding `-Djava.io.tmpdir=/path/to/alternate/tmp` to `JAVA_OPTS`.
+If multiple properties need to be set via `JAVA_OPTS`, separate them with a space, e.g. `JAVA_OPTS="-Djava.io.tmpdir/path/to/alternate/tmp -Djna.library.path=/path/to/blosc"`.
+
+If you know this issue does not affect your input data and wish to warn instead of immediately stopping conversion, the `--warn-no-exec` option can be used.
+For input data that relies on native library loading (e.g. NDPI, JPEG-XR compression), using `--warn-no-exec` instead of specifying an alternate
+temporary directory will simply cause the conversion to fail at a later point.
+
+For additional information, please see:
+
+* https://github.com/glencoesoftware/bioformats2raw/pull/252
+* https://github.com/scijava/native-lib-loader/issues/41
+* https://forum.image.sc/t/after-omero-server-upgrade-hamamatsu-ndpi-files-display-only-in-low-resolution/81868
+* https://forum.image.sc/t/bioformats-unable-to-read-czi-files-with-jpegxr-compression-on-almalinux-os-java-lang-unsatisfiedlinkerror-ome-jxrlib-jxrjni-new-decodecontext-j/82646
+
 Installation
 ============
 
