@@ -875,15 +875,19 @@ public class Converter implements Callable<Integer> {
    *
    * @param order dimension order
    */
+  @Deprecated
   @Option(
           names = "--dimension-order",
           description = "Override the input file dimension order in the " +
-                  "output file [Can break compatibility with raw2ometiff] " +
+                  "output file [DEPRECRATED, results in " +
+                  "invalid OME-NGFF data] " +
                   "(${COMPLETION-CANDIDATES})",
           converter = DimensionOrderConverter.class,
           defaultValue = "XYZCT"
   )
   public void setDimensionOrder(DimensionOrder order) {
+    LOGGER.warn(
+      "--dimension-order is deprecated; OME-NGFF requires XYZCT output order");
     dimensionOrder = order;
   }
 
