@@ -2557,7 +2557,7 @@ public class Converter implements Callable<Integer> {
    * @throws InterruptedException
    */
   private void setSeriesLevelMetadata(int series, int resolutions)
-      throws IOException, InterruptedException
+      throws IOException, InterruptedException, EnumerationException
   {
     LOGGER.debug("setSeriesLevelMetadata({}, {})", series, resolutions);
     String resolutionString = String.format(
@@ -2595,17 +2595,14 @@ public class Converter implements Callable<Integer> {
 
     IFormatReader v = null;
     IMetadata meta = null;
-    String axisOrder = null;
+    List<Axis> activeAxes = null;
+
     try {
       v = readers.take();
       meta = (IMetadata) v.getMetadataStore();
 
-      if (dimensionOrder != null) {
-        axisOrder = dimensionOrder.toString();
-      }
-      else {
-        axisOrder = v.getDimensionOrder();
-      }
+      activeAxes = getDimensions(v, v.getSizeX(), v.getSizeY(),
+        v.getSizeZ(), 1, 1, 1);
     }
     finally {
       readers.put(v);
@@ -2633,9 +2630,10 @@ public class Converter implements Callable<Integer> {
       scale.put("type", "scale");
       List<Double> axisValues = new ArrayList<Double>();
       double resolutionScale = Math.pow(PYRAMID_SCALE, r);
-      for (int i=axisOrder.length()-1; i>=0; i--) {
-        Quantity axisScale = getScale(meta, series, axisOrder, i);
-        String axisChar = axisOrder.substring(i, i + 1).toLowerCase();
+      for (int i=0; i<activeAxes.size(); i++) {
+        String axisChar =
+          String.valueOf(activeAxes.get(i).getType()).toLowerCase();
+        Quantity axisScale = getScale(meta, series, axisChar.charAt(0));
 
         if (axisScale != null) {
           // if physical dimension information is defined,
@@ -2673,10 +2671,10 @@ public class Converter implements Callable<Integer> {
     multiscale.put("datasets", datasets);
 
     List<Map<String, String>> axes = new ArrayList<Map<String, String>>();
-    for (int i=axisOrder.length()-1; i>=0; i--) {
-      String axis = axisOrder.substring(i, i + 1).toLowerCase();
+    for (int i=0; i<activeAxes.size(); i++) {
+      String axis = String.valueOf(activeAxes.get(i).getType()).toLowerCase();
       String type = "space";
-      Quantity scale = getScale(meta, series, axisOrder, i);
+      Quantity scale = getScale(meta, series, axis.charAt(0));
       if (axis.equals("t")) {
         type = "time";
       }
@@ -2810,9 +2808,7 @@ public class Converter implements Callable<Integer> {
     LOGGER.debug("    finished writing subgroup attributes");
   }
 
-  private Quantity getScale(
-    IMetadata meta, int series, String axisOrder, int axis)
-  {
+  private Quantity getScale(IMetadata meta, int series, char axisChar) {
     if (meta == null) {
       return null;
     }
@@ -2822,8 +2818,7 @@ public class Converter implements Callable<Integer> {
       return null;
     }
 
-    String axisChar = axisOrder.substring(axis, axis + 1).toLowerCase();
-    switch (axisChar.charAt(0)) {
+    switch (axisChar) {
       case 'x':
         return meta.getPixelsPhysicalSizeX(seriesIndex);
       case 'y':
