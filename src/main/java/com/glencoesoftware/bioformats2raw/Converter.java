@@ -19,6 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -36,6 +37,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 import loci.common.Constants;
+import loci.common.Region;
 import loci.common.image.IImageScaler;
 import loci.common.image.SimpleImageScaler;
 import loci.common.services.DependencyException;
@@ -168,6 +170,7 @@ public class Converter implements Callable<Integer> {
   private volatile boolean reuseExistingResolutions = false;
   private volatile int minSize;
   private volatile boolean writeImageData = true;
+  private volatile boolean compactDims = false;
 
   /** Scaling implementation that will be used during downsampling. */
   private volatile IImageScaler scaler = new SimpleImageScaler();
@@ -870,6 +873,22 @@ public class Converter implements Callable<Integer> {
   }
 
   /**
+   * Set whether a compact dimensional representation should be used,
+   * i.e. whether singleton dimensions should be omitted.
+   * Defaults to false.
+   *
+   * @param compact true for a compact dimensional representation
+   */
+  @Option(
+      names = "--compact",
+      description = "Only write dimensions greater than 1",
+      defaultValue = "false"
+  )
+  public void setCompactDimensions(boolean compact) {
+    compactDims = compact;
+  }
+
+  /**
    * Set the output dimension order. Defaults to XYZCT for compliance with
    * the OME-NGFF specification.
    *
@@ -1142,6 +1161,13 @@ public class Converter implements Callable<Integer> {
    */
   public int getMinImageSize() {
     return minSize;
+  }
+
+  /**
+   * @return true if dimensions have been compacted
+   */
+  public boolean getCompactDimensions() {
+    return compactDims;
   }
 
   /**
@@ -1844,8 +1870,8 @@ public class Converter implements Callable<Integer> {
   }
 
   private byte[] getTileDownsampled(
-      int series, int resolution, int plane, int xx, int yy,
-      int width, int height)
+      int series, int resolution, int plane,
+      Region boundingBox, List<Axis> axes)
           throws FormatException, IOException, InterruptedException,
                  EnumerationException, InvalidRangeException
   {
@@ -1855,31 +1881,43 @@ public class Converter implements Callable<Integer> {
     final ZarrArray zarr = ZarrArray.open(getRootPath().resolve(pathName));
     int[] dimensions = zarr.getShape();
     int[] blockSizes = zarr.getChunks();
-    int activeTileWidth = blockSizes[blockSizes.length - 1];
-    int activeTileHeight = blockSizes[blockSizes.length - 2];
+    int xDim = 1;
+    int yDim = 1;
+    int activeTileWidth = 1;
+    int activeTileHeight = 1;
+    for (int i=0; i<axes.size(); i++) {
+      switch (axes.get(i).getType()) {
+        case 'X':
+          activeTileWidth = blockSizes[i];
+          xDim = dimensions[i];
+          break;
+        case 'Y':
+          activeTileHeight = blockSizes[i];
+          yDim = dimensions[i];
+          break;
+        default:
+          LOGGER.trace("ignoring axis type {}", axes.get(i).getType());
+      }
+    }
 
     // Upscale our base X and Y offsets, and sizes to the previous resolution
     // based on the pyramid scaling factor
-    xx *= PYRAMID_SCALE;
-    yy *= PYRAMID_SCALE;
-    width = (int) Math.min(
-        activeTileWidth * PYRAMID_SCALE,
-        dimensions[dimensions.length - 1] - xx);
-    height = (int) Math.min(
-        activeTileHeight * PYRAMID_SCALE,
-        dimensions[dimensions.length - 2] - yy);
+    int xx = boundingBox.x * PYRAMID_SCALE;
+    int yy = boundingBox.y * PYRAMID_SCALE;
+    int width = (int) Math.min(activeTileWidth * PYRAMID_SCALE, xDim - xx);
+    int height = (int) Math.min(activeTileHeight * PYRAMID_SCALE, yDim - yy);
 
     IFormatReader reader = readers.take();
     int[] offset;
     try {
-      offset = getOffset(reader, xx, yy, plane);
+      offset = getOffset(reader, xx, yy, plane, axes);
     }
     finally {
       readers.put(reader);
     }
 
     int bytesPerPixel = FormatTools.getBytesPerPixel(pixelType);
-    int[] shape = new int[] {1, 1, 1, height, width};
+    int[] shape = createShape(axes, width, height, 1);
     byte[] tileAsBytes = readAsBytes(zarr, shape, offset);
 
     if (downsampling == Downsampling.SIMPLE) {
@@ -1894,8 +1932,8 @@ public class Converter implements Callable<Integer> {
   }
 
   private byte[] getTile(
-      int series, int resolution, int plane, int xx, int yy,
-      int width, int height)
+      int series, int resolution, int plane, Region boundingBox,
+      List<Axis> axes)
           throws FormatException, IOException, InterruptedException,
                  EnumerationException, InvalidRangeException
   {
@@ -1903,7 +1941,9 @@ public class Converter implements Callable<Integer> {
     try {
       if (reader.getResolutionCount() > 1 && reuseExistingResolutions) {
         reader.setResolution(resolution);
-        return reader.openBytes(plane, xx, yy, width, height);
+        return reader.openBytes(plane,
+          boundingBox.x, boundingBox.y,
+          boundingBox.width, boundingBox.height);
       }
     }
     finally {
@@ -1912,7 +1952,9 @@ public class Converter implements Callable<Integer> {
     if (resolution == 0) {
       reader = readers.take();
       try {
-        return reader.openBytes(plane, xx, yy, width, height);
+        return reader.openBytes(plane,
+          boundingBox.x, boundingBox.y,
+          boundingBox.width, boundingBox.height);
       }
       finally {
         readers.put(reader);
@@ -1921,8 +1963,7 @@ public class Converter implements Callable<Integer> {
     else {
       Slf4JStopWatch t0 = new Slf4JStopWatch("getTileDownsampled");
       try {
-        return getTileDownsampled(
-            series, resolution, plane, xx, yy, width, height);
+        return getTileDownsampled(series, resolution, plane, boundingBox, axes);
       }
       finally {
         t0.stop();
@@ -1937,24 +1978,96 @@ public class Converter implements Callable<Integer> {
    * @param scaledWidth size of the X dimension at the current resolution
    * @param scaledHeight size of the Y dimension at the current resolution
    * @param scaledDepth size of the Z dimension at the current resolution
+   * @param scaledTileWidth chunk size in X
+   * @param scaledTileHeight chunk size in Y
+   * @param scaledChunkDepth chunk size in Z
    * @return dimension array ready for use with Zarr
    * @throws EnumerationException
    */
-  private int[] getDimensions(
-    IFormatReader reader, int scaledWidth, int scaledHeight, int scaledDepth)
+  private List<Axis> getDimensions(
+    IFormatReader reader, int scaledWidth, int scaledHeight, int scaledDepth,
+      int scaledTileWidth, int scaledTileHeight, int scaledChunkDepth)
       throws EnumerationException
   {
+    ArrayList<Axis> axes = new ArrayList<Axis>();
     int sizeZ = reader.getSizeZ();
     int sizeC = reader.getSizeC();
     int sizeT = reader.getSizeT();
     String o = new StringBuilder(
         dimensionOrder != null? dimensionOrder.toString()
         : reader.getDimensionOrder()).reverse().toString();
-    int[] dimensions = new int[] {0, 0, scaledDepth, scaledHeight, scaledWidth};
-    dimensions[o.indexOf("Z")] = sizeZ;
-    dimensions[o.indexOf("C")] = sizeC;
-    dimensions[o.indexOf("T")] = sizeT;
-    return dimensions;
+
+    for (char c : o.toCharArray()) {
+      switch (c) {
+        case 'X':
+          axes.add(new Axis(c, scaledWidth, scaledTileWidth));
+          break;
+        case 'Y':
+          axes.add(new Axis(c, scaledHeight, scaledTileHeight));
+          break;
+        case 'Z':
+          axes.add(new Axis(c, scaledDepth, scaledChunkDepth));
+          break;
+        case 'C':
+          axes.add(new Axis(c, sizeC, 1));
+          break;
+        case 'T':
+          axes.add(new Axis(c, sizeT, 1));
+          break;
+        default:
+          LOGGER.trace("ignoring axis type {}", c);
+      }
+    }
+
+    if (getCompactDimensions()) {
+      // if requested, omit any dimension that has length 1
+      // this includes X and Y
+      for (int a=0; a<axes.size(); a++) {
+        Axis axis = axes.get(a);
+        if (axis.getLength() == 1) {
+          axes.remove(axis);
+          a--;
+        }
+      }
+    }
+    return axes;
+  }
+
+  private int[] getShapeArray(List<Axis> axes) {
+    int[] shape = new int[axes.size()];
+    for (int i=0; i<axes.size(); i++) {
+      shape[i] = axes.get(i).getLength();
+    }
+    return shape;
+  }
+
+  private int[] getChunkSizeArray(List<Axis> axes) {
+    int[] chunk = new int[axes.size()];
+    for (int i=0; i<axes.size(); i++) {
+      chunk[i] = axes.get(i).getChunkSize();
+    }
+    return chunk;
+  }
+
+  private int[] createShape(List<Axis> axes, int width, int height, int depth) {
+    int[] shape = new int[axes.size()];
+    Arrays.fill(shape, 1);
+    for (int i=0; i<axes.size(); i++) {
+      switch (axes.get(i).getType()) {
+        case 'X':
+          shape[i] = width;
+          break;
+        case 'Y':
+          shape[i] = height;
+          break;
+        case 'Z':
+          shape[i] = depth;
+          break;
+        default:
+          LOGGER.trace("ignoring axis type {}", axes.get(i).getType());
+      }
+    }
+    return shape;
   }
 
   /**
@@ -1964,25 +2077,44 @@ public class Converter implements Callable<Integer> {
    * @param x X position at the current resolution
    * @param y Y position at the current resolution
    * @param plane current plane being operated upon
+   * @param axes ordered list of typed axes (may have fewer than 5 elements)
    * @return offsets array ready to use
    * @throws EnumerationException
    */
   private int[] getOffset(
-    IFormatReader reader, int x, int y, int plane) throws EnumerationException
+    IFormatReader reader, int x, int y, int plane, List<Axis> axes)
+    throws EnumerationException
   {
-    String o = new StringBuilder(
-        dimensionOrder != null? dimensionOrder.toString()
-        : reader.getDimensionOrder()).reverse().toString();
     int[] zct = reader.getZCTCoords(plane);
-    int[] offset = new int[] {0, 0, 0, y, x};
-    offset[o.indexOf("Z")] = zct[0];
-    offset[o.indexOf("C")] = zct[1];
-    offset[o.indexOf("T")] = zct[2];
+    int[] offset = new int[axes.size()];
+    Arrays.fill(offset, 0);
+    for (int i=0; i<axes.size(); i++) {
+      Axis a = axes.get(i);
+      switch (a.getType()) {
+        case 'X':
+          offset[i] = x;
+          break;
+        case 'Y':
+          offset[i] = y;
+          break;
+        case 'Z':
+          offset[i] = zct[0];
+          break;
+        case 'C':
+          offset[i] = zct[1];
+          break;
+        case 'T':
+          offset[i] = zct[2];
+          break;
+        default:
+          LOGGER.trace("ignoring axis type {}", axes.get(i).getType());
+      }
+    }
     return offset;
   }
 
   private void processChunk(int series, int resolution, int plane,
-      int[] offset, int[] shape)
+      int[] offset, int[] shape, List<Axis> axes)
         throws EnumerationException, FormatException, IOException,
           InterruptedException, InvalidRangeException
   {
@@ -1995,23 +2127,40 @@ public class Converter implements Callable<Integer> {
     int bpp = FormatTools.getBytesPerPixel(reader.getPixelType());
     int[] zct;
     ByteArrayOutputStream chunkAsBytes = new ByteArrayOutputStream();
-    int zOffset;
-    int zShape;
+    int xOffset = 0;
+    int xShape = 1;
+    int yOffset = 0;
+    int yShape = 1;
+    int zOffset = 0;
+    int zShape = 1;
     try {
       LOGGER.info("requesting tile to write at {} to {}", offset, pathName);
       //Get coords of current series
       zct = reader.getZCTCoords(plane);
-      String o = new StringBuilder(
-          dimensionOrder != null? dimensionOrder.toString()
-          : reader.getDimensionOrder()).reverse().toString();
-      zOffset = offset[o.indexOf("Z")];
-      zShape = shape[o.indexOf("Z")];
+      for (int i=0; i<axes.size(); i++) {
+        switch (axes.get(i).getType()) {
+          case 'X':
+            xOffset = offset[i];
+            xShape = shape[i];
+            break;
+          case 'Y':
+            yOffset = offset[i];
+            yShape = shape[i];
+            break;
+          case 'Z':
+            zOffset = offset[i];
+            zShape = shape[i];
+            break;
+          default:
+            LOGGER.trace("ignoring axis type {}", axes.get(i).getType());
+        }
+      }
     }
     finally {
       readers.put(reader);
     }
     getProgressListener().notifyChunkStart(
-      plane, offset[4], offset[3], zOffset);
+      plane, xOffset, yOffset, zOffset);
     Slf4JStopWatch t0 = new Slf4JStopWatch("getChunk");
     try {
       for (int z = zOffset; z < zOffset + zShape; z++) {
@@ -2024,8 +2173,9 @@ public class Converter implements Callable<Integer> {
         finally {
           readers.put(reader);
         }
+        Region boundingBox = new Region(xOffset, yOffset, xShape, yShape);
         byte[] tileAsBytes = getTile(series, resolution, planeIndex,
-                                    offset[4], offset[3], shape[4], shape[3]);
+                                    boundingBox, axes);
         if (tileAsBytes == null) {
           return;
         }
@@ -2043,7 +2193,7 @@ public class Converter implements Callable<Integer> {
         littleEndian ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN);
     }
     writeBytes(zarr, shape, offset, tileBuffer);
-    getProgressListener().notifyChunkEnd(plane, offset[4], offset[3], zOffset);
+    getProgressListener().notifyChunkEnd(plane, xOffset, yOffset, zOffset);
   }
 
   /**
@@ -2142,14 +2292,16 @@ public class Converter implements Callable<Integer> {
         activeChunkDepth = scaledDepth;
       }
 
+      List<Axis> activeAxes =
+        getDimensions(workingReader, scaledWidth, scaledHeight, scaledDepth,
+        activeTileWidth, activeTileHeight, activeChunkDepth);
+
       DataType dataType = getZarrType(pixelType);
       String resolutionString = String.format(
               scaleFormatString, getScaleFormatStringArgs(series, resolution));
       ArrayParams arrayParams = new ArrayParams()
-          .shape(getDimensions(
-              workingReader, scaledWidth, scaledHeight, scaledDepth))
-          .chunks(new int[] {1, 1, activeChunkDepth, activeTileHeight,
-            activeTileWidth})
+          .shape(getShapeArray(activeAxes))
+          .chunks(getChunkSizeArray(activeAxes))
           .dataType(dataType)
           .dimensionSeparator(getDimensionSeparator())
           .compressor(CompressorFactory.create(
@@ -2188,20 +2340,18 @@ public class Converter implements Callable<Integer> {
                   futures.add(future);
                   executor.execute(() -> {
                     try {
-                      int[] shape = {1, 1, 1, height, width};
+                      int[] shape =
+                        createShape(activeAxes, width, height, depth);
                       int[] offset;
                       IFormatReader reader = readers.take();
                       try {
-                        String o = new StringBuilder(
-                            dimensionOrder != null? dimensionOrder.toString()
-                            : reader.getDimensionOrder()).reverse().toString();
-                        shape[o.indexOf("Z")] = depth;
-                        offset = getOffset(reader, xx, yy, plane);
+                        offset = getOffset(reader, xx, yy, plane, activeAxes);
                       }
                       finally {
                         readers.put(reader);
                       }
-                      processChunk(series, resolution, plane, offset, shape);
+                      processChunk(
+                        series, resolution, plane, offset, shape, activeAxes);
                       LOGGER.info(
                           "Successfully processed chunk; resolution={} plane={}"
                           + " xx={} yy={} zz={} width={} height={} depth={}",
