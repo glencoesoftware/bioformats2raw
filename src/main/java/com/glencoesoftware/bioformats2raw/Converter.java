@@ -167,6 +167,7 @@ public class Converter implements Callable<Integer> {
   private volatile boolean noRootGroup = false;
   private volatile boolean reuseExistingResolutions = false;
   private volatile int minSize;
+  private volatile boolean writeImageData = true;
 
   /** Scaling implementation that will be used during downsampling. */
   private volatile IImageScaler scaler = new SimpleImageScaler();
@@ -372,6 +373,20 @@ public class Converter implements Callable<Integer> {
     else {
       LOGGER.warn("Ignoring invalid chunk depth: {}", depth);
     }
+  }
+
+  /**
+   * Set whether or not tiles should actually be converted.
+   *
+   * @param noTiles true if tiles should not be converted
+   */
+  @Option(
+    names = {"--no-tiles"},
+    description = "Write all metadata, but do not convert any tiles",
+    defaultValue = "false"
+  )
+  public void setNoTiles(boolean noTiles) {
+    writeImageData = !noTiles;
   }
 
   /**
@@ -931,6 +946,13 @@ public class Converter implements Callable<Integer> {
   }
 
   /**
+   * @return true if image data will not be converted
+   */
+  public boolean getNoTiles() {
+    return !writeImageData;
+  }
+
+  /**
    * @return slf4j logging level
    */
   public String getLogLevel() {
@@ -1384,6 +1406,13 @@ public class Converter implements Callable<Integer> {
       }
       finally {
         readers.put(v);
+      }
+      if (meta != null) {
+        final OMEXMLMetadataRoot root = (OMEXMLMetadataRoot) meta.getRoot();
+        readers.forEach((reader) -> {
+          IMetadata workerMeta = (IMetadata) reader.getMetadataStore();
+          workerMeta.setRoot(root);
+        });
       }
 
       if (!noHCS) {
@@ -2126,6 +2155,10 @@ public class Converter implements Callable<Integer> {
           .compressor(CompressorFactory.create(
               compressionType.toString(), compressionProperties));
       ZarrArray.create(getRootPath().resolve(resolutionString), arrayParams);
+
+      if (!writeImageData) {
+        continue;
+      }
 
       nTile = new AtomicInteger(0);
       tileCount = resTileCounts[resolution];
