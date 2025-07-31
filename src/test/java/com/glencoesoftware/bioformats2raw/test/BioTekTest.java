@@ -71,7 +71,12 @@ public class BioTekTest {
     Path testTiff = getTestFile("test.tiff");
 
     for (String f : filenames) {
-      Files.copy(testTiff, input.resolve(f));
+      Path copyLocation = input.resolve(f);
+      if (!input.equals(copyLocation.getParent())) {
+        // supplied file path includes a subdirectory
+        copyLocation.getParent().toFile().mkdirs();
+      }
+      Files.copy(testTiff, copyLocation);
     }
 
     // reset the input path to the first file in the list
@@ -80,16 +85,15 @@ public class BioTekTest {
   }
 
   /**
-   * Create an artificial single well BioTek plate with the given
-   * list of file names.
+   * Create an artificial BioTek plate with the given list of file names.
    * Checks that the correct well row/column and ZCT sizes are detected.
    *
    * This test will be run once for each Arguments object
    * returned by getTestCases below.
    *
    * @param paths path to each file in the plate
-   * @param wellRow well row index (from 0)
-   * @param wellColumn well column index (from 0)
+   * @param wellRow row index for each well (from 0)
+   * @param wellColumn column index for each well (from 0)
    * @param fields number of fields in the well
    * @param sizeZ number of Z sections
    * @param sizeC number of channels
@@ -97,7 +101,7 @@ public class BioTekTest {
    */
   @ParameterizedTest
   @MethodSource("getTestCases")
-  public void testBioTek(String[] paths, int wellRow, int wellColumn,
+  public void testBioTek(String[] paths, int[] wellRow, int[] wellColumn,
     int fields, int sizeZ, int sizeC, int sizeT) throws Exception
   {
     // set up the artificial plate
@@ -112,29 +116,33 @@ public class BioTekTest {
       // an exception which would fail the test
       reader.setId(input.toString());
 
-      // the number of OME Images should match the expected field count
+      // the number of OME Images should match the expected well * field count
       // this should be the same as the series count
-      assertEquals(metadata.getImageCount(), fields);
+      assertEquals(metadata.getImageCount(), fields * wellRow.length);
       assertEquals(metadata.getImageCount(), reader.getSeriesCount());
-      // there should be exactly one plate, with exactly one well
+      // there should be exactly one plate
       assertEquals(metadata.getPlateCount(), 1);
-      assertEquals(metadata.getWellCount(0), 1);
+      assertEquals(metadata.getWellCount(0), wellRow.length);
       // the well's row and column indexes should match expectations
       // this is especially important for "sparse" plates where the first
       // row and/or column in the plate are missing
-      assertEquals(metadata.getWellRow(0, 0).getValue(), wellRow);
-      assertEquals(metadata.getWellColumn(0, 0).getValue(), wellColumn);
-      // all of the Images should be linked to the well
-      assertEquals(metadata.getWellSampleCount(0, 0), fields);
-      for (int f=0; f<fields; f++) {
-        // sanity check that the Images are linked to the
-        // well in the correct order
-        assertEquals(metadata.getWellSampleImageRef(0, 0, f), "Image:" + f);
-        // check that the number of Z sections, channels, and timepoints
-        // all match expectations
-        assertEquals(metadata.getPixelsSizeZ(f).getValue(), sizeZ);
-        assertEquals(metadata.getPixelsSizeC(f).getValue(), sizeC);
-        assertEquals(metadata.getPixelsSizeT(f).getValue(), sizeT);
+      for (int w=0; w<wellRow.length; w++) {
+        assertEquals(metadata.getWellRow(0, w).getValue(), wellRow[w]);
+        assertEquals(metadata.getWellColumn(0, w).getValue(), wellColumn[w]);
+        // all of the fields should be linked to the well
+        assertEquals(metadata.getWellSampleCount(0, w), fields);
+        for (int f=0; f<fields; f++) {
+          // sanity check that the Images are linked to the
+          // well in the correct order
+          int imageIndex = (fields * w) + f;
+          assertEquals(metadata.getWellSampleImageRef(0, w, f),
+            "Image:" + imageIndex);
+          // check that the number of Z sections, channels, and timepoints
+          // all match expectations
+          assertEquals(metadata.getPixelsSizeZ(imageIndex).getValue(), sizeZ);
+          assertEquals(metadata.getPixelsSizeC(imageIndex).getValue(), sizeC);
+          assertEquals(metadata.getPixelsSizeT(imageIndex).getValue(), sizeT);
+        }
       }
     }
   }
@@ -175,7 +183,7 @@ public class BioTekTest {
     return Stream.of(
       Arguments.of(new String[] {
         "A1_-1_1_1_Tsf[Phase Contrast]_001.tif"
-      }, 0, 0, 1, 1, 1, 1),
+      }, new int[] {0}, new int[] {0}, 1, 1, 1, 1),
       Arguments.of(new String[] {
         "A1_01_1_1_Phase Contrast_001.tif",
         "A1_01_1_2_Phase Contrast_001.tif",
@@ -186,33 +194,111 @@ public class BioTekTest {
         "A1_01_1_7_Phase Contrast_001.tif",
         "A1_01_1_8_Phase Contrast_001.tif",
         "A1_01_1_9_Phase Contrast_001.tif",
-      }, 0, 0, 9, 1, 1, 1),
+      }, new int[] {0}, new int[] {0}, 9, 1, 1, 1),
       Arguments.of(new String[] {
         "P24_1_Bright Field_1_001_02.tif"
-      }, 15, 23, 1, 1, 1, 1),
+      }, new int[] {15}, new int[] {23}, 1, 1, 1, 1),
       Arguments.of(new String[] {
         "B2_1_Bright Field_1_001_02.tif"
-      }, 1, 1, 1, 1, 1, 1),
+      }, new int[] {1}, new int[] {1}, 1, 1, 1, 1),
       Arguments.of(new String[] {
         "A1_1_Stitched[AandB_Phase Contrast]_1_001_-1.tif"
-      }, 0, 0, 1, 1, 1, 1),
+      }, new int[] {0}, new int[] {0}, 1, 1, 1, 1),
       Arguments.of(new String[] {
         "A1_1Z0_DAPI_1_001_.tif",
         "A1_1Z1_DAPI_1_001_.tif",
         "A1_1Z2_DAPI_1_001_.tif",
         "A1_1Z3_DAPI_1_001_.tif",
         "A1_1Z4_DAPI_1_001_.tif"
-      }, 0, 0, 1, 5, 1, 1),
+      }, new int[] {0}, new int[] {0}, 1, 5, 1, 1),
       Arguments.of(new String[] {
         "A1_-1_1_1_Stitched[Channel1 300,400]_001.tif",
         "A1_-1_2_1_Stitched[Channel2 500,600]_001.tif",
         "A1_-1_3_1_Stitched[Channel 3 600,650]_001.tif"
-      }, 0, 0, 1, 1, 3, 1),
+      }, new int[] {0}, new int[] {0}, 1, 1, 3, 1),
       Arguments.of(new String[] {
         "A1_-2_1_1_Tsf[Stitched[Channel1 300,400]]_001.tif",
         "A1_-2_2_1_Tsf[Stitched[Channel2 500,600]]_001.tif",
         "A1_-2_3_1_Tsf[Stitched[Channel 3 600,650]]_001.tif"
-      }, 0, 0, 1, 1, 3, 1)
+      }, new int[] {0}, new int[] {0}, 1, 1, 3, 1),
+      Arguments.of(new String[] {
+        "B2/B2_1_Bright Field_1_001_02.tif",
+        "D3/D3_1_Bright Field_1_001_02.tif",
+      }, new int[] {1, 3}, new int[] {1, 2}, 1, 1, 1, 1),
+      Arguments.of(new String[] {
+        "ID_A9 info/A9_-1_1_1_Phase Contrast_001.tif",
+        "ID_A9 info/A9_-1_2_1_GFP_001.tif",
+        "ID_A9 info/A9_-1_3_1_DAPI_001.tif",
+        "ID_A10 info/A10_-1_1_1_Phase Contrast_001.tif",
+        "ID_A10 info/A10_-1_2_1_GFP_001.tif",
+        "ID_A10 info/A10_-1_3_1_DAPI_001.tif",
+        "ID_E9 info/E9_-1_1_1_Phase Contrast_001.tif",
+        "ID_E9 info/E9_-1_2_1_GFP_001.tif",
+        "ID_E9 info/E9_-1_3_1_DAPI_001.tif",
+        "ID_E10 info/E10_-1_1_1_Phase Contrast_001.tif",
+        "ID_E10 info/E10_-1_2_1_GFP_001.tif",
+        "ID_E10 info/E10_-1_3_1_DAPI_001.tif"
+      }, new int[] {0, 0, 4, 4}, new int[] {8, 9, 8, 9}, 1, 1, 3, 1),
+      Arguments.of(new String[] {
+        "A1ROI1_01_1_1Z0_Confocal DAPI_001.tif",
+        "A1ROI1_01_1_1Z1_Confocal DAPI_001.tif",
+        "A1ROI1_01_1_1Z2_Confocal DAPI_001.tif",
+        "A1ROI1_01_1_1Z0_Confocal RFP_001.tif",
+        "A1ROI1_01_1_1Z1_Confocal RFP_001.tif",
+        "A1ROI1_01_1_1Z2_Confocal RFP_001.tif",
+        "A1ROI1_01_1_2Z0_Confocal DAPI_001.tif",
+        "A1ROI1_01_1_2Z1_Confocal DAPI_001.tif",
+        "A1ROI1_01_1_2Z2_Confocal DAPI_001.tif",
+        "A1ROI1_01_1_2Z0_Confocal RFP_001.tif",
+        "A1ROI1_01_1_2Z1_Confocal RFP_001.tif",
+        "A1ROI1_01_1_2Z2_Confocal RFP_001.tif",
+        "A1ROI2_01_1_1Z0_Confocal DAPI_001.tif",
+        "A1ROI2_01_1_1Z1_Confocal DAPI_001.tif",
+        "A1ROI2_01_1_1Z2_Confocal DAPI_001.tif",
+        "A1ROI2_01_1_1Z0_Confocal RFP_001.tif",
+        "A1ROI2_01_1_1Z1_Confocal RFP_001.tif",
+        "A1ROI2_01_1_1Z2_Confocal RFP_001.tif",
+        "A1ROI2_01_1_2Z0_Confocal DAPI_001.tif",
+        "A1ROI2_01_1_2Z1_Confocal DAPI_001.tif",
+        "A1ROI2_01_1_2Z2_Confocal DAPI_001.tif",
+        "A1ROI2_01_1_2Z0_Confocal RFP_001.tif",
+        "A1ROI2_01_1_2Z1_Confocal RFP_001.tif",
+        "A1ROI2_01_1_2Z2_Confocal RFP_001.tif"
+      }, new int[] {0}, new int[] {0}, 4, 3, 2, 1),
+      Arguments.of(new String[] {
+        "A1ROI1_01_1_1Z0_Confocal DAPI_001.tif",
+        "A1ROI1_01_1_1Z1_Confocal DAPI_001.tif",
+        "A1ROI1_01_1_1Z2_Confocal DAPI_001.tif",
+        "A1ROI1_01_1_1Z0_Confocal RFP_001.tif",
+        "A1ROI1_01_1_1Z1_Confocal RFP_001.tif",
+        "A1ROI1_01_1_1Z2_Confocal RFP_001.tif",
+        "A1ROI2_01_1_1Z0_Confocal DAPI_001.tif",
+        "A1ROI2_01_1_1Z1_Confocal DAPI_001.tif",
+        "A1ROI2_01_1_1Z2_Confocal DAPI_001.tif",
+        "A1ROI2_01_1_1Z0_Confocal RFP_001.tif",
+        "A1ROI2_01_1_1Z1_Confocal RFP_001.tif",
+        "A1ROI2_01_1_1Z2_Confocal RFP_001.tif",
+        "A1ROI3_01_1_1Z0_Confocal DAPI_001.tif",
+        "A1ROI3_01_1_1Z1_Confocal DAPI_001.tif",
+        "A1ROI3_01_1_1Z2_Confocal DAPI_001.tif",
+        "A1ROI3_01_1_1Z0_Confocal RFP_001.tif",
+        "A1ROI3_01_1_1Z1_Confocal RFP_001.tif",
+        "A1ROI3_01_1_1Z2_Confocal RFP_001.tif",
+      }, new int[] {0}, new int[] {0}, 3, 3, 2, 1),
+      Arguments.of(new String[] {
+        "A1_01_3_4_Blue_001.tif",
+        "A1_01_3_3_Blue_001.tif",
+        "A1_01_3_2_Blue_001.tif",
+        "A1_01_3_1_Blue_001.tif",
+        "A1_01_2_4_Green_001.tif",
+        "A1_01_2_3_Green_001.tif",
+        "A1_01_2_2_Green_001.tif",
+        "A1_01_2_1_Green_001.tif",
+        "A1_01_1_4_Red_001.tif",
+        "A1_01_1_3_Red_001.tif",
+        "A1_01_1_2_Red_001.tif",
+        "A1_01_1_1_Red_001.tif"
+      }, new int[] {0}, new int[] {0}, 4, 1, 3, 1)
     );
   }
 
