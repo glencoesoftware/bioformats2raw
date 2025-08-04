@@ -549,7 +549,7 @@ public class MiraxReader extends FormatReader {
           int length = indexData.readInt();
           int fileNumber = indexData.readInt();
 
-          LOGGER.warn("nextOffset = {}, nextCounter = {}, " +
+          LOGGER.trace("nextOffset = {}, nextCounter = {}, " +
             "length = {}, fileNumber = {}",
             nextOffset, nextCounter, length, fileNumber);
 
@@ -618,6 +618,24 @@ public class MiraxReader extends FormatReader {
 
               format.add(barcode.get("BARCODE_IMAGE_TYPE"));
               core.add(m);
+            }
+          }
+          else {
+            LOGGER.warn("name = {}", name);
+            indexData.seek(nonHierarchicalRoot + (totalCount + q) * 4);
+
+            findDataFileReference(indexData);
+            int nextOffset = indexData.readInt();
+            int length = indexData.readInt();
+            int fileNumber = indexData.readInt();
+            LOGGER.warn("  fileNumber = {}, nextOffset = {}, length = {}",
+              fileNumber, nextOffset, length);
+            try {
+              byte[] positionData = getDecompressedData(fileNumber, nextOffset);
+              LOGGER.warn("  positionData.length = {}", positionData.length);
+              LOGGER.warn("  decomped string = {}", new String(positionData));
+            }
+            catch (Throwable t) {
             }
           }
         }
@@ -702,26 +720,36 @@ public class MiraxReader extends FormatReader {
             int length = indexData.readInt();
             int fileNumber = indexData.readInt();
 
-            byte[] positionData = getDecompressedData(fileNumber, nextOffset);
-
-            int nTiles = positionData.length / 9;
-            LOGGER.warn("Reading {} tile positions from file {}",
-              nTiles, fileNumber);
-            LOGGER.warn("  position file offset = {}", nextOffset);
-            LOGGER.warn("  decompressed bytes = {}", positionData.length);
-
-            try (RandomAccessInputStream positionStream =
-              new RandomAccessInputStream(positionData))
-            {
-              positionStream.order(true);
-              tilePositions = getTilePositions(positionStream, nTiles);
-            }
-
             String stitchingTable =
               hierarchy.get("NONHIER_" + i + "_VAL_" + q + "_SECTION");
             IniTable stitching = data.getTable(stitchingTable);
             String prefix =
               "COMPRESSED_STITCHING_ORIG_SLIDE_SCANNED_AREA_IN_PIXELS__";
+
+            String left = stitching.get(prefix + "LEFT");
+            String top = stitching.get(prefix + "TOP");
+            String right = stitching.get(prefix + "RIGHT");
+            String bottom = stitching.get(prefix + "BOTTOM");
+            int minX = 0;
+            int minY = 0;
+
+            if (left != null && top != null &&
+              right != null && bottom != null)
+            {
+              minX = Integer.parseInt(left);
+              minY = Integer.parseInt(top);
+              int tableMaxX = Integer.parseInt(right);
+              int tableMaxY = Integer.parseInt(bottom);
+              metadataWidth = (tableMaxX - minX) + 1;
+              metadataHeight = (tableMaxY - minY) + 1;
+            }
+
+            String overlapX = stitching.get("COMPRESSED_STITCHING_ORIG_CAMERA_TILE_OVERLAP_X");
+            String overlapY = stitching.get("COMPRESSED_STITCHING_ORIG_CAMERA_TILE_OVERLAP_Y");
+            int cameraOverlapX = overlapX == null ? 0 : Integer.parseInt(overlapX);
+            int cameraOverlapY = overlapY == null ? 0 : Integer.parseInt(overlapY);
+            /* debug */ cameraOverlapX = 84; // from OBJECT_GUIDE_HYSTERESIS_X in NONHIERLAYER_1_SECTION
+            /* debug */ cameraOverlapY = 84; // from OBJECT_GUIDE_HYSTERESIS_Y in NONHIERLAYER_1_SECTION
 
             // this gives the dimensions of the tilePositions array
             // this array now needs to be expanded to include the small tiles
@@ -736,11 +764,45 @@ public class MiraxReader extends FormatReader {
             }
             int tableRows = Integer.parseInt(originalTileRows);
             int tableCols = Integer.parseInt(originalTileCols);
+            LOGGER.warn("table columns = {}, table rows = {}", tableCols, tableRows);
+            LOGGER.warn("xTiles = {}, yTiles = {}", xTiles, yTiles);
+
+            byte[] positionData = getDecompressedData(fileNumber, nextOffset);
+
+            int nTiles = positionData.length / 9;
+            LOGGER.warn("Reading {} tile positions from file {}",
+              nTiles, fileNumber);
+            LOGGER.warn("  position file offset = {}", nextOffset);
+            LOGGER.warn("  decompressed bytes = {}", positionData.length);
+
+            try (RandomAccessInputStream positionStream =
+              new RandomAccessInputStream(positionData))
+            {
+              positionStream.order(true);
+              tilePositions = new int[nTiles][2];
+              /* debug */ System.out.println("tilePositions.length = " + tilePositions.length);
+              for (int tile=0; tile<nTiles; tile++) {
+                boolean acquired = positionStream.read() == 1;
+                tilePositions[tile][0] = positionStream.readInt();
+                tilePositions[tile][1] = positionStream.readInt();
+                LOGGER.warn("raw tile #{} X = {}, Y = {}", tile, tilePositions[tile][0], tilePositions[tile][1]);
+
+                int tileRow = tile / tableCols;
+                int tileCol = tile % tableCols;
+                tilePositions[tile][0] += (tileCol * cameraOverlapY);
+                tilePositions[tile][1] += (tileRow * cameraOverlapY);
+
+                tilePositions[tile][0] -= minX;
+                tilePositions[tile][1] -= minY;
+                LOGGER.warn("corrected tile #{} X = {}, Y = {}", tile, tilePositions[tile][0], tilePositions[tile][1]);
+              }
+            }
 
             int[][] realPositions = new int[xTiles * yTiles][2];
             // calculate small tiles per large tile
             int binX = (int) Math.ceil(xTiles / (double) tableCols);
             int binY = (int) Math.ceil(yTiles / (double) tableRows);
+            LOGGER.warn("binX = {}, binY = {}", binX, binY);
 
             // iterate over each small tile
             for (int yy=0; yy<yTiles; yy++) {
@@ -764,22 +826,6 @@ public class MiraxReader extends FormatReader {
               }
             }
             tilePositions = realPositions;
-
-            String left = stitching.get(prefix + "LEFT");
-            String top = stitching.get(prefix + "TOP");
-            String right = stitching.get(prefix + "RIGHT");
-            String bottom = stitching.get(prefix + "BOTTOM");
-
-            if (left != null && top != null &&
-              right != null && bottom != null)
-            {
-              int tableMinX = Integer.parseInt(left);
-              int tableMinY = Integer.parseInt(top);
-              int tableMaxX = Integer.parseInt(right);
-              int tableMaxY = Integer.parseInt(bottom);
-              metadataWidth = (tableMaxX - tableMinX) + 1;
-              metadataHeight = (tableMaxY - tableMinY) + 1;
-            }
           }
         }
 
@@ -787,6 +833,8 @@ public class MiraxReader extends FormatReader {
       totalCount += count;
     }
     indexData.close();
+
+    /* debug */ if (true) throw new IllegalArgumentException("***");
 
     tileRowCount = new double[pyramidDepth];
     tileColCount = new double[pyramidDepth];
