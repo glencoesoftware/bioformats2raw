@@ -2681,7 +2681,13 @@ public class Converter implements Callable<Integer> {
       case 'z':
         return meta.getPixelsPhysicalSizeZ(seriesIndex);
       case 't':
-        return meta.getPixelsTimeIncrement(seriesIndex);
+        Quantity timeIncrement = meta.getPixelsTimeIncrement(seriesIndex);
+        if (timeIncrement != null && timeIncrement.value().doubleValue() > 0) {
+          return timeIncrement;
+        }
+        else {
+          return null;
+        }
       default:
         return null;
     }
