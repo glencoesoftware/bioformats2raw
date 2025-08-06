@@ -2683,7 +2683,7 @@ public class Converter implements Callable<Integer> {
       case 't':
         Quantity timeIncrement = meta.getPixelsTimeIncrement(seriesIndex);
         if (timeIncrement != null && timeIncrement.value().doubleValue() > 0) {
-          return meta.getPixelsTimeIncrement(seriesIndex);
+          return timeIncrement;
         }
         else {
           return null;
