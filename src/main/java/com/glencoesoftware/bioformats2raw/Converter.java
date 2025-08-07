@@ -128,6 +128,8 @@ public class Converter implements Callable<Integer> {
   private volatile Path inputPath;
   private volatile String outputLocation;
 
+  private volatile boolean warnNoExec = false;
+
   private Map<String, String> outputOptions;
   private volatile Integer pyramidResolutions;
   private volatile List<Integer> seriesList;
@@ -422,6 +424,23 @@ public class Converter implements Callable<Integer> {
   )
   public void setProgressBars(boolean useProgressBars) {
     progressBars = useProgressBars;
+  }
+
+  /**
+   * Configure whether to warn instead of throwing an exception
+   * if files created in the temporary directory
+   * ("java.io.tmpdir" system property) will not be executable.
+   *
+   * @param warnOnly true if a warning should be logged instead of an exception
+   */
+  @Option(
+    names = {"--warn-no-exec"},
+    description = "Warn instead of throwing an exception if " +
+                  "java.io.tmpdir is not executable",
+    defaultValue = "false"
+  )
+  public void setWarnOnNoExec(boolean warnOnly) {
+    warnNoExec = warnOnly;
   }
 
   /**
@@ -967,6 +986,14 @@ public class Converter implements Callable<Integer> {
   }
 
   /**
+   * @return true if a warning is logged instead of an exception when the tmp
+   *              directory is noexec
+   */
+  public boolean getWarnNoExec() {
+    return warnNoExec;
+  }
+
+  /**
    * @return true if only version info is displayed
    */
   public boolean getPrintVersionOnly() {
@@ -1192,6 +1219,37 @@ public class Converter implements Callable<Integer> {
       LOGGER.warn("Non-default tile size: {} x {}. " +
         "This may cause performance issues in some applications.",
         tileWidth, tileHeight);
+    }
+
+    // if the tmpdir is mounted as noexec, then any native library
+    // loading (OpenCV, turbojpeg, etc.) is expected to fail, which
+    // can cause conversion to fail with an exception that is not user friendly
+    //
+    // try to detect this case early and fail before the conversion begins,
+    // with a more informative message
+
+    // a temp file is created and set as executable
+    // in the noexec case, setting as executable is expected to silently fail
+    File tmpdirCheck = File.createTempFile("noexec-test", ".txt");
+    try {
+      // expect 'success' to be true in the noexec case, even though
+      // the file will not actually be executable
+      boolean success = tmpdirCheck.setExecutable(true);
+      if (!success || !tmpdirCheck.canExecute()) {
+        String msg = System.getProperty("java.io.tmpdir") +
+          " is noexec; fix it or specify a different java.io.tmpdir." +
+          " See https://github.com/glencoesoftware/bioformats2raw/" +
+          "blob/master/README.md#temporary-directory-usage for details";
+        if (getWarnNoExec()) {
+          LOGGER.warn(msg);
+        }
+        else {
+          throw new RuntimeException(msg);
+        }
+      }
+    }
+    finally {
+      tmpdirCheck.delete();
     }
 
     OpenCVTools.loadOpenCV();
