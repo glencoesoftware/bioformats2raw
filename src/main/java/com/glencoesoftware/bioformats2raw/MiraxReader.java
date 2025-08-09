@@ -620,24 +620,6 @@ public class MiraxReader extends FormatReader {
               core.add(m);
             }
           }
-          else {
-            LOGGER.trace("name = {}", name);
-            indexData.seek(nonHierarchicalRoot + (totalCount + q) * 4);
-
-            findDataFileReference(indexData);
-            int nextOffset = indexData.readInt();
-            int length = indexData.readInt();
-            int fileNumber = indexData.readInt();
-            LOGGER.trace("  fileNumber = {}, nextOffset = {}, length = {}",
-              fileNumber, nextOffset, length);
-            try {
-              byte[] positionData = getDecompressedData(fileNumber, nextOffset);
-              LOGGER.trace("  positionData.length = {}", positionData.length);
-              LOGGER.trace("  decomped string = {}", new String(positionData));
-            }
-            catch (Throwable t) {
-            }
-          }
         }
       }
       else if (name.equals("StitchingIntensityLayer")) {
