@@ -491,9 +491,8 @@ public class MiraxReader extends FormatReader {
     indexData.seek(hierarchicalRoot);
     long[][] listOffsets = new long[nHierarchies][];
     for (int i=0; i<listOffsets.length; i++) {
-      int depth = pyramidDepth;
-      listOffsets[i] = new long[depth];
-      for (int d=0; d<depth; d++) {
+      listOffsets[i] = new long[pyramidDepth];
+      for (int d=0; d<pyramidDepth; d++) {
         listOffsets[i][d] = indexData.readInt();
         LOGGER.trace("Expect {} offsets for hierarchy #{}, level #{}",
           listOffsets[i][d], i, d);
@@ -501,7 +500,7 @@ public class MiraxReader extends FormatReader {
     }
 
     // read offsets to pyramid pixel data tiles
-    for (int h=0; h<1; h++) { // TODO
+    for (int h=0; h<nHierarchies; h++) {
       for (int i=0; i<listOffsets[h].length; i++) {
         LOGGER.trace("h = {}, i = {}", h, i);
         if (i == format.size()) {
