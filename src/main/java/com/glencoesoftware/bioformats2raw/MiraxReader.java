@@ -491,7 +491,6 @@ public class MiraxReader extends FormatReader {
     indexData.seek(hierarchicalRoot);
     long[][] listOffsets = new long[nHierarchies][];
     for (int i=0; i<listOffsets.length; i++) {
-      //int depth = Integer.parseInt(hierarchy.get("HIER_" + i + "_COUNT"));
       int depth = pyramidDepth;
       listOffsets[i] = new long[depth];
       for (int d=0; d<depth; d++) {
@@ -699,11 +698,6 @@ public class MiraxReader extends FormatReader {
             // hardware coordinates for each tile are present
             // but in this case they are not correct for actually
             // placing the tiles on the canvas
-            indexData.seek(nonHierarchicalRoot + (totalCount + q) * 4);
-            findDataFileReference(indexData);
-            int nextOffset = indexData.readInt();
-            int length = indexData.readInt();
-            int fileNumber = indexData.readInt();
 
             String stitchingTable =
               hierarchy.get("NONHIER_" + i + "_VAL_" + q + "_SECTION");
@@ -732,6 +726,7 @@ public class MiraxReader extends FormatReader {
             // this gives the dimensions of the tilePositions array
             // this array now needs to be expanded to include the small tiles
             // actually stored
+            // note spelling of "COMPRESSSED", this is not a typo in the reader
             String originalTileRows =
               stitching.get("COMPRESSSED_STITCHING_TABLE_HEIGHT");
             String originalTileCols =
