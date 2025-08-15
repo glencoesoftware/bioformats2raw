@@ -752,6 +752,49 @@ public class ZarrTest {
   }
 
   /**
+   * Test compact representation of multiple Z sections
+   * with a single channel and timepoint.
+   * The result should be a 3D array, not a 5D array.
+   */
+  @Test
+  public void testCompactDimensions() throws Exception {
+    input = fake("sizeZ", "3");
+    assertTool("--compact");
+    ZarrGroup group = ZarrGroup.open(output.toString());
+
+    // Check dimensions and block size
+    ZarrArray series0 = group.openArray("0/0");
+    assertArrayEquals(new int[] {3, 512, 512}, series0.getShape());
+    assertArrayEquals(new int[] {1, 512, 512}, series0.getChunks());
+
+    // Check special pixels for each plane
+    int[] shape = new int[] {1, 512, 512};
+    byte[] tile = new byte[512 * 512];
+    int[] offset = new int[] {0, 0, 0};
+
+    for (int z=0; z<3; z++) {
+      offset[0] = z;
+      series0.read(tile, shape, offset);
+      int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
+      assertArrayEquals(new int[] {0, z, z, 0, 0}, seriesPlaneNumberZCT);
+    }
+
+    // check that 3 axes were written instead of 5
+    List<Map<String, Object>> multiscales = getMultiscales("0");
+    assertEquals(1, multiscales.size());
+    Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "image");
+    List<Map<String, Object>> datasets =
+            (List<Map<String, Object>>) multiscale.get("datasets");
+    assertTrue(datasets.size() > 0);
+    assertEquals("0", datasets.get(0).get("path"));
+
+    List<Map<String, Object>> axes =
+      (List<Map<String, Object>>) multiscale.get("axes");
+    checkAxes(axes, "ZYX", null);
+  }
+
+  /**
    * Test the progress listener API.
    */
   @Test
