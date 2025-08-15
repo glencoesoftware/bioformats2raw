@@ -909,7 +909,6 @@ public class Converter implements Callable<Integer> {
       LOGGER.warn(
         "--dimension-order is deprecated;" +
         " OME-NGFF requires XYZCT output order");
-      dimensionOrder = order;
     }
     dimensionOrder = order;
   }
