@@ -907,7 +907,8 @@ public class Converter implements Callable<Integer> {
   public void setDimensionOrder(DimensionOrder order) {
     if (order != DimensionOrder.XYZCT) {
       LOGGER.warn(
-        "--dimension-order is deprecated; OME-NGFF requires XYZCT output order");
+        "--dimension-order is deprecated;" +
+        " OME-NGFF requires XYZCT output order");
       dimensionOrder = order;
     }
     dimensionOrder = order;
