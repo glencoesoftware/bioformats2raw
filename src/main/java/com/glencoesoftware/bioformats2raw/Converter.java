@@ -1997,16 +1997,20 @@ public class Converter implements Callable<Integer> {
         dimensionOrder != null? dimensionOrder.toString()
         : reader.getDimensionOrder()).reverse().toString();
 
+    int spatialDims = 0;
     for (char c : o.toCharArray()) {
       switch (c) {
         case 'X':
           axes.add(new Axis(c, scaledWidth, scaledTileWidth));
+          spatialDims++;
           break;
         case 'Y':
           axes.add(new Axis(c, scaledHeight, scaledTileHeight));
+          spatialDims++;
           break;
         case 'Z':
           axes.add(new Axis(c, scaledDepth, scaledChunkDepth));
+          spatialDims++;
           break;
         case 'C':
           axes.add(new Axis(c, sizeC, 1));
@@ -2025,10 +2029,19 @@ public class Converter implements Callable<Integer> {
       for (int a=0; a<axes.size(); a++) {
         Axis axis = axes.get(a);
         if (axis.getLength() == 1) {
+          char type = axis.getType();
+          if (type == 'X' || type == 'Y' || type == 'Z') {
+            spatialDims--;
+          }
           axes.remove(axis);
           a--;
         }
       }
+    }
+
+    if (spatialDims < 2) {
+      throw new IllegalArgumentException("Found " + spatialDims +
+        " spatial dimensions, try again without --compact");
     }
     return axes;
   }
