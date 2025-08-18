@@ -795,6 +795,162 @@ public class ZarrTest {
   }
 
   /**
+   * Test compact representation of single XY plane.
+   */
+  @Test
+  public void testCompactXY() throws Exception {
+    input = fake();
+    assertTool("--compact");
+    ZarrGroup group = ZarrGroup.open(output.toString());
+
+    // Check dimensions and block size
+    ZarrArray series0 = group.openArray("0/0");
+    assertArrayEquals(new int[] {512, 512}, series0.getShape());
+    assertArrayEquals(new int[] {512, 512}, series0.getChunks());
+
+    // Check special pixels for each plane
+    int[] shape = new int[] {512, 512};
+    byte[] tile = new byte[512 * 512];
+    int[] offset = new int[] {0, 0};
+
+    series0.read(tile, shape, offset);
+    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
+    assertArrayEquals(new int[] {0, 0, 0, 0, 0}, seriesPlaneNumberZCT);
+
+    // check that 2 axes were written instead of 5
+    List<Map<String, Object>> multiscales = getMultiscales("0");
+    assertEquals(1, multiscales.size());
+    Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "image");
+    List<Map<String, Object>> datasets =
+            (List<Map<String, Object>>) multiscale.get("datasets");
+    assertTrue(datasets.size() > 0);
+    assertEquals("0", datasets.get(0).get("path"));
+
+    List<Map<String, Object>> axes =
+      (List<Map<String, Object>>) multiscale.get("axes");
+    checkAxes(axes, "YX", null);
+  }
+
+  /**
+   * Test compact representation of dataset with Y=1.
+   */
+  @Test
+  public void testCompactSingleY() throws Exception {
+    input = fake("sizeY", "1", "sizeZ", "300");
+    assertTool("--compact");
+    ZarrGroup group = ZarrGroup.open(output.toString());
+
+    // Check dimensions and block size
+    ZarrArray series0 = group.openArray("0/0");
+    assertArrayEquals(new int[] {300, 512}, series0.getShape());
+    assertArrayEquals(new int[] {1, 512}, series0.getChunks());
+
+    // Check special pixels for each plane
+    int[] shape = new int[] {1, 512};
+    byte[] tile = new byte[512];
+    int[] offset = new int[] {0, 0};
+
+    for (int z=0; z<300; z++) {
+      offset[0] = z;
+      series0.read(tile, shape, offset);
+      int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
+
+      // special pixels will be adjusted because it is uint8 data
+      int zSpecialPixel = z % 256;
+      assertArrayEquals(new int[] {0, zSpecialPixel, zSpecialPixel, 0, 0},
+        seriesPlaneNumberZCT);
+    }
+
+    // check that 2 axes were written instead of 5
+    List<Map<String, Object>> multiscales = getMultiscales("0");
+    assertEquals(1, multiscales.size());
+    Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "image");
+    List<Map<String, Object>> datasets =
+            (List<Map<String, Object>>) multiscale.get("datasets");
+    assertTrue(datasets.size() > 0);
+    assertEquals("0", datasets.get(0).get("path"));
+
+    List<Map<String, Object>> axes =
+      (List<Map<String, Object>>) multiscale.get("axes");
+    checkAxes(axes, "ZX", null);
+  }
+
+  /**
+   * Test compact representation of XT data.
+   * This should throw an exception as there is only one
+   * spatial dimension greater than 1.
+   */
+  @Test
+  public void testCompactInvalid2D() throws Exception {
+    input = fake("sizeY", "1", "sizeT", "4");
+    assertThrows(ExecutionException.class, () -> {
+      assertTool("--compact");
+    });
+  }
+
+  /**
+   * Test compact representation of single pixel.
+   * This should throw an exception.
+   */
+  @Test
+  public void testCompactSinglePixel() throws Exception {
+    input = fake("sizeX", "1", "sizeY", "1");
+    assertThrows(ExecutionException.class, () -> {
+      assertTool("--compact");
+    });
+  }
+
+  /**
+   * Test compact representation of multiple channels and
+   * timepoints with a single Z section.
+   * The result should be a 4D array, not a 5D array.
+   */
+  @Test
+  public void testCompact4D() throws Exception {
+    input = fake("sizeC", "4", "sizeT", "2");
+    assertTool("--compact");
+    ZarrGroup group = ZarrGroup.open(output.toString());
+
+    // Check dimensions and block size
+    ZarrArray series0 = group.openArray("0/0");
+    assertArrayEquals(new int[] {2, 4, 512, 512}, series0.getShape());
+    assertArrayEquals(new int[] {1, 1, 512, 512}, series0.getChunks());
+
+    // Check special pixels for each plane
+    int[] shape = new int[] {1, 1, 512, 512};
+    byte[] tile = new byte[512 * 512];
+    int[] offset = new int[] {0, 0, 0, 0};
+
+    int plane = 0;
+    for (int t=0; t<2; t++) {
+      for (int c=0; c<4; c++) {
+        offset[0] = t;
+        offset[1] = c;
+        series0.read(tile, shape, offset);
+        int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
+        assertArrayEquals(new int[] {0, plane, 0, c, t}, seriesPlaneNumberZCT);
+        plane++;
+      }
+    }
+
+    // check that 3 axes were written instead of 5
+    List<Map<String, Object>> multiscales = getMultiscales("0");
+    assertEquals(1, multiscales.size());
+    Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "image");
+    List<Map<String, Object>> datasets =
+            (List<Map<String, Object>>) multiscale.get("datasets");
+    assertTrue(datasets.size() > 0);
+    assertEquals("0", datasets.get(0).get("path"));
+
+    List<Map<String, Object>> axes =
+      (List<Map<String, Object>>) multiscale.get("axes");
+    checkAxes(axes, "TCYX", null);
+  }
+
+  /**
    * Test the progress listener API.
    */
   @Test
