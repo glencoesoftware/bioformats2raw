@@ -1342,6 +1342,16 @@ public class MiraxReader extends FormatReader {
     if (channelOffsets == null || c >= channelOffsets.size()) {
       return null;
     }
+    // there may be an extra invalid tile defined (for fluorescence data)
+    // skip over it in favor of the correct tile
+    // not sure if there is a better way to detect this case,
+    // so this logic might need improving in the future
+    int expectedOffsetCount =
+      (int) Math.ceil((double) getSizeC() / MAX_CHANNELS);
+    if (channelOffsets.size() > expectedOffsetCount && c > 0) {
+      return channelOffsets.get(
+        c + (channelOffsets.size() - expectedOffsetCount));
+    }
     return channelOffsets.get(c);
   }
 
