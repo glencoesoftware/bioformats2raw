@@ -3252,7 +3252,8 @@ public class Converter implements Callable<Integer> {
    * @param args command line arguments
    */
   public static void main(String[] args) {
-    CommandLine.call(new Converter(), args);
+    int exitCode = new CommandLine(new Converter()).execute(args);
+    System.exit(exitCode);
   }
 
 }
