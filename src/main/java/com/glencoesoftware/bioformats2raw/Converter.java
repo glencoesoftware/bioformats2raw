@@ -127,6 +127,24 @@ public class Converter implements Callable<Integer> {
   /** NGFF specification version.*/
   public static final String NGFF_VERSION = "0.4";
 
+  /** Units allowed by NGFF specification for length/space axes. */
+  private static final List<String> LENGTH_UNITS = Arrays.asList(
+    "angstrom", "attometer", "centimeter", "decimeter", "exameter",
+    "femtometer", "foot", "gigameter", "hectometer", "inch", "kilometer",
+    "megameter", "meter", "micrometer", "mile", "millimeter", "nanometer",
+    "parsec", "petameter", "picometer", "terameter", "yard", "yoctometer",
+    "yottameter", "zeptometer", "zettameter"
+  );
+
+  /** Units allowed by NGFF specification for time axes. */
+  private static final List<String> TIME_UNITS = Arrays.asList(
+    "attosecond", "centisecond", "day", "decisecond", "exasecond",
+    "femtosecond", "gigasecond", "hectosecond", "hour", "kilosecond",
+    "megasecond", "microsecond", "millisecond", "minute", "nanosecond",
+    "petasecond", "picosecond", "second", "terasecond", "yoctosecond",
+    "yottasecond", "zeptosecond", "zettasecond"
+  );
+
   private volatile Path inputPath;
   private volatile String outputLocation;
 
@@ -2767,16 +2785,20 @@ public class Converter implements Callable<Integer> {
         String unitName = null;
         try {
           if (scale instanceof Length) {
-            unitName = UnitsLength.fromString(symbol).name().toLowerCase();
+            unitName = getLengthUnit(
+              UnitsLength.fromString(symbol).name().toLowerCase());
           }
           else if (scale instanceof Time) {
-            unitName = UnitsTime.fromString(symbol).name().toLowerCase();
+            unitName = getTimeUnit(
+              UnitsTime.fromString(symbol).name().toLowerCase());
           }
         }
         catch (EnumerationException e) {
           LOGGER.warn("Could not identify unit '{}'", symbol);
         }
-        thisAxis.put("unit", unitName);
+        if (unitName != null) {
+          thisAxis.put("unit", unitName);
+        }
       }
       axes.add(thisAxis);
     }
@@ -3208,6 +3230,44 @@ public class Converter implements Callable<Integer> {
       return String.valueOf(wave);
     }
     return v.toString();
+  }
+
+  /**
+   * Get a valid unit name for a length/space axis according to NGFF spec.
+   * OME-XML schema allows for some units that are not valid according to
+   * NGFF, e.g. 'pixel'.
+   *
+   * @param unitName length unit from OME schema
+   * @return valid NGFF unit or null
+   */
+  private String getLengthUnit(String unitName) {
+    if (unitName == null) {
+      return null;
+    }
+    if (LENGTH_UNITS.contains(unitName)) {
+      return unitName;
+    }
+    LOGGER.debug("Omitting unit '{}'", unitName);
+    return null;
+  }
+
+  /**
+   * Get a valid unit name for a time axis according to NGFF spec.
+   * OME-XML schema allows for some units that are not valid according to
+   * NGFF, e.g. 'decasecond'.
+   *
+   * @param unitName length unit from OME schema
+   * @return valid NGFF unit or null
+   */
+  private String getTimeUnit(String unitName) {
+    if (unitName == null) {
+      return null;
+    }
+    if (TIME_UNITS.contains(unitName)) {
+      return unitName;
+    }
+    LOGGER.debug("Omitting unit '{}'", unitName);
+    return null;
   }
 
   private int calculateResolutions(int width, int height) {
