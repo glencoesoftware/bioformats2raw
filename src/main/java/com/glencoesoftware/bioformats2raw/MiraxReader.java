@@ -72,6 +72,7 @@ public class MiraxReader extends FormatReader {
   private static final int MAX_TILE_SIZE = 256;
 
   private static final String SLIDE_DATA = "Slidedat.ini";
+  private static final String FILTER_LEVEL = "Slide filter level";
 
   /**
    * Maximum number of channels in a tile.  The assembled slide can
@@ -218,6 +219,9 @@ public class MiraxReader extends FormatReader {
     // this is to match the default behavior of Pannoramic Viewer
     Arrays.fill(buf, getFillColor());
 
+    LOGGER.trace("openBytes(no={}, x={}, y={}, w={}, h={})",
+      no, x, y, w, h);
+
     if (tileCache == null) {
       tileCache = CacheBuilder.newBuilder()
         .maximumSize(0)  // Disabled
@@ -258,6 +262,8 @@ public class MiraxReader extends FormatReader {
           int tile = yp * (xTiles / divPerSide) + xp;
           int correctX = colIndex % (int) div;
           int correctY = rowIndex % (int) div;
+          LOGGER.debug("row = {}, col = {}, rowIndex = {}, " +
+            "colIndex = {}, tile = {}", row, col, rowIndex, colIndex, tile);
           tileRegion.x =
             (int) (((tilePositions[tile][0] / scale) + (correctX * width)));
           tileRegion.y =
@@ -266,8 +272,14 @@ public class MiraxReader extends FormatReader {
 
         Region intersection = tileRegion.intersection(image);
         if (!tileRegion.intersects(image)) {
+          LOGGER.debug("tile row={}, col={} ({}) doesn't overlap", row, col,
+            tileRegion);
           continue;
         }
+        LOGGER.debug("Looking up tile for resolution = {}, x={}, y={}, c={}",
+          index, col, row, no / MAX_CHANNELS);
+        LOGGER.debug("  tileRegion = {}", tileRegion);
+        LOGGER.debug("  intersection = {}", intersection);
 
         TilePointer thisOffset = lookupTile(index, col, row, no / MAX_CHANNELS);
         if (thisOffset != null) {
@@ -281,6 +293,8 @@ public class MiraxReader extends FormatReader {
           }
 
           String file = files.get(thisOffset.fileIndex + 1);
+          LOGGER.debug("  * got file = {}, offset = {}",
+            file, thisOffset.offset);
           byte[] tileBuf = tileCache.getIfPresent(thisOffset);
           if (tileBuf == null) {
             long nextOffset = thisOffset.offset + thisOffset.length;
@@ -317,6 +331,9 @@ public class MiraxReader extends FormatReader {
               }
             }
             tileCache.put(thisOffset, tileBuf);
+          }
+          else {
+            LOGGER.warn("null tile buffer for row={}, col={}", row, col);
           }
         }
       }
@@ -472,35 +489,45 @@ public class MiraxReader extends FormatReader {
     long hierarchicalRoot = indexData.readInt();
     long nonHierarchicalRoot = indexData.readInt();
     indexData.seek(hierarchicalRoot);
-    long[] listOffsets = new long[nHierarchies * pyramidDepth];
+    long[][] listOffsets = new long[nHierarchies][];
     for (int i=0; i<listOffsets.length; i++) {
-      listOffsets[i] = indexData.readInt();
+      listOffsets[i] = new long[pyramidDepth];
+      for (int d=0; d<pyramidDepth; d++) {
+        listOffsets[i][d] = indexData.readInt();
+        LOGGER.trace("Expect {} offsets for hierarchy #{}, level #{}",
+          listOffsets[i][d], i, d);
+      }
     }
 
     // read offsets to pyramid pixel data tiles
     for (int h=0; h<nHierarchies; h++) {
-      for (int i=0; i<pyramidDepth; i++) {
+      for (int i=0; i<listOffsets[h].length; i++) {
+        LOGGER.trace("h = {}, i = {}", h, i);
         if (i == format.size()) {
           format.add("");
         }
-        int levelIndex = h * pyramidDepth + i;
-        if (listOffsets[levelIndex] == 0) {
+
+        if (listOffsets[h][i] == 0) {
+          LOGGER.trace("Skipping hierarchy #{} level #{}", h, i);
           continue;
         }
-        indexData.seek(listOffsets[levelIndex]);
+        indexData.seek(listOffsets[h][i]);
         int nItems = indexData.readInt();
         if (nItems != 0) {
-          LOGGER.warn("First page size should be 0, was " + nItems +
+          LOGGER.trace("First page size should be 0, was " + nItems +
             "; skipping level " + i + " in hierarchy " + h);
           continue;
         }
-        listOffsets[levelIndex] = indexData.readInt();
+        listOffsets[h][i] = indexData.readInt();
 
-        if (listOffsets[levelIndex] == 0) {
+        if (listOffsets[h][i] == 0) {
+          LOGGER.trace("Found offset 0 for hierarchy #{} level #{}", h, i);
           continue;
         }
+        LOGGER.trace("Reading tile offsets for hierarchy #{} level #{} from {}",
+          h, i, listOffsets[h][i]);
 
-        indexData.seek(listOffsets[levelIndex]);
+        indexData.seek(listOffsets[h][i]);
         nItems = indexData.readInt();
         int nextPointer = indexData.readInt();
         int nextCounter = indexData.readInt();
@@ -519,6 +546,10 @@ public class MiraxReader extends FormatReader {
           long nextOffset = indexData.readInt();
           int length = indexData.readInt();
           int fileNumber = indexData.readInt();
+
+          LOGGER.trace("nextOffset = {}, nextCounter = {}, " +
+            "length = {}, fileNumber = {}",
+            nextOffset, nextCounter, length, fileNumber);
 
           if (i == 0) {
             TilePointer key = new TilePointer(i, nextCounter);
@@ -594,54 +625,26 @@ public class MiraxReader extends FormatReader {
           name = hierarchy.get("NONHIER_" + i + "_VAL_" + q);
           if (name.equals("StitchingIntensityLevel")) {
             indexData.seek(nonHierarchicalRoot + (totalCount + q) * 4);
-            int offset = indexData.readInt();
-            indexData.seek(offset);
-            int nItems = indexData.readInt();
-            offset = indexData.readInt();
-            indexData.seek(offset);
-            nItems = indexData.readInt();
-            int nextPointer = indexData.readInt();
-            indexData.skipBytes(8);
+
+            findDataFileReference(indexData);
             int nextOffset = indexData.readInt();
             int length = indexData.readInt();
             int fileNumber = indexData.readInt();
 
-            String positionFile = files.get(fileNumber + 1);
-            RandomAccessInputStream stream =
-              new RandomAccessInputStream(positionFile);
-            stream.seek(nextOffset);
-
-            ZlibCodec codec = new ZlibCodec();
-            byte[] positionData = codec.decompress(stream, null);
+            byte[] positionData = getDecompressedData(fileNumber, nextOffset);
 
             int nTiles = positionData.length / 9;
-            tilePositions = new int[nTiles][2];
-            int minX = Integer.MAX_VALUE;
-            int minY = Integer.MAX_VALUE;
+            LOGGER.trace("Reading {} tile positions from file {}",
+              nTiles, fileNumber);
+            LOGGER.trace("  position file offset = {}", nextOffset);
+            LOGGER.trace("  decompressed bytes = {}", positionData.length);
 
-            for (int t=0; t<nTiles; t++) {
-              tilePositions[t][0] =
-                DataTools.bytesToInt(positionData, t * 9 + 1, 4, true);
-              tilePositions[t][1] =
-                DataTools.bytesToInt(positionData, t * 9 + 5, 4, true);
-
-              if (tilePositions[t][0] > 0 && tilePositions[t][0] < minX) {
-                minX = tilePositions[t][0];
-              }
-              if (tilePositions[t][1] > 0 && tilePositions[t][1] < minY) {
-                minY = tilePositions[t][1];
-              }
+            try (RandomAccessInputStream positionStream =
+              new RandomAccessInputStream(positionData))
+            {
+              positionStream.order(true);
+              tilePositions = getTilePositions(positionStream, nTiles);
             }
-
-            originX = minX - (minX % 256);
-            originY = minY - (minY % 256);
-
-            for (int t=0; t<nTiles; t++) {
-              tilePositions[t][0] -= originX;
-              tilePositions[t][1] -= originY;
-            }
-
-            stream.close();
 
             String stitchingTable =
               hierarchy.get("NONHIER_" + i + "_VAL_" + q + "_SECTION");
@@ -666,52 +669,118 @@ public class MiraxReader extends FormatReader {
             }
           }
         }
-
       }
       else if (name.equals("VIMSLIDE_POSITION_BUFFER")) {
         for (int q=0; q<count; q++) {
           indexData.seek(nonHierarchicalRoot + (totalCount + q) * 4);
-          int offset = indexData.readInt();
-          indexData.seek(offset);
-          int nItems = indexData.readInt();
-          offset = indexData.readInt();
-          indexData.seek(offset);
-          nItems = indexData.readInt();
-          int nextPointer = indexData.readInt();
-          indexData.skipBytes(8);
+          findDataFileReference(indexData);
           int nextOffset = indexData.readInt();
           int length = indexData.readInt();
           int fileNumber = indexData.readInt();
 
           String positionFile = files.get(fileNumber + 1);
-          RandomAccessInputStream stream =
-            new RandomAccessInputStream(positionFile);
-          stream.order(true);
-          stream.seek(nextOffset);
+          try (RandomAccessInputStream stream =
+            new RandomAccessInputStream(positionFile))
+          {
+            stream.order(true);
+            stream.seek(nextOffset);
 
-          int nTiles = length / 9;
-          int minX = Integer.MAX_VALUE;
-          int minY = Integer.MAX_VALUE;
-          tilePositions = new int[nTiles][2];
-          for (int t=0; t<nTiles; t++) {
-            stream.skipBytes(1);
-            tilePositions[t][0] = stream.readInt();
-            tilePositions[t][1] = stream.readInt();
+            int nTiles = length / 9;
+            tilePositions = getTilePositions(stream, nTiles);
+          }
+        }
+      }
+      else if (name.equals("StitchingLayerForHWCoord")) {
+        for (int q=0; q<count; q++) {
+          name = hierarchy.get("NONHIER_" + i + "_VAL_" + q);
+          if (name.equals("StitchingLevelForHWCoord")) {
+            // hardware coordinates for each tile are present
+            // but in this case they are not correct for actually
+            // placing the tiles on the canvas
 
-            if (tilePositions[t][0] > 0 && tilePositions[t][0] < minX) {
-              minX = tilePositions[t][0];
+            String stitchingTable =
+              hierarchy.get("NONHIER_" + i + "_VAL_" + q + "_SECTION");
+            IniTable stitching = data.getTable(stitchingTable);
+            String prefix =
+              "COMPRESSED_STITCHING_ORIG_SLIDE_SCANNED_AREA_IN_PIXELS__";
+
+            String left = stitching.get(prefix + "LEFT");
+            String top = stitching.get(prefix + "TOP");
+            String right = stitching.get(prefix + "RIGHT");
+            String bottom = stitching.get(prefix + "BOTTOM");
+            int minX = 0;
+            int minY = 0;
+
+            if (left != null && top != null &&
+              right != null && bottom != null)
+            {
+              minX = Integer.parseInt(left);
+              minY = Integer.parseInt(top);
+              int tableMaxX = Integer.parseInt(right);
+              int tableMaxY = Integer.parseInt(bottom);
+              metadataWidth = (tableMaxX - minX) + 1;
+              metadataHeight = (tableMaxY - minY) + 1;
             }
-            if (tilePositions[t][1] > 0 && tilePositions[t][1] < minY) {
-              minY = tilePositions[t][1];
+
+            // this gives the dimensions of the tilePositions array
+            // this array now needs to be expanded to include the small tiles
+            // actually stored
+            // note spelling of "COMPRESSSED", this is not a typo in the reader
+            String originalTileRows =
+              stitching.get("COMPRESSSED_STITCHING_TABLE_HEIGHT");
+            String originalTileCols =
+              stitching.get("COMPRESSSED_STITCHING_TABLE_WIDTH");
+
+            if (originalTileRows == null || originalTileCols == null) {
+              throw new FormatException("Cannot read tile table dimensions");
             }
+            int tableRows = Integer.parseInt(originalTileRows);
+            int tableCols = Integer.parseInt(originalTileCols);
+            LOGGER.trace("table columns = {}, table rows = {}",
+              tableCols, tableRows);
+            LOGGER.trace("xTiles = {}, yTiles = {}", xTiles, yTiles);
+
+            int nTiles = tableRows * tableCols;
+
+            // calculate small tiles per large tile
+            int binX = (int) Math.ceil(xTiles / (double) tableCols);
+            int binY = (int) Math.ceil(yTiles / (double) tableRows);
+            LOGGER.trace("binX = {}, binY = {}", binX, binY);
+
+            tilePositions = new int[nTiles][2];
+            for (int tableRow=0; tableRow<tableRows; tableRow++) {
+              for (int tableCol=0; tableCol<tableCols; tableCol++) {
+                int tile = tableRow * tableCols + tableCol;
+                tilePositions[tile][0] = (tableCol * binX * 256) - minX;
+                tilePositions[tile][1] = (tableRow * binY * 256) - minY;
+              }
+            }
+
+            int[][] realPositions = new int[xTiles * yTiles][2];
+
+            // iterate over each small tile
+            for (int yy=0; yy<yTiles; yy++) {
+              for (int xx=0; xx<xTiles; xx++) {
+                int destIndex = yy * xTiles + xx;
+                int srcIndex = (yy / binY) * tableCols + (xx / binX);
+                int relativeY = yy % binY;
+                int relativeX = xx % binX;
+                realPositions[destIndex][0] =
+                  tilePositions[srcIndex][0] + (relativeX * 256);
+                realPositions[destIndex][1] =
+                  tilePositions[srcIndex][1] + (relativeY * 256);
+                LOGGER.trace(
+                  "tilePositions[{}][0] = {} => realPositions[{}][0] = {}",
+                  srcIndex, tilePositions[srcIndex][0],
+                  destIndex, realPositions[destIndex][0]);
+                LOGGER.trace(
+                  "tilePositions[{}][1] = {} => realPositions[{}][1] = {}",
+                  srcIndex, tilePositions[srcIndex][1],
+                  destIndex, realPositions[destIndex][1]);
+              }
+            }
+            tilePositions = realPositions;
           }
-          minX -= (minX % 256);
-          minY -= (minY % 256);
-          for (int t=0; t<nTiles; t++) {
-            tilePositions[t][0] -= minX;
-            tilePositions[t][1] -= minY;
-          }
-          stream.close();
         }
       }
       totalCount += count;
@@ -755,7 +824,7 @@ public class MiraxReader extends FormatReader {
         Integer.parseInt(zoomLevel.get("IMAGE_FILL_COLOR_BGR"));
 
       CoreMetadata m = core.get(i);
-      m.sizeC = Integer.parseInt(hierarchy.get("HIER_1_COUNT"));
+      m.sizeC = getChannelCount(hierarchy);
       m.rgb = false;
       m.sizeZ = 1;
       m.sizeT = 1;
@@ -816,6 +885,9 @@ public class MiraxReader extends FormatReader {
         double totalWidth = tileWidth[i] * tileColCount[i];
         double totalHeight = tileHeight[i] * tileRowCount[i];
 
+        LOGGER.trace("tileRowCount = {}, tileColCount = {}",
+          tileRowCount[i], tileColCount[i]);
+
         m.sizeX = (int) totalWidth;
         m.sizeY = (int) totalHeight;
 
@@ -851,6 +923,14 @@ public class MiraxReader extends FormatReader {
         core.get(0).resolutionCount--;
         pyramidDepth--;
       }
+    }
+
+    LOGGER.debug("minRowIndex[0] = {}, minColIndex[0] = {}",
+      minRowIndex[0], minColIndex[0]);
+
+    if (tilePositions == null) {
+      throw new FormatException(
+        "Tile positions not found, image will be incorrect");
     }
 
     MetadataStore store = makeFilterMetadata();
@@ -979,8 +1059,10 @@ public class MiraxReader extends FormatReader {
 
       // parse channel data
 
+      int slideIndex = getSlideHierarchyIndex(hierarchy);
       for (int c=0; c<getSizeC(); c++) {
-        section = hierarchy.get("HIER_1_VAL_" + c + "_SECTION");
+        section =
+          hierarchy.get("HIER_" + slideIndex + "_VAL_" + c + "_SECTION");
         IniTable channelTable = data.getTable(section);
 
         if (channelTable == null) {
@@ -1224,6 +1306,29 @@ public class MiraxReader extends FormatReader {
     return tile;
   }
 
+  private int getSlideHierarchyIndex(IniTable hierarchy) {
+    int hierarchyIndex = 1;
+    String nameKey = "HIER_%d_NAME";
+
+    int hierCount = Integer.parseInt(hierarchy.get("HIER_COUNT"));
+    for (int i=hierarchyIndex; i<hierCount; i++) {
+      if (hierarchy.get(String.format(nameKey, i)).equals(FILTER_LEVEL)) {
+        hierarchyIndex = i;
+        break;
+      }
+    }
+
+    return hierarchyIndex;
+  }
+
+  private int getChannelCount(IniTable hierarchy) {
+    int hierarchyIndex = getSlideHierarchyIndex(hierarchy);
+    String countKey = "HIER_%d_COUNT";
+
+    String channelKey = String.format(countKey, hierarchyIndex);
+    return Integer.parseInt(hierarchy.get(channelKey));
+  }
+
   private TilePointer lookupTile(int resolution, int x, int y, int c) {
     int counter = 0;
     if (resolution < pyramidDepth) {
@@ -1236,6 +1341,16 @@ public class MiraxReader extends FormatReader {
     List<TilePointer> channelOffsets = offsets.get(key);
     if (channelOffsets == null || c >= channelOffsets.size()) {
       return null;
+    }
+    // there may be an extra invalid tile defined (for fluorescence data)
+    // skip over it in favor of the correct tile
+    // not sure if there is a better way to detect this case,
+    // so this logic might need improving in the future
+    int expectedOffsetCount =
+      (int) Math.ceil((double) getSizeC() / MAX_CHANNELS);
+    if (channelOffsets.size() > expectedOffsetCount && c > 0) {
+      return channelOffsets.get(
+        c + (channelOffsets.size() - expectedOffsetCount));
     }
     return channelOffsets.get(c);
   }
@@ -1251,6 +1366,59 @@ public class MiraxReader extends FormatReader {
     }
     tileStream = null;
     tileFile = null;
+  }
+
+  private byte[] getDecompressedData(int fileNumber, long nextOffset)
+    throws FormatException, IOException
+  {
+    String positionFile = files.get(fileNumber + 1);
+    ZlibCodec codec = new ZlibCodec();
+    try (RandomAccessInputStream stream =
+      new RandomAccessInputStream(positionFile))
+    {
+      stream.seek(nextOffset);
+      return codec.decompress(stream, null);
+    }
+  }
+
+  private void findDataFileReference(RandomAccessInputStream s)
+    throws IOException
+  {
+    int offset = s.readInt();
+    s.seek(offset);
+    int nItems = s.readInt();
+    offset = s.readInt();
+    s.seek(offset);
+    nItems = s.readInt();
+    int nextPointer = s.readInt();
+    s.skipBytes(8);
+  }
+
+  private int[][] getTilePositions(RandomAccessInputStream s, int nTiles)
+    throws IOException
+  {
+    int minX = Integer.MAX_VALUE;
+    int minY = Integer.MAX_VALUE;
+    int[][] positions = new int[nTiles][2];
+    for (int t=0; t<nTiles; t++) {
+      s.skipBytes(1);
+      positions[t][0] = s.readInt();
+      positions[t][1] = s.readInt();
+
+      if (positions[t][0] > 0 && positions[t][0] < minX) {
+        minX = positions[t][0];
+      }
+      if (positions[t][1] > 0 && positions[t][1] < minY) {
+        minY = positions[t][1];
+      }
+    }
+    minX -= (minX % 256);
+    minY -= (minY % 256);
+    for (int t=0; t<nTiles; t++) {
+      positions[t][0] -= minX;
+      positions[t][1] -= minY;
+    }
+    return positions;
   }
 
   private double getResolutionDivisions(int res) {
