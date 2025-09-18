@@ -2585,7 +2585,9 @@ public class Converter implements Callable<Integer> {
     getProgressListener().notifySeriesEnd(series);
   }
 
-  private void saveHCSMetadata(IMetadata meta) throws IOException {
+  private void saveHCSMetadata(IMetadata meta)
+    throws IOException, ZarrException
+  {
     if (noHCS) {
       LOGGER.debug("skipping HCS metadata");
       return;
@@ -2593,8 +2595,6 @@ public class Converter implements Callable<Integer> {
     LOGGER.debug("saving HCS metadata");
 
     // assumes only one plate defined
-    Path rootPath = getRootPath();
-    ZarrGroup root = ZarrGroup.open(rootPath);
     int plate = 0;
     Map<String, Object> plateMap = new HashMap<String, Object>();
 
@@ -2659,10 +2659,6 @@ public class Converter implements Callable<Integer> {
 
           List<Map<String, Object>> imageList =
             new ArrayList<Map<String, Object>>();
-          String rowPath = index.getRowPath();
-          ZarrGroup rowGroup = root.createSubGroup(rowPath);
-          String columnPath = index.getColumnPath();
-          ZarrGroup columnGroup = rowGroup.createSubGroup(columnPath);
           for (HCSIndex field : hcsIndexes) {
             if (field.getPlateIndex() == index.getPlateIndex() &&
               field.getWellRowIndex() == index.getWellRowIndex() &&
@@ -2680,9 +2676,24 @@ public class Converter implements Callable<Integer> {
 
           Map<String, Object> wellMap = new HashMap<String, Object>();
           wellMap.put("images", imageList);
-          Map<String, Object> attributes = columnGroup.getAttributes();
-          attributes.put("well", wellMap);
-          columnGroup.writeAttributes(attributes);
+          Map<String, Object> columnAttrs = new HashMap<String, Object>();
+          columnAttrs.put("well", wellMap);
+
+          String rowPath = index.getRowPath();
+          String columnPath = index.getColumnPath();
+          if (getV3()) {
+            Group rowGroup = Group.create(v3Store.resolve(rowPath));
+            Group columnGroup =
+              Group.create(v3Store.resolve(rowPath, columnPath));
+            columnGroup.setAttributes(columnAttrs);
+          }
+          else {
+            Path rootPath = getRootPath();
+            ZarrGroup root = ZarrGroup.open(rootPath);
+            ZarrGroup rowGroup = root.createSubGroup(rowPath);
+            ZarrGroup columnGroup = rowGroup.createSubGroup(columnPath);
+            columnGroup.writeAttributes(columnAttrs);
+          }
 
           // make sure the row/column indexes are added to the plate attributes
           // this is necessary when Plate.Rows or Plate.Columns is not set
@@ -2732,9 +2743,19 @@ public class Converter implements Callable<Integer> {
     plateMap.put("field_count", maxField + 1);
     plateMap.put("version", NGFF_VERSION);
 
-    Map<String, Object> attributes = root.getAttributes();
-    attributes.put("plate", plateMap);
-    root.writeAttributes(attributes);
+    if (getV3()) {
+      Group v3Group = Group.open(v3Store.resolve());
+      Map<String, Object> attributes = v3Group.metadata.attributes;
+      attributes.put("plate", plateMap);
+      v3Group.setAttributes(attributes);
+    }
+    else {
+      Path rootPath = getRootPath();
+      ZarrGroup root = ZarrGroup.open(rootPath);
+      Map<String, Object> attributes = root.getAttributes();
+      attributes.put("plate", plateMap);
+      root.writeAttributes(attributes);
+    }
   }
 
   /**
