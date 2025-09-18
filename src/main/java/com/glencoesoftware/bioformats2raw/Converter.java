@@ -113,7 +113,7 @@ import dev.zarr.zarrjava.utils.Utils;
 import dev.zarr.zarrjava.v3.Array;
 import dev.zarr.zarrjava.v3.Group;
 //import dev.zarr.zarrjava.v3.Node;
-//import dev.zarr.zarrjava.v3.codec.CodecBuilder;
+import dev.zarr.zarrjava.v3.codec.CodecBuilder;
 
 /**
  * Command line tool for converting whole slide imaging files to Zarr.
@@ -155,6 +155,11 @@ public class Converter implements Callable<Integer> {
   private volatile int tileWidth;
   private volatile int tileHeight;
   private volatile int chunkDepth;
+
+  private volatile int shardWidth;
+  private volatile int shardHeight;
+  private volatile int shardDepth;
+
   private volatile String logLevel;
   private volatile boolean progressBars = false;
   private volatile boolean printVersion = false;
@@ -396,6 +401,65 @@ public class Converter implements Callable<Integer> {
     }
     else {
       LOGGER.warn("Ignoring invalid chunk depth: {}", depth);
+    }
+  }
+
+  /**
+   * Set the maximum shard width (X shard size) when writing v3.
+   *
+   * @param width shard width
+   */
+  @Option(
+    names = {"--shard-width", "--shard_width"},
+    description = "Maximum shard width (default: ${DEFAULT-VALUE}). " +
+      "Changing this may have performance implications.",
+    defaultValue = "1024"
+  )
+  public void setShardWidth(int width) {
+    if (width > 0) {
+      shardWidth = width;
+    }
+    else {
+      LOGGER.warn("Ignoring invalid shard width: {}", width);
+    }
+  }
+
+  /**
+   * Set the maximum shard height (Y shard size) when writing v3.
+   *
+   * @param height shard height
+   */
+  @Option(
+    names = {"--shard-height", "--shard_height"},
+    description = "Maximum shard height (default: ${DEFAULT-VALUE}). " +
+      "Changing this may have performance implications.",
+    defaultValue = "1024"
+  )
+  public void setShardHeight(int height) {
+    if (height > 0) {
+      shardHeight = height;
+    }
+    else {
+      LOGGER.warn("Ignoring invalid shard height: {}", height);
+    }
+  }
+
+  /**
+   * Set the maximum shard depth (Z shard size) when writing v3.
+   *
+   * @param depth Z shard size
+   */
+  @Option(
+    names = {"--shard-depth", "--shard_depth"},
+    description = "Maximum shard depth to read (default: ${DEFAULT-VALUE}) ",
+    defaultValue = "1"
+  )
+  public void setShardDepth(int depth) {
+    if (depth > 0) {
+      shardDepth = depth;
+    }
+    else {
+      LOGGER.warn("Ignoring invalid shard depth: {}", depth);
     }
   }
 
@@ -1022,6 +1086,27 @@ public class Converter implements Callable<Integer> {
    */
   public int getChunkDepth() {
     return chunkDepth;
+  }
+
+  /**
+   * @return shard width (X shard size)
+   */
+  public int getShardWidth() {
+    return shardWidth;
+  }
+
+  /**
+   * @return shard height (Y shard size)
+   */
+  public int getShardHeight() {
+    return shardHeight;
+  }
+
+  /**
+   * @return shard depth (Z shard size)
+   */
+  public int getShardDepth() {
+    return shardDepth;
   }
 
   /**
@@ -2228,6 +2313,27 @@ public class Converter implements Callable<Integer> {
     return chunk;
   }
 
+  private int[] getShardSizeArray(List<Axis> axes) {
+    int[] shard = new int[axes.size()];
+    for (int i=0; i<axes.size(); i++) {
+      Axis axis = axes.get(i);
+      switch (axis.getType()) {
+        case 'X':
+          shard[i] = getShardWidth();
+          break;
+        case 'Y':
+          shard[i] = getShardHeight();
+          break;
+        case 'Z':
+          shard[i] = getShardDepth();
+          break;
+        default:
+          shard[i] = axis.getChunkSize();
+      }
+    }
+    return shard;
+  }
+
   private int[] createShape(List<Axis> axes, int width, int height, int depth) {
     int[] shape = new int[axes.size()];
     Arrays.fill(shape, 1);
@@ -2478,13 +2584,43 @@ public class Converter implements Callable<Integer> {
               scaleFormatString, getScaleFormatStringArgs(series, resolution));
 
       if (getV3()) {
+        CodecBuilder codecBuilder =
+          new CodecBuilder(ZarrTypes.getV3ZarrType(pixelType));
+
+        int[] chunkSizes = getChunkSizeArray(activeAxes);
+        int[] shardSizes = getShardSizeArray(activeAxes);
+        int[] shape = getShapeArray(activeAxes);
+        boolean useSharding = false;
+
+        for (int axis=0; axis<shape.length; axis++) {
+          // for smaller resolutions in particular, the selected
+          // chunk size may be smaller than the image
+          // the chunk size needs to be adjusted in this case,
+          // otherwise an exception will be thrown when creating the array
+          if (shape[axis] < shardSizes[axis]) {
+            shardSizes[axis] = shape[axis];
+          }
+        }
+
+        if (chunkAndShardCompatible(chunkSizes, shardSizes, shape)) {
+          codecBuilder = codecBuilder.withSharding(chunkSizes);
+          useSharding = true;
+        }
+        if (getCompression() == ZarrCompression.blosc) {
+          codecBuilder = codecBuilder.withBlosc();
+        }
+        else if (getCompression() != ZarrCompression.raw) {
+          LOGGER.warn("Skipping unsupported compression: {}", getCompression());
+        }
+
+        final CodecBuilder builder = codecBuilder;
         StoreHandle v3Handle = v3Store.resolve(resolutionString);
         Array v3Array = Array.create(v3Handle,
           Array.metadataBuilder()
-            .withShape(Utils.toLongArray(getShapeArray(activeAxes)))
+            .withShape(Utils.toLongArray(shape))
             .withDataType(ZarrTypes.getV3ZarrType(pixelType))
-            .withChunkShape(getChunkSizeArray(activeAxes))
-            //.withCodecs(c -> builder)
+            .withChunkShape(useSharding ? shardSizes : chunkSizes)
+            .withCodecs(c -> builder)
             .build()
         );
       }
@@ -3296,6 +3432,38 @@ public class Converter implements Callable<Integer> {
       height /= PYRAMID_SCALE;
     }
     return resolutions;
+  }
+
+  /**
+   * Check that the desired chunk and shard sizes are compatible.
+   * In each dimension, the chunk size must evenly divide into the shard size.
+   *
+   * @param chunkSize expected chunk size
+   * @param shardSize expected shard size
+   * @param shape array shape
+   * @return true if the chunk and shard can be used together
+   */
+  private boolean chunkAndShardCompatible(
+    int[] chunkSize, int[] shardSize, int[] shape)
+  {
+    if (chunkSize.length != shardSize.length ||
+      shape.length != chunkSize.length)
+    {
+      return false;
+    }
+    for (int d=0; d<shape.length; d++) {
+      if (shardSize[d] % chunkSize[d] != 0) {
+        LOGGER.warn("Shard={} not compatible with chunk={} (axis {})",
+          shardSize[d], chunkSize[d], d);
+        return false;
+      }
+      if (chunkSize[d] > shape[d]) {
+        LOGGER.warn("Shard={} must be smaller than shape={} (axis {})",
+          shardSize[d], shape[d], d);
+        return false;
+      }
+    }
+    return true;
   }
 
   private static Slf4JStopWatch stopWatch() {
