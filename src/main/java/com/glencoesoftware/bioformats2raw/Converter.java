@@ -1360,7 +1360,7 @@ public class Converter implements Callable<Integer> {
         ).orElse("development");
       System.out.println("Version = " + version);
       System.out.println("Bio-Formats version = " + FormatTools.VERSION);
-      System.out.println("NGFF specification version = " + NGFF_VERSION);
+      System.out.println("NGFF specification version = " + getNGFFVersion());
       return -1;
     }
 
@@ -2877,7 +2877,7 @@ public class Converter implements Callable<Integer> {
     plateMap.put("rows", rows);
 
     plateMap.put("field_count", maxField + 1);
-    plateMap.put("version", NGFF_VERSION);
+    plateMap.put("version", getNGFFVersion());
 
     if (getV3()) {
       Group v3Group = Group.open(v3Store.resolve());
@@ -2940,7 +2940,7 @@ public class Converter implements Callable<Integer> {
       multiscale.put("type", downsampling.getName());
     }
     multiscale.put("metadata", metadata);
-    multiscale.put("version", nested ? NGFF_VERSION : "0.1");
+    multiscale.put("version", getNGFFVersion());
     multiscales.add(multiscale);
 
     IFormatReader v = null;
@@ -3432,6 +3432,13 @@ public class Converter implements Callable<Integer> {
       height /= PYRAMID_SCALE;
     }
     return resolutions;
+  }
+
+  private String getNGFFVersion() {
+    if (getV3()) {
+      return NGFF_VERSION_V3;
+    }
+    return getNested() ? NGFF_VERSION : "0.1";
   }
 
   /**
