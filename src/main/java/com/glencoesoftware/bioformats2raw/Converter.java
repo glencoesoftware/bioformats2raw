@@ -2940,7 +2940,9 @@ public class Converter implements Callable<Integer> {
       multiscale.put("type", downsampling.getName());
     }
     multiscale.put("metadata", metadata);
-    multiscale.put("version", getNGFFVersion());
+    if (!getV3()) {
+      multiscale.put("version", getNGFFVersion());
+    }
     multiscales.add(multiscale);
 
     IFormatReader v = null;
@@ -3062,7 +3064,15 @@ public class Converter implements Callable<Integer> {
     multiscale.put("name", name);
 
     Map<String, Object> attributes = new HashMap<String, Object>();
-    attributes.put("multiscales", multiscales);
+    if (getV3()) {
+      Map<String, Object> omeAttributes = new HashMap<String, Object>();
+      omeAttributes.put("version", getNGFFVersion());
+      omeAttributes.put("multiscales", multiscales);
+      attributes.put("ome", omeAttributes);
+    }
+    else {
+      attributes.put("multiscales", multiscales);
+    }
 
     if (omeroMetadata) {
       Map<String, Object> omero = new HashMap<String, Object>();

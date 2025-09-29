@@ -31,6 +31,11 @@ public class ZarrV3Test extends AbstractZarrTest {
     return "0.5";
   }
 
+  @Override
+  void checkMultiscale(Map<String, Object> multiscale, String name) {
+    assertEquals(name, multiscale.get("name"));
+  }
+
   /**
    * Test basic v3 conversion.
    */
@@ -46,8 +51,11 @@ public class ZarrV3Test extends AbstractZarrTest {
 
     Group rootGroup = Group.open(store.resolve("0"));
     Map<String, Object> attrs = rootGroup.metadata.attributes;
+    Map<String, Object> omeAttrs = (Map<String, Object>) attrs.get("ome");
+    assertEquals("0.5", omeAttrs.get("version"));
+
     List<Map<String, Object>> multiscales =
-      (List<Map<String, Object>>) attrs.get("multiscales");
+      (List<Map<String, Object>>) omeAttrs.get("multiscales");
     assertEquals(1, multiscales.size());
     Map<String, Object> multiscale = multiscales.get(0);
     checkMultiscale(multiscale, "image");

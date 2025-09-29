@@ -64,6 +64,12 @@ public class ZarrTest extends AbstractZarrTest {
     return "0.4";
   }
 
+  @Override
+  void checkMultiscale(Map<String, Object> multiscale, String name) {
+    assertEquals(getNGFFVersion(), multiscale.get("version"));
+    assertEquals(name, multiscale.get("name"));
+  }
+
   /**
    * Test a fake file with default values smaller than
    * the default tile size (512 vs 1024).

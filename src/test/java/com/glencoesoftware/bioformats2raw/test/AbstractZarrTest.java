@@ -186,10 +186,7 @@ public abstract class AbstractZarrTest {
     return (OME) xmlService.createOMEXMLRoot(omexml);
   }
 
-  void checkMultiscale(Map<String, Object> multiscale, String name) {
-    assertEquals(getNGFFVersion(), multiscale.get("version"));
-    assertEquals(name, multiscale.get("name"));
-  }
+  abstract void checkMultiscale(Map<String, Object> multiscale, String name);
 
   abstract String getNGFFVersion();
 }
