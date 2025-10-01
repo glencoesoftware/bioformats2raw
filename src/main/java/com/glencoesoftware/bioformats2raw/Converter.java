@@ -107,13 +107,14 @@ import com.bc.zarr.ZarrGroup;
 
 import dev.zarr.zarrjava.ZarrException;
 import dev.zarr.zarrjava.store.FilesystemStore;
-//import dev.zarr.zarrjava.store.Store;
 import dev.zarr.zarrjava.store.StoreHandle;
 import dev.zarr.zarrjava.utils.Utils;
 import dev.zarr.zarrjava.v3.Array;
+import dev.zarr.zarrjava.v3.ArrayMetadata;
 import dev.zarr.zarrjava.v3.Group;
-//import dev.zarr.zarrjava.v3.Node;
+import dev.zarr.zarrjava.v3.codec.Codec;
 import dev.zarr.zarrjava.v3.codec.CodecBuilder;
+import dev.zarr.zarrjava.v3.codec.core.ShardingIndexedCodec;
 
 /**
  * Command line tool for converting whole slide imaging files to Zarr.
@@ -2131,6 +2132,16 @@ public class Converter implements Callable<Integer> {
       v3Array = Array.open(v3Store.resolve(pathName));
       dimensions = Utils.toIntArray(v3Array.metadata.shape);
       blockSizes = v3Array.metadata.chunkShape();
+
+      Optional<Codec> shardingCodec =
+        ArrayMetadata.getShardingIndexedCodec(v3Array.metadata.codecs);
+      if (shardingCodec.isPresent() &&
+        shardingCodec.get() instanceof ShardingIndexedCodec)
+      {
+        ShardingIndexedCodec shardIndex =
+          (ShardingIndexedCodec) shardingCodec.get();
+        blockSizes = shardIndex.configuration.chunkShape;
+      }
     }
     else {
       v2Array = ZarrArray.open(getRootPath().resolve(pathName));

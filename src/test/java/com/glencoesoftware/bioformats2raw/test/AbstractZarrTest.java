@@ -186,6 +186,53 @@ public abstract class AbstractZarrTest {
     return (OME) xmlService.createOMEXMLRoot(omexml);
   }
 
+  void checkPlateSeriesMetadata(List<String> groupMap,
+    int rowCount, int colCount, int fieldCount)
+  {
+    assertEquals(groupMap.size(), rowCount * colCount * fieldCount);
+    int index = 0;
+    for (int r=0; r<rowCount; r++) {
+      for (int c=0; c<colCount; c++) {
+        for (int f=0; f<fieldCount; f++) {
+          String groupPath = (char) (r + 'A') + "/" + (c + 1) + "/" + f;
+          assertEquals(groupMap.get(index++), groupPath);
+        }
+      }
+    }
+  }
+
+  void checkPlateDimensions(Map<String, Object> plate,
+    int rowCount, int colCount, int fieldCount)
+  {
+    assertEquals(fieldCount, ((Number) plate.get("field_count")).intValue());
+    assertEquals(getNGFFVersion(), plate.get("version"));
+
+    List<Map<String, Object>> acquisitions =
+      (List<Map<String, Object>>) plate.get("acquisitions");
+    List<Map<String, Object>> rows =
+      (List<Map<String, Object>>) plate.get("rows");
+    List<Map<String, Object>> columns =
+      (List<Map<String, Object>>) plate.get("columns");
+    List<Map<String, Object>> wells =
+      (List<Map<String, Object>>) plate.get("wells");
+
+    assertEquals(1, acquisitions.size());
+    assertEquals(0, acquisitions.get(0).get("id"));
+
+    assertEquals(rows.size(), rowCount);
+    assertEquals(columns.size(), colCount);
+
+    assertEquals(rows.size() * columns.size(), wells.size());
+    for (int row=0; row<rows.size(); row++) {
+      for (int col=0; col<columns.size(); col++) {
+        int well = row * columns.size() + col;
+        String rowName = rows.get(row).get("name").toString();
+        String colName = columns.get(col).get("name").toString();
+        assertEquals(rowName + "/" + colName, wells.get(well).get("path"));
+      }
+    }
+  }
+
   abstract void checkMultiscale(Map<String, Object> multiscale, String name);
 
   abstract String getNGFFVersion();

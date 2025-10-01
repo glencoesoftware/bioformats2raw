@@ -1247,16 +1247,7 @@ public class ZarrTest extends AbstractZarrTest {
     ZarrGroup omeGroup = ZarrGroup.open(omePath.toString());
     List<String> groupMap =
       (List<String>) omeGroup.getAttributes().get("series");
-    assertEquals(groupMap.size(), 12);
-    int index = 0;
-    for (int r=0; r<rowCount; r++) {
-      for (int c=0; c<colCount; c++) {
-        for (int f=0; f<fieldCount; f++) {
-          String groupPath = (char) (r + 'A') + "/" + (c + 1) + "/" + f;
-          assertEquals(groupMap.get(index++), groupPath);
-        }
-      }
-    }
+    checkPlateSeriesMetadata(groupMap, rowCount, colCount, fieldCount);
 
     Map<String, List<String>> plateMap = new HashMap<String, List<String>>();
     plateMap.put("A", Arrays.asList("1", "2", "3"));
@@ -1267,35 +1258,13 @@ public class ZarrTest extends AbstractZarrTest {
     // check plate/well level metadata
     Map<String, Object> plate =
         (Map<String, Object>) z.getAttributes().get("plate");
-    assertEquals(fieldCount, ((Number) plate.get("field_count")).intValue());
-    assertEquals(getNGFFVersion(), plate.get("version"));
+    checkPlateDimensions(plate, rowCount, colCount, fieldCount);
 
-    List<Map<String, Object>> acquisitions =
-      (List<Map<String, Object>>) plate.get("acquisitions");
+    // check well metadata
     List<Map<String, Object>> rows =
       (List<Map<String, Object>>) plate.get("rows");
     List<Map<String, Object>> columns =
       (List<Map<String, Object>>) plate.get("columns");
-    List<Map<String, Object>> wells =
-      (List<Map<String, Object>>) plate.get("wells");
-
-    assertEquals(1, acquisitions.size());
-    assertEquals(0, acquisitions.get(0).get("id"));
-
-    assertEquals(rows.size(), rowCount);
-    assertEquals(columns.size(), colCount);
-
-    assertEquals(rows.size() * columns.size(), wells.size());
-    for (int row=0; row<rows.size(); row++) {
-      for (int col=0; col<columns.size(); col++) {
-        int well = row * columns.size() + col;
-        String rowName = rows.get(row).get("name").toString();
-        String colName = columns.get(col).get("name").toString();
-        assertEquals(rowName + "/" + colName, wells.get(well).get("path"));
-      }
-    }
-
-    // check well metadata
     for (Map<String, Object> row : rows) {
       String rowName = (String) row.get("name");
       for (Map<String, Object> column : columns) {
