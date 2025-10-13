@@ -2624,10 +2624,18 @@ public class Converter implements Callable<Integer> {
           LOGGER.warn("Skipping unsupported compression: {}", getCompression());
         }
 
+
+        String[] dimensionNames = new String[activeAxes.size()];
+        for (int a=0; a<activeAxes.size(); a++) {
+          dimensionNames[a] =
+            String.valueOf(activeAxes.get(a).getType()).toLowerCase();
+        }
+
         final CodecBuilder builder = codecBuilder;
         StoreHandle v3Handle = v3Store.resolve(resolutionString);
         Array v3Array = Array.create(v3Handle,
           Array.metadataBuilder()
+            .withDimensionNames(dimensionNames)
             .withShape(Utils.toLongArray(shape))
             .withDataType(ZarrTypes.getV3ZarrType(pixelType))
             .withChunkShape(useSharding ? shardSizes : chunkSizes)
