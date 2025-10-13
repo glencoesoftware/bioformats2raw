@@ -3075,11 +3075,10 @@ public class Converter implements Callable<Integer> {
     multiscale.put("name", name);
 
     Map<String, Object> attributes = new HashMap<String, Object>();
+    Map<String, Object> omeAttributes = new HashMap<String, Object>();
     if (getV3()) {
-      Map<String, Object> omeAttributes = new HashMap<String, Object>();
       omeAttributes.put("version", getNGFFVersion());
       omeAttributes.put("multiscales", multiscales);
-      attributes.put("ome", omeAttributes);
     }
     else {
       attributes.put("multiscales", multiscales);
@@ -3169,10 +3168,16 @@ public class Converter implements Callable<Integer> {
 
       omero.put("channels", channels);
 
-      attributes.put("omero", omero);
+      if (getV3()) {
+        omeAttributes.put("omero", omero);
+      }
+      else {
+        attributes.put("omero", omero);
+      }
     }
 
     if (getV3()) {
+      attributes.put("ome", omeAttributes);
       Group v3Group = Group.create(v3Store.resolve(seriesString));
       v3Group.setAttributes(attributes);
     }

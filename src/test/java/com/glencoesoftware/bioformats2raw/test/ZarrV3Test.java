@@ -158,8 +158,9 @@ public class ZarrV3Test extends AbstractZarrTest {
     FilesystemStore store = new FilesystemStore(output);
     for (int i=0; i<names.length; i++) {
       Group z = Group.open(store.resolve(String.valueOf(i)));
-      Map<String, Object> omero =
-            (Map<String, Object>) z.metadata.attributes.get("omero");
+      Map<String, Object> attrs = z.metadata.attributes;
+      Map<String, Object> omeAttrs = (Map<String, Object>) attrs.get("ome");
+      Map<String, Object> omero = (Map<String, Object>) omeAttrs.get("omero");
 
       Map<String, Object> rdefs = (Map<String, Object>) omero.get("rdefs");
       assertEquals(
