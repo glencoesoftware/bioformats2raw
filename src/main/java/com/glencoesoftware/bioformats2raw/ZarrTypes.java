@@ -20,6 +20,8 @@ public final class ZarrTypes {
    */
   public static ucar.ma2.DataType getDataType(int type) {
     switch (type) {
+      case FormatTools.BIT:
+        return ucar.ma2.DataType.BOOLEAN;
       case FormatTools.INT8:
         return ucar.ma2.DataType.BYTE;
       case FormatTools.UINT8:
@@ -50,6 +52,8 @@ public final class ZarrTypes {
    */
   public static dev.zarr.zarrjava.v3.DataType getV3ZarrType(int type) {
     switch (type) {
+      case FormatTools.BIT:
+        return dev.zarr.zarrjava.v3.DataType.BOOL;
       case FormatTools.INT8:
         return dev.zarr.zarrjava.v3.DataType.INT8;
       case FormatTools.UINT8:
