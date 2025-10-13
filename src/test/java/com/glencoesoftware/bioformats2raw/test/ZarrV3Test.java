@@ -123,8 +123,9 @@ public class ZarrV3Test extends AbstractZarrTest {
 
     checkPlateSeriesMetadata(groupMap, rowCount, colCount, fieldCount);
 
-    Map<String, Object> plate =
-      (Map<String, Object>) rootGroup.metadata.attributes.get("plate");
+    Map<String, Object> omeAttrs =
+      (Map<String, Object>) rootGroup.metadata.attributes.get("ome");
+    Map<String, Object> plate = (Map<String, Object>) omeAttrs.get("plate");
     checkPlateDimensions(plate, rowCount, colCount, fieldCount);
 
     long[] arrayShape = new long[] {1, 1, 1, 512, 512};

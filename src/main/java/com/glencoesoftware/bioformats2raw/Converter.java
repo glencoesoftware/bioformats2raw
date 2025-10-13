@@ -2840,7 +2840,9 @@ public class Converter implements Callable<Integer> {
             Group rowGroup = Group.create(v3Store.resolve(rowPath));
             Group columnGroup =
               Group.create(v3Store.resolve(rowPath, columnPath));
-            columnGroup.setAttributes(columnAttrs);
+            Map<String, Object> omeAttrs = new HashMap<String, Object>();
+            omeAttrs.put("ome", columnAttrs);
+            columnGroup.setAttributes(omeAttrs);
           }
           else {
             Path rootPath = getRootPath();
@@ -2901,7 +2903,15 @@ public class Converter implements Callable<Integer> {
     if (getV3()) {
       Group v3Group = Group.open(v3Store.resolve());
       Map<String, Object> attributes = v3Group.metadata.attributes;
-      attributes.put("plate", plateMap);
+      Map<String, Object> omeAttributes = null;
+      if (attributes.containsKey("ome")) {
+        omeAttributes = (Map<String, Object>) attributes.get("ome");
+      }
+      else {
+        omeAttributes = new HashMap<String, Object>();
+      }
+      omeAttributes.put("plate", plateMap);
+      attributes.put("ome", omeAttributes);
       v3Group.setAttributes(attributes);
     }
     else {
