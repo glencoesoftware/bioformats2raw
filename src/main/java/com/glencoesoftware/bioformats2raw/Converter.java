@@ -174,6 +174,7 @@ public class Converter implements Callable<Integer> {
   private volatile int maxCachedTiles;
   private volatile ZarrCompression compressionType;
   private volatile Map<String, Object> compressionProperties;
+  private volatile boolean compressInnerChunk = false;
   private volatile Class<?>[] extraReaders;
   private volatile boolean omeroMetadata = true;
   private volatile boolean nested = true;
@@ -639,6 +640,22 @@ public class Converter implements Callable<Integer> {
     else {
       compressionProperties = new HashMap<String, Object>();
     }
+  }
+
+  /**
+   * Set whether compression applies to inner chunk when sharding is used.
+   * By default, compression is applied to the shard, not the chunks
+   * within the shard.
+   *
+   * @param compressChunk true if the chunks within a shard are compressed
+   */
+  @Option(
+      names = {"--compress-inner-chunk"},
+      description = "True if compression options apply to chunks in a shard",
+      defaultValue = "false"
+  )
+  public void setCompressInnerChunk(boolean compressChunk) {
+    compressInnerChunk = compressChunk;
   }
 
   /**
@@ -1179,6 +1196,13 @@ public class Converter implements Callable<Integer> {
    */
   public Map<String, Object> getCompressionProperties() {
     return compressionProperties;
+  }
+
+  /**
+   * @return true if chunks within a shard are compressed
+   */
+  public boolean getCompressInnerChunk() {
+    return compressInnerChunk;
   }
 
   /**
@@ -2614,16 +2638,21 @@ public class Converter implements Callable<Integer> {
         }
 
         if (chunkAndShardCompatible(chunkSizes, shardSizes, shape)) {
-          codecBuilder = codecBuilder.withSharding(chunkSizes);
           useSharding = true;
+          if (getCompressInnerChunk()) {
+            final CodecBuilder innerChunkBuilder =
+              applyCompressionType(
+                new CodecBuilder(ZarrTypes.getV3ZarrType(pixelType)));
+            codecBuilder = codecBuilder.withSharding(chunkSizes,
+              c -> innerChunkBuilder);
+          }
+          else {
+            codecBuilder = codecBuilder.withSharding(chunkSizes);
+          }
         }
-        if (getCompression() == ZarrCompression.blosc) {
-          codecBuilder = codecBuilder.withBlosc();
+        if (!getCompressInnerChunk()) {
+          codecBuilder = applyCompressionType(codecBuilder);
         }
-        else if (getCompression() != ZarrCompression.raw) {
-          LOGGER.warn("Skipping unsupported compression: {}", getCompression());
-        }
-
 
         String[] dimensionNames = new String[activeAxes.size()];
         for (int a=0; a<activeAxes.size(); a++) {
@@ -3515,6 +3544,25 @@ public class Converter implements Callable<Integer> {
       }
     }
     return true;
+  }
+
+  /**
+   * Convert the specified compression type into a v3 CodecBuilder.
+   * This builder can then be applied to either the chunk or the shard.
+   * If the specified compression type is not supported yet, a warning
+   * is logged and the CodecBuilder will not include any compression.
+   *
+   * @param builder non-null CodecBuilder
+   * @return CodecBuilder with compression applied
+   */
+  private CodecBuilder applyCompressionType(CodecBuilder builder) {
+    if (getCompression() == ZarrCompression.blosc) {
+      return builder.withBlosc();
+    }
+    else if (getCompression() != ZarrCompression.raw) {
+      LOGGER.warn("Skipping unsupported compression: {}", getCompression());
+    }
+    return builder;
   }
 
   private static Slf4JStopWatch stopWatch() {
