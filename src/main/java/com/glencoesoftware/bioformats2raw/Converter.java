@@ -3514,7 +3514,9 @@ public class Converter implements Callable<Integer> {
 
   private int calculateResolutions(int width, int height) {
     int resolutions = 1;
-    while (width > minSize || height > minSize) {
+    while ((width > minSize || height > minSize) &&
+      (width > 1 && height > 1))
+    {
       resolutions++;
       width /= PYRAMID_SCALE;
       height /= PYRAMID_SCALE;

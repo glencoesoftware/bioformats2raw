@@ -1949,6 +1949,37 @@ public class ZarrTest extends AbstractZarrTest {
   }
 
   /**
+   * Test with one dimension significantly larger than the other.
+   */
+  @Test
+  public void testLongNarrowImage() throws Exception {
+    int sizeX = 2048;
+    int sizeY = 3;
+    int expectedResolutionCount = 2;
+    input = fake("sizeX", String.valueOf(sizeX),
+      "sizeY", String.valueOf(sizeY));
+    assertTool();
+
+    ZarrGroup z =
+        ZarrGroup.open(output.resolve("0").toString());
+    List<Map<String, Object>> multiscales = (List<Map<String, Object>>)
+            z.getAttributes().get("multiscales");
+
+    Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "image");
+    List<Map<String, Object>> datasets =
+              (List<Map<String, Object>>) multiscale.get("datasets");
+    assertEquals(expectedResolutionCount, datasets.size());
+    for (int i = 0; i < datasets.size(); i++) {
+      String path = (String) datasets.get(i).get("path");
+      ZarrArray series = z.openArray(path);
+      assertArrayEquals(new int[] {1, 1, 1, sizeY, sizeX}, series.getShape());
+      sizeY /= 2;
+      sizeX /= 2;
+    }
+  }
+
+  /**
    * Convert with the --chunk_depth option. Conversion should produce
    * chunk sizes matching the provided input
    *
