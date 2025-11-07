@@ -201,11 +201,16 @@ public abstract class AbstractZarrTest {
     }
   }
 
+  abstract void checkPlateDimensions(Map<String, Object> plate,
+    int rowCount, int colCount, int fieldCount);
+
   void checkPlateDimensions(Map<String, Object> plate,
-    int rowCount, int colCount, int fieldCount)
+    int rowCount, int colCount, int fieldCount, boolean checkVersion)
   {
     assertEquals(fieldCount, ((Number) plate.get("field_count")).intValue());
-    assertEquals(getNGFFVersion(), plate.get("version"));
+    if (checkVersion) {
+      assertEquals(getNGFFVersion(), plate.get("version"));
+    }
 
     List<Map<String, Object>> acquisitions =
       (List<Map<String, Object>>) plate.get("acquisitions");

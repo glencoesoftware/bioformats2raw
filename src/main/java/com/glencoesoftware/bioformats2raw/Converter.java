@@ -1723,8 +1723,12 @@ public class Converter implements Callable<Integer> {
       attributes.put("bioformats2raw.layout", LAYOUT);
 
       if (getV3()) {
+        attributes.put("version", getNGFFVersion());
+
         Group v3Root = Group.create(v3Store.resolve());
-        v3Root.setAttributes(attributes);
+        Map<String, Object> rootAttributes = new HashMap<String, Object>();
+        rootAttributes.put("ome", attributes);
+        v3Root.setAttributes(rootAttributes);
       }
       else {
         final ZarrGroup root = ZarrGroup.create(getRootPath());
@@ -1732,8 +1736,6 @@ public class Converter implements Callable<Integer> {
       }
     }
     if (!noOMEMeta) {
-      Map<String, Object> attributes = new HashMap<String, Object>();
-
       // record the path to each series (multiscales) and the corresponding
       // series (OME-XML Image) index
       // using the index as the key would mean that the index is stored
@@ -1749,13 +1751,26 @@ public class Converter implements Callable<Integer> {
         }
         groups.add(seriesString);
       }
-      attributes.put("series", groups);
 
       if (getV3()) {
         Group v3OME = Group.create(v3Store.resolve("OME"));
+        Map<String, Object> attributes = v3OME.metadata.attributes;
+        Map<String, Object> omeAttributes = null;
+        if (attributes.containsKey("ome")) {
+          omeAttributes = (Map<String, Object>) attributes.get("ome");
+        }
+        else {
+          omeAttributes = new HashMap<String, Object>();
+        }
+        omeAttributes.put("series", groups);
+        omeAttributes.put("version", getNGFFVersion());
+        attributes.put("ome", omeAttributes);
+
         v3OME.setAttributes(attributes);
       }
       else {
+        Map<String, Object> attributes = new HashMap<String, Object>();
+        attributes.put("series", groups);
         Path metadataPath = getRootPath().resolve("OME");
         final ZarrGroup root = ZarrGroup.create(metadataPath);
         root.writeAttributes(attributes);
@@ -2927,7 +2942,6 @@ public class Converter implements Callable<Integer> {
     plateMap.put("rows", rows);
 
     plateMap.put("field_count", maxField + 1);
-    plateMap.put("version", getNGFFVersion());
 
     if (getV3()) {
       Group v3Group = Group.open(v3Store.resolve());
@@ -2944,6 +2958,7 @@ public class Converter implements Callable<Integer> {
       v3Group.setAttributes(attributes);
     }
     else {
+      plateMap.put("version", getNGFFVersion());
       Path rootPath = getRootPath();
       ZarrGroup root = ZarrGroup.open(rootPath);
       Map<String, Object> attributes = root.getAttributes();

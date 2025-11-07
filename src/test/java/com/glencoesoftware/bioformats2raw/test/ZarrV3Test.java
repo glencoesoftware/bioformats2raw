@@ -44,6 +44,13 @@ public class ZarrV3Test extends AbstractZarrTest {
   }
 
   @Override
+  void checkPlateDimensions(Map<String, Object> plate,
+    int rowCount, int colCount, int fieldCount)
+  {
+    checkPlateDimensions(plate, rowCount, colCount, fieldCount, false);
+  }
+
+  @Override
   void checkMultiscale(Map<String, Object> multiscale, String name) {
     assertEquals(name, multiscale.get("name"));
   }
@@ -58,12 +65,18 @@ public class ZarrV3Test extends AbstractZarrTest {
 
     FilesystemStore store = new FilesystemStore(output);
 
+    Group rootGroup = Group.open(store.resolve(""));
+    Map<String, Object> attrs = rootGroup.metadata.attributes;
+    Map<String, Object> omeAttrs = (Map<String, Object>) attrs.get("ome");
+    assertEquals(getNGFFVersion(), omeAttrs.get("version"));
+    assertEquals(3, omeAttrs.get("bioformats2raw.layout"));
+
     Array array = Array.open(store.resolve("0", "0"));
     assertArrayEquals(new long[] {1, 1, 1, 512, 512}, array.metadata.shape);
 
-    Group rootGroup = Group.open(store.resolve("0"));
-    Map<String, Object> attrs = rootGroup.metadata.attributes;
-    Map<String, Object> omeAttrs = (Map<String, Object>) attrs.get("ome");
+    rootGroup = Group.open(store.resolve("0"));
+    attrs = rootGroup.metadata.attributes;
+    omeAttrs = (Map<String, Object>) attrs.get("ome");
     assertEquals("0.5", omeAttrs.get("version"));
 
     List<Map<String, Object>> multiscales =
@@ -118,13 +131,17 @@ public class ZarrV3Test extends AbstractZarrTest {
 
     Group rootGroup = Group.open(store.resolve(""));
     Group omeGroup = Group.open(store.resolve("OME"));
-    List<String> groupMap =
-      (List<String>) omeGroup.metadata.attributes.get("series");
+    Map<String, Object> omeAttrs =
+      (Map<String, Object>) omeGroup.metadata.attributes.get("ome");
+    List<String> groupMap = (List<String>) omeAttrs.get("series");
+    assertEquals(getNGFFVersion(), omeAttrs.get("version"));
 
     checkPlateSeriesMetadata(groupMap, rowCount, colCount, fieldCount);
 
-    Map<String, Object> omeAttrs =
-      (Map<String, Object>) rootGroup.metadata.attributes.get("ome");
+    omeAttrs = (Map<String, Object>) rootGroup.metadata.attributes.get("ome");
+    assertEquals(getNGFFVersion(), omeAttrs.get("version"));
+    assertEquals(3, omeAttrs.get("bioformats2raw.layout"));
+
     Map<String, Object> plate = (Map<String, Object>) omeAttrs.get("plate");
     checkPlateDimensions(plate, rowCount, colCount, fieldCount);
 

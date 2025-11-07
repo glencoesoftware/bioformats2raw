@@ -65,6 +65,13 @@ public class ZarrTest extends AbstractZarrTest {
   }
 
   @Override
+  void checkPlateDimensions(Map<String, Object> plate,
+    int rowCount, int colCount, int fieldCount)
+  {
+    checkPlateDimensions(plate, rowCount, colCount, fieldCount, true);
+  }
+
+  @Override
   void checkMultiscale(Map<String, Object> multiscale, String name) {
     assertEquals(getNGFFVersion(), multiscale.get("version"));
     assertEquals(name, multiscale.get("name"));
