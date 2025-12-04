@@ -17,6 +17,7 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 import dev.zarr.zarrjava.ZarrException;
+import dev.zarr.zarrjava.core.Attributes;
 import dev.zarr.zarrjava.store.FilesystemStore;
 import dev.zarr.zarrjava.v3.Array;
 import dev.zarr.zarrjava.v3.ArrayMetadata;
@@ -66,17 +67,17 @@ public class ZarrV3Test extends AbstractZarrTest {
     FilesystemStore store = new FilesystemStore(output);
 
     Group rootGroup = Group.open(store.resolve(""));
-    Map<String, Object> attrs = rootGroup.metadata.attributes;
-    Map<String, Object> omeAttrs = (Map<String, Object>) attrs.get("ome");
+    Attributes attrs = rootGroup.metadata().attributes;
+    Attributes omeAttrs = attrs.getAttributes("ome");
     assertEquals(getNGFFVersion(), omeAttrs.get("version"));
     assertEquals(3, omeAttrs.get("bioformats2raw.layout"));
 
     Array array = Array.open(store.resolve("0", "0"));
-    assertArrayEquals(new long[] {1, 1, 1, 512, 512}, array.metadata.shape);
+    assertArrayEquals(new long[] {1, 1, 1, 512, 512}, array.metadata().shape);
 
     rootGroup = Group.open(store.resolve("0"));
-    attrs = rootGroup.metadata.attributes;
-    omeAttrs = (Map<String, Object>) attrs.get("ome");
+    attrs = rootGroup.metadata().attributes;
+    omeAttrs = attrs.getAttributes("ome");
     assertEquals("0.5", omeAttrs.get("version"));
 
     List<Map<String, Object>> multiscales =
@@ -131,18 +132,17 @@ public class ZarrV3Test extends AbstractZarrTest {
 
     Group rootGroup = Group.open(store.resolve(""));
     Group omeGroup = Group.open(store.resolve("OME"));
-    Map<String, Object> omeAttrs =
-      (Map<String, Object>) omeGroup.metadata.attributes.get("ome");
+    Attributes omeAttrs = omeGroup.metadata().attributes.getAttributes("ome");
     List<String> groupMap = (List<String>) omeAttrs.get("series");
     assertEquals(getNGFFVersion(), omeAttrs.get("version"));
 
     checkPlateSeriesMetadata(groupMap, rowCount, colCount, fieldCount);
 
-    omeAttrs = (Map<String, Object>) rootGroup.metadata.attributes.get("ome");
+    omeAttrs = rootGroup.metadata().attributes.getAttributes("ome");
     assertEquals(getNGFFVersion(), omeAttrs.get("version"));
     assertEquals(3, omeAttrs.get("bioformats2raw.layout"));
 
-    Map<String, Object> plate = (Map<String, Object>) omeAttrs.get("plate");
+    Attributes plate = omeAttrs.getAttributes("plate");
     checkPlateDimensions(plate, rowCount, colCount, fieldCount);
 
     long[] arrayShape = new long[] {1, 1, 1, 512, 512};
@@ -153,7 +153,7 @@ public class ZarrV3Test extends AbstractZarrTest {
             String.valueOf((char) ('A' + r)),
             String.valueOf(c + 1),
             String.valueOf(f), "0"));
-          assertArrayEquals(arrayShape, array.metadata.shape);
+          assertArrayEquals(arrayShape, array.metadata().shape);
         }
       }
     }
@@ -176,11 +176,11 @@ public class ZarrV3Test extends AbstractZarrTest {
     FilesystemStore store = new FilesystemStore(output);
     for (int i=0; i<names.length; i++) {
       Group z = Group.open(store.resolve(String.valueOf(i)));
-      Map<String, Object> attrs = z.metadata.attributes;
-      Map<String, Object> omeAttrs = (Map<String, Object>) attrs.get("ome");
-      Map<String, Object> omero = (Map<String, Object>) omeAttrs.get("omero");
+      Attributes attrs = z.metadata().attributes;
+      Attributes omeAttrs = attrs.getAttributes("ome");
+      Attributes omero = omeAttrs.getAttributes("omero");
 
-      Map<String, Object> rdefs = (Map<String, Object>) omero.get("rdefs");
+      Attributes rdefs = omero.getAttributes("rdefs");
       assertEquals(
         names[i].length == 1 ? "greyscale" : "color", rdefs.get("model"));
 
@@ -243,7 +243,7 @@ public class ZarrV3Test extends AbstractZarrTest {
     long[] arrayShape = new long[] {sizeT, sizeC, sizeZ, 512, 512};
     for (int s=0; s<seriesCount; s++) {
       Array array = Array.open(store.resolve(String.valueOf(s), "0"));
-      assertArrayEquals(arrayShape, array.metadata.shape);
+      assertArrayEquals(arrayShape, array.metadata().shape);
 
       checkSpecialPixels(s, sizeZ, sizeC, sizeT, shape, array);
     }
@@ -289,13 +289,13 @@ public class ZarrV3Test extends AbstractZarrTest {
 
     long[] arrayShape = new long[] {sizeT, sizeC, sizeZ, sizeY, sizeX};
     Array array = Array.open(store.resolve("0", "0"));
-    assertArrayEquals(arrayShape, array.metadata.shape);
+    assertArrayEquals(arrayShape, array.metadata().shape);
 
     int[] shardShape = new int[] {1, 1, z, y, x};
     int[] chunkShape = new int[] {1, 1, 1, 512, 512};
-    assertArrayEquals(shardShape, array.metadata.chunkShape());
+    assertArrayEquals(shardShape, array.metadata().chunkShape());
     Optional<Codec> shardingCodec =
-      ArrayMetadata.getShardingIndexedCodec(array.metadata.codecs);
+      ArrayMetadata.getShardingIndexedCodec(array.metadata().codecs);
     assertTrue(shardingCodec.isPresent());
     assertTrue(shardingCodec.get() instanceof ShardingIndexedCodec);
     ShardingIndexedCodec shardIndex =
@@ -325,9 +325,9 @@ public class ZarrV3Test extends AbstractZarrTest {
 
     long[] arrayShape = new long[] {1, 1, 1, sizeY, sizeX};
     Array array = Array.open(store.resolve("0", "0"));
-    assertArrayEquals(arrayShape, array.metadata.shape);
+    assertArrayEquals(arrayShape, array.metadata().shape);
     Optional<Codec> shardingCodec =
-      ArrayMetadata.getShardingIndexedCodec(array.metadata.codecs);
+      ArrayMetadata.getShardingIndexedCodec(array.metadata().codecs);
     assertFalse(shardingCodec.isPresent());
   }
 

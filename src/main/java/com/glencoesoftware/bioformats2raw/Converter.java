@@ -106,6 +106,7 @@ import com.bc.zarr.ZarrGroup;
 // zarr-java: v3
 
 import dev.zarr.zarrjava.ZarrException;
+import dev.zarr.zarrjava.core.Attributes;
 import dev.zarr.zarrjava.store.FilesystemStore;
 import dev.zarr.zarrjava.store.StoreHandle;
 import dev.zarr.zarrjava.utils.Utils;
@@ -1726,7 +1727,7 @@ public class Converter implements Callable<Integer> {
         attributes.put("version", getNGFFVersion());
 
         Group v3Root = Group.create(v3Store.resolve());
-        Map<String, Object> rootAttributes = new HashMap<String, Object>();
+        Attributes rootAttributes = new Attributes();
         rootAttributes.put("ome", attributes);
         v3Root.setAttributes(rootAttributes);
       }
@@ -1754,13 +1755,13 @@ public class Converter implements Callable<Integer> {
 
       if (getV3()) {
         Group v3OME = Group.create(v3Store.resolve("OME"));
-        Map<String, Object> attributes = v3OME.metadata.attributes;
-        Map<String, Object> omeAttributes = null;
+        Attributes attributes = v3OME.metadata().attributes;
+        Attributes omeAttributes = null;
         if (attributes.containsKey("ome")) {
-          omeAttributes = (Map<String, Object>) attributes.get("ome");
+          omeAttributes = attributes.getAttributes("ome");
         }
         else {
-          omeAttributes = new HashMap<String, Object>();
+          omeAttributes = new Attributes();
         }
         omeAttributes.put("series", groups);
         omeAttributes.put("version", getNGFFVersion());
@@ -2083,7 +2084,7 @@ public class Converter implements Callable<Integer> {
         throws ZarrException
   {
     final ucar.ma2.Array pixels = ucar.ma2.Array.factory(
-      array.metadata.dataType.getMA2DataType(), shape, tile);
+      array.metadata().dataType.getMA2DataType(), shape, tile);
     array.write(Utils.toLongArray(offset), pixels);
   }
 
@@ -2169,11 +2170,11 @@ public class Converter implements Callable<Integer> {
 
     if (getV3()) {
       v3Array = Array.open(v3Store.resolve(pathName));
-      dimensions = Utils.toIntArray(v3Array.metadata.shape);
-      blockSizes = v3Array.metadata.chunkShape();
+      dimensions = Utils.toIntArray(v3Array.metadata().shape);
+      blockSizes = v3Array.metadata().chunkShape();
 
       Optional<Codec> shardingCodec =
-        ArrayMetadata.getShardingIndexedCodec(v3Array.metadata.codecs);
+        ArrayMetadata.getShardingIndexedCodec(v3Array.metadata().codecs);
       if (shardingCodec.isPresent() &&
         shardingCodec.get() instanceof ShardingIndexedCodec)
       {
@@ -2884,7 +2885,7 @@ public class Converter implements Callable<Integer> {
             Group rowGroup = Group.create(v3Store.resolve(rowPath));
             Group columnGroup =
               Group.create(v3Store.resolve(rowPath, columnPath));
-            Map<String, Object> omeAttrs = new HashMap<String, Object>();
+            Attributes omeAttrs = new Attributes();
             omeAttrs.put("ome", columnAttrs);
             columnGroup.setAttributes(omeAttrs);
           }
@@ -2945,13 +2946,13 @@ public class Converter implements Callable<Integer> {
 
     if (getV3()) {
       Group v3Group = Group.open(v3Store.resolve());
-      Map<String, Object> attributes = v3Group.metadata.attributes;
-      Map<String, Object> omeAttributes = null;
+      Attributes attributes = v3Group.metadata().attributes;
+      Attributes omeAttributes = null;
       if (attributes.containsKey("ome")) {
-        omeAttributes = (Map<String, Object>) attributes.get("ome");
+        omeAttributes = attributes.getAttributes("ome");
       }
       else {
-        omeAttributes = new HashMap<String, Object>();
+        omeAttributes = new Attributes();
       }
       omeAttributes.put("plate", plateMap);
       attributes.put("ome", omeAttributes);
@@ -3241,7 +3242,7 @@ public class Converter implements Callable<Integer> {
     if (getV3()) {
       attributes.put("ome", omeAttributes);
       Group v3Group = Group.create(v3Store.resolve(seriesString));
-      v3Group.setAttributes(attributes);
+      v3Group.setAttributes(new Attributes(attributes));
     }
     else {
       Path subGroupPath = getRootPath().resolve(seriesString);
