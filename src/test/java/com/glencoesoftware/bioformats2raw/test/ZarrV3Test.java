@@ -62,7 +62,7 @@ public class ZarrV3Test extends AbstractZarrTest {
   @Test
   public void testDefault() throws Exception {
     input = fake();
-    assertTool("--v3");
+    assertTool("--ngff-version", getNGFFVersion());
 
     FilesystemStore store = new FilesystemStore(output);
 
@@ -126,7 +126,7 @@ public class ZarrV3Test extends AbstractZarrTest {
       "plateRows", String.valueOf(rowCount),
       "plateCols", String.valueOf(colCount),
       "fields", String.valueOf(fieldCount));
-    assertTool("--v3");
+    assertTool("--ngff-version", getNGFFVersion());
 
     FilesystemStore store = new FilesystemStore(output);
 
@@ -168,7 +168,7 @@ public class ZarrV3Test extends AbstractZarrTest {
   @Test
   public void testOMEROMetadata() throws Exception {
     input = getTestFile("colors.ome.xml");
-    assertTool("--v3");
+    assertTool("--ngff-version", getNGFFVersion());
 
     String[][] names = {{"orange"}, {"green", "blue"}, {"blue"}};
     String[][] colors = {{"FF7F00"}, {"00FF00", "0000FF"}, {"808080"}};
@@ -204,7 +204,7 @@ public class ZarrV3Test extends AbstractZarrTest {
   @Test
   public void testNoRootGroupOption() throws Exception {
     input = fake();
-    assertTool("--no-root-group", "--v3");
+    assertTool("--no-root-group", "--ngff-version", getNGFFVersion());
 
     assertFalse(Files.exists(output.resolve("zarr.json")));
   }
@@ -216,7 +216,7 @@ public class ZarrV3Test extends AbstractZarrTest {
   @Test
   public void testNoOMEOption() throws Exception {
     input = fake();
-    assertTool("--no-ome-meta-export", "--v3");
+    assertTool("--no-ome-meta-export", "--ngff-version", getNGFFVersion());
 
     assertTrue(
       !Files.exists(output.resolve("OME").resolve("METADATA.ome.xml")));
@@ -235,7 +235,7 @@ public class ZarrV3Test extends AbstractZarrTest {
       "sizeC", String.valueOf(sizeC),
       "sizeZ", String.valueOf(sizeZ),
       "sizeT", String.valueOf(sizeT));
-    assertTool("--v3");
+    assertTool("--ngff-version", getNGFFVersion());
 
     FilesystemStore store = new FilesystemStore(output);
 
@@ -278,7 +278,7 @@ public class ZarrV3Test extends AbstractZarrTest {
       "sizeC", String.valueOf(sizeC),
       "sizeZ", String.valueOf(sizeZ),
       "sizeT", String.valueOf(sizeT));
-    assertTool("--v3",
+    assertTool("--ngff-version", getNGFFVersion(),
       "--tile-width", "512",
       "--tile-height", "512",
       "--shard-width", String.valueOf(x),
@@ -315,7 +315,7 @@ public class ZarrV3Test extends AbstractZarrTest {
     int sizeY = 3192;
     input = fake("sizeX", String.valueOf(sizeX),
       "sizeY", String.valueOf(sizeY));
-    assertTool("--v3",
+    assertTool("--ngff-version", getNGFFVersion(),
       "--tile-width", "512",
       "--tile-height", "512",
       "--shard-width", String.valueOf(sizeX),

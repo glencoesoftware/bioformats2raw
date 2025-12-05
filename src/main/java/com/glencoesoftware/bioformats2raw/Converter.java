@@ -141,10 +141,6 @@ public class Converter implements Callable<Integer> {
   /** Version of the bioformats2raw layout. */
   public static final Integer LAYOUT = 3;
 
-  /** NGFF specification version.*/
-  public static final String NGFF_VERSION = "0.4";
-  public static final String NGFF_VERSION_V3 = "0.5";
-
   private volatile Path inputPath;
   private volatile String outputLocation;
 
@@ -168,6 +164,7 @@ public class Converter implements Callable<Integer> {
   private volatile boolean help = false;
   private volatile boolean originalMetadata = true;
 
+  private volatile SupportedVersions ngffVersion = SupportedVersions.NGFF_04;
   private volatile boolean v3 = false;
   private volatile FilesystemStore v3Store = null;
 
@@ -691,7 +688,7 @@ public class Converter implements Callable<Integer> {
 
   /**
    * Configure whether or not the output Zarr is written as nested,
-   * using the '/' chunk separator.
+   * using the '/' chunk separator. Non-nested storage implies NGFF 0.1.
    *
    * @param unnested false if nested chunk storage should be used
    */
@@ -703,6 +700,9 @@ public class Converter implements Callable<Integer> {
   )
   public void setUnnested(boolean unnested) {
     nested = !unnested;
+    if (!nested) {
+      setNGFFVersion(SupportedVersions.NGFF_01);
+    }
   }
 
   /**
@@ -764,18 +764,23 @@ public class Converter implements Callable<Integer> {
   }
 
   /**
-   * Set whether or not to use Zarr v3.
-   * By default, v2 is used.
+   * Set NGFF version to write. Impacts whether Zarr v2 or v3 is used.
+   * By default, NGFF 0.4 and Zarr v2.
    *
-   * @param useV3 true if Zarr v3 should be written
+   * @param version NGFF version
    */
   @Option(
-          names = "--v3",
-          description = "Write Zarr v3 data",
-          defaultValue = "false"
+          names = "--ngff-version",
+          description = "Write the specified NGFF version, if supported",
+          defaultValue = "0.4"
   )
-  public void setV3(boolean useV3) {
-    v3 = useV3;
+  public void setNGFFVersion(SupportedVersions version) {
+    if (!getNested() && version != SupportedVersions.NGFF_01) {
+      LOGGER.warn("Cannot use unnested storage with version {}", version);
+    }
+    else {
+      ngffVersion = version;
+    }
   }
 
   /**
@@ -1226,10 +1231,17 @@ public class Converter implements Callable<Integer> {
   }
 
   /**
+   * @return NGFF version to write
+   */
+  public SupportedVersions getNGFFVersion() {
+    return ngffVersion;
+  }
+
+  /**
    * @return true if Zarr v3 data should be written
    */
   public boolean getV3() {
-    return v3;
+    return getNGFFVersion() == SupportedVersions.NGFF_05;
   }
 
   /**
@@ -1700,7 +1712,7 @@ public class Converter implements Callable<Integer> {
       attributes.put("bioformats2raw.layout", LAYOUT);
 
       if (getV3()) {
-        attributes.put("version", getNGFFVersion());
+        attributes.put("version", getNGFFVersion().toString());
 
         Group v3Root = Group.create(v3Store.resolve());
         Attributes rootAttributes = new Attributes();
@@ -1740,7 +1752,7 @@ public class Converter implements Callable<Integer> {
           omeAttributes = new Attributes();
         }
         omeAttributes.put("series", groups);
-        omeAttributes.put("version", getNGFFVersion());
+        omeAttributes.put("version", getNGFFVersion().toString());
         attributes.put("ome", omeAttributes);
 
         v3OME.setAttributes(attributes);
@@ -2928,7 +2940,7 @@ public class Converter implements Callable<Integer> {
       v3Group.setAttributes(attributes);
     }
     else {
-      plateMap.put("version", getNGFFVersion());
+      plateMap.put("version", getNGFFVersion().toString());
       Path rootPath = getRootPath();
       ZarrGroup root = ZarrGroup.open(rootPath);
       Map<String, Object> attributes = root.getAttributes();
@@ -2984,7 +2996,7 @@ public class Converter implements Callable<Integer> {
     }
     multiscale.put("metadata", metadata);
     if (!getV3()) {
-      multiscale.put("version", getNGFFVersion());
+      multiscale.put("version", getNGFFVersion().toString());
     }
     multiscales.add(multiscale);
 
@@ -3109,7 +3121,7 @@ public class Converter implements Callable<Integer> {
     Map<String, Object> attributes = new HashMap<String, Object>();
     Map<String, Object> omeAttributes = new HashMap<String, Object>();
     if (getV3()) {
-      omeAttributes.put("version", getNGFFVersion());
+      omeAttributes.put("version", getNGFFVersion().toString());
       omeAttributes.put("multiscales", multiscales);
     }
     else {
@@ -3492,13 +3504,6 @@ public class Converter implements Callable<Integer> {
       height /= PYRAMID_SCALE;
     }
     return resolutions;
-  }
-
-  private String getNGFFVersion() {
-    if (getV3()) {
-      return NGFF_VERSION_V3;
-    }
-    return getNested() ? NGFF_VERSION : "0.1";
   }
 
   /**
