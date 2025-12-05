@@ -310,6 +310,59 @@ public class ZarrTest extends AbstractZarrTest {
   }
 
   /**
+   * Test that physical sizes with invalid units are not saved in
+   * axes metadata.
+   */
+  @Test
+  public void testInvalidUnitPhysicalSizes() throws Exception {
+    input = fake("physicalSizeX", "1pixel",
+      "physicalSizeY", "0.5thou",
+      "physicalSizeZ", "2dam");
+    assertTool();
+
+    List<Map<String, Object>> multiscales = getMultiscales("0");
+    assertEquals(1, multiscales.size());
+    Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "image");
+    List<Map<String, Object>> axes =
+      (List<Map<String, Object>>) multiscale.get("axes");
+    checkAxes(axes, "TCZYX",
+      new String[] {null, null, null, null, null});
+
+    List<Map<String, Object>> datasets =
+      (List<Map<String, Object>>) multiscale.get("datasets");
+    assertEquals(2, datasets.size());
+
+    for (int r=0; r<datasets.size(); r++) {
+      Map<String, Object> dataset = datasets.get(r);
+      List<Map<String, Object>> transforms =
+        (List<Map<String, Object>>) dataset.get("coordinateTransformations");
+      assertEquals(1, transforms.size());
+      Map<String, Object> scale = transforms.get(0);
+      assertEquals("scale", scale.get("type"));
+      List<Double> axisValues = (List<Double>) scale.get("scale");
+
+      assertEquals(5, axisValues.size());
+      double factor = Math.pow(2, r);
+      // X and Y are the only dimensions that are downsampled,
+      // so the TCZ physical scales remain the same across all resolutions
+      assertEquals(axisValues, Arrays.asList(new Double[] {
+        1.0, 1.0, 2.0, 0.5 * factor, factor}));
+    }
+
+    // Check dimensions and special pixels
+    ZarrGroup z = ZarrGroup.open(output.toString());
+    ZarrArray series0 = z.openArray("0/0");
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getShape());
+    assertArrayEquals(new int[] {1, 1, 1, 512, 512}, series0.getChunks());
+    int[] shape = new int[] {1, 1, 1, 512, 512};
+    byte[] tile = new byte[512 * 512];
+    series0.read(tile, shape);
+    int[] seriesPlaneNumberZCT = FakeReader.readSpecialPixels(tile);
+    assertArrayEquals(new int[] {0, 0, 0, 0, 0}, seriesPlaneNumberZCT);
+  }
+
+  /**
    * Test using a different tile size from the default (1024).
    */
   @Test

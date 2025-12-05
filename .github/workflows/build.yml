@@ -9,6 +9,8 @@ on:
 
 jobs:
   build:
+    permissions:
+      contents: read
     strategy:
       matrix:
         java: [8, 11, 17, 21]
@@ -42,3 +44,21 @@ jobs:
         if: github.event_name != 'pull_request' && matrix.java == 11
         run: |
           ./gradlew -PArtifactoryUserName=${ArtifactoryUserName} -PArtifactoryPassword=${ArtifactoryPassword} publish
+  release:
+    permissions:
+      contents: write
+    if: startsWith(github.ref, 'refs/tags')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download artifacts from build
+        uses: actions/download-artifact@v4
+        with:
+          name: bioformats2raw 11
+      - name: List artifacts
+        run: ls -R
+      - name: Create a GitHub release
+        run: gh release create --generate-notes "${GITHUB_REF#refs/tags/}" bioformats2raw-*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
