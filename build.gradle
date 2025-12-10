@@ -8,7 +8,9 @@ plugins {
 group = 'com.glencoesoftware'
 version = '0.12.0-SNAPSHOT'
 
-mainClassName = 'com.glencoesoftware.bioformats2raw.Converter'
+application {
+  mainClassName = 'com.glencoesoftware.bioformats2raw.Converter'
+}
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
