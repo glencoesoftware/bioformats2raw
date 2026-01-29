@@ -9,6 +9,7 @@ package com.glencoesoftware.bioformats2raw.test;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -20,14 +21,20 @@ import java.util.Map;
 
 import loci.common.LogbackTools;
 import loci.common.services.ServiceFactory;
+import loci.formats.FormatTools;
+import loci.formats.in.FakeReader;
 import loci.formats.services.OMEXMLService;
 import ome.xml.model.OME;
 
 import com.glencoesoftware.bioformats2raw.Converter;
+import dev.zarr.zarrjava.ZarrException;
+import dev.zarr.zarrjava.core.Array;
+import dev.zarr.zarrjava.store.FilesystemStore;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -37,6 +44,7 @@ public abstract class AbstractZarrTest {
   Path input;
   Path output;
   Converter converter;
+  FilesystemStore store;
 
   /**
    * Set logging to warn before all methods.
@@ -47,6 +55,7 @@ public abstract class AbstractZarrTest {
   public void setup(@TempDir Path tmp) throws Exception {
     output = tmp.resolve("test");
     LogbackTools.setRootLevel("warn");
+    store = null;
   }
 
   /**
@@ -71,6 +80,7 @@ public abstract class AbstractZarrTest {
     catch (Throwable t) {
       throw new RuntimeException(t);
     }
+    store = new FilesystemStore(output);
   }
 
   static Path fake(String...args) {
@@ -234,6 +244,83 @@ public abstract class AbstractZarrTest {
         String rowName = rows.get(row).get("name").toString();
         String colName = columns.get(col).get("name").toString();
         assertEquals(rowName + "/" + colName, wells.get(well).get("path"));
+      }
+    }
+  }
+
+  /**
+   * Check that FakeReader-defined special pixels are as expected
+   * in the given array. Assumes uint8 pixel data.
+   *
+   * @param s series index
+   * @param sizeZ total Z size, or 0 if the Z axis is omitted
+   * @param sizeC total C size, or 0 if the C axis is omitted
+   * @param sizeT total T size, or 0 if the T axis is omitted
+   * @param shape shape of tile to read
+   * @param array array to check
+   * @throws ZarrException
+   */
+  public void checkSpecialPixels(int s, int sizeZ, int sizeC, int sizeT,
+    int[] shape, Array array)
+    throws ZarrException
+  {
+    checkSpecialPixels(s, sizeZ, sizeC, sizeT, shape, array, FormatTools.UINT8);
+  }
+
+  /**
+   * Check that FakeReader-defined special pixels are as expected
+   * in the given array.
+   *
+   * @param s series index
+   * @param sizeZ total Z size, or 0 if the Z axis is omitted
+   * @param sizeC total C size, or 0 if the C axis is omitted
+   * @param sizeT total T size, or 0 if the T axis is omitted
+   * @param shape shape of tile to read
+   * @param array array to check
+   * @param pixelType pixel type as defined in FormatTools
+   * @throws ZarrException
+   */
+  public void checkSpecialPixels(int s, int sizeZ, int sizeC, int sizeT,
+    int[] shape, Array array, int pixelType)
+    throws ZarrException
+  {
+    boolean noZ = sizeZ == 0;
+    boolean noC = sizeC == 0;
+    boolean noT = sizeT == 0;
+
+    int plane = 0;
+    for (int t=0; t<(int) Math.max(1, sizeT); t++) {
+      for (int c=0; c<(int) Math.max(1, sizeC); c++) {
+        for (int z=0; z<(int) Math.max(1, sizeZ); z++, plane++) {
+          long[] offset = new long[shape.length];
+          int nextPointer = 0;
+          if (!noT) {
+            offset[nextPointer++] = t;
+          }
+          if (!noC) {
+            offset[nextPointer++] = c;
+          }
+          if (!noZ) {
+            offset[nextPointer++] = z;
+          }
+          ucar.ma2.Array tile = array.read(offset, shape);
+          ByteBuffer buf = tile.getDataAsByteBuffer();
+          byte[] pixels = new byte[buf.remaining()];
+          buf.get(pixels);
+          int bpp = FormatTools.getBytesPerPixel(pixelType);
+          assertEquals(pixels.length,
+            shape[shape.length - 2] * shape[shape.length - 1] * bpp);
+
+          int[] specialPixels =
+            FakeReader.readSpecialPixels(pixels, pixelType, false);
+          int[] expected = new int[] {s, plane, z, c, t};
+          if (pixelType == FormatTools.UINT8) {
+            for (int p=0; p<expected.length; p++) {
+              expected[p] %= 256;
+            }
+          }
+          assertArrayEquals(expected, specialPixels);
+        }
       }
     }
   }
