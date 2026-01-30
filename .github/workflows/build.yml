@@ -13,7 +13,7 @@ jobs:
       contents: read
     strategy:
       matrix:
-        java: [11, 17, 21, 25]
+        java: [17, 21, 25]
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     env:
@@ -32,13 +32,7 @@ jobs:
         run: |
           sudo apt-get install -y libblosc1
       - name: Run with latest Gradle
-        if: matrix.java == 25
-        run: |
-          wget https://services.gradle.org/distributions/gradle-9.2.1-bin.zip
-          unzip gradle-9.2.1-bin.zip
-          ./gradle-9.2.1/bin/gradle ${{ env.gradle_commands }}
       - name: Run commands
-        if: matrix.java != 25
         run: |
           ./gradlew ${{ env.gradle_commands }}
       - name: Upload artifacts
@@ -48,7 +42,7 @@ jobs:
           path: build/distributions/*.zip
           retention-days: 30
       - name: Publish artifacts
-        if: github.event_name != 'pull_request' && matrix.java == 11
+        if: github.event_name != 'pull_request' && matrix.java == 17
         run: |
           ./gradlew -PArtifactoryUserName=${ArtifactoryUserName} -PArtifactoryPassword=${ArtifactoryPassword} publish
   release:
@@ -62,7 +56,7 @@ jobs:
       - name: Download artifacts from build
         uses: actions/download-artifact@v4
         with:
-          name: bioformats2raw 11
+          name: bioformats2raw 17
       - name: List artifacts
         run: ls -R
       - name: Create a GitHub release
