@@ -31,7 +31,6 @@ jobs:
       - name: Install libraries
         run: |
           sudo apt-get install -y libblosc1
-      - name: Run with latest Gradle
       - name: Run commands
         run: |
           ./gradlew ${{ env.gradle_commands }}
