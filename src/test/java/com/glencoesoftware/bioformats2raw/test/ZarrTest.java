@@ -1124,7 +1124,7 @@ public class ZarrTest extends AbstractZarrTest {
     assertArrayEquals(
       new int[] {1, 1, 1, 512, 512}, series0.metadata().chunkShape());
     // 12 series + OME group + .zgroup + .zattrs
-    assertEquals(15, store.resolve().list().count());
+    assertEquals(15, store.listChildren().count());
 
     // Check OME metadata
     OME ome = getOMEMetadata();

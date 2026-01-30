@@ -2798,8 +2798,8 @@ public class Converter implements Callable<Integer> {
     plateMap.put("field_count", maxField + 1);
 
     Group group = openGroup();
+    Attributes attributes = group.metadata().attributes();
     if (getV3()) {
-      Attributes attributes = group.metadata().attributes();
       Attributes omeAttributes = null;
       if (attributes.containsKey("ome")) {
         omeAttributes = attributes.getAttributes("ome");
@@ -2813,11 +2813,9 @@ public class Converter implements Callable<Integer> {
       ((dev.zarr.zarrjava.v3.Group) group).setAttributes(attributes);
     }
     else {
-      // TODO: this does not write the plate attributes
-      // there doesn't seem to be a way to update attributes
-      // for existing v2 groups with zarr-java 0.0.9
       plateMap.put("version", getNGFFVersion().toString());
-      group.metadata().attributes().put("plate", plateMap);
+      attributes.put("plate", plateMap);
+      ((dev.zarr.zarrjava.v2.Group) group).setAttributes(attributes);
     }
   }
 
