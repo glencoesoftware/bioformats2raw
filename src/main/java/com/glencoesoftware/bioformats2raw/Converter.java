@@ -2544,12 +2544,25 @@ public class Converter implements Callable<Integer> {
             .withChunks(chunkSizes)
             .withDataType(ZarrTypes.getZarrType(pixelType))
             .withDimensionSeparator(getDimensionSeparator());
-        // TODO: respect compression properties, if any
+
+        // currently uses defaults from jzarr, for easier
+        // comparison with old versions
         if (compressionType == ZarrCompression.blosc) {
-          builder = builder.withBloscCompressor();
+          String cname =
+            compressionProperties.getOrDefault("cname", "lz4").toString();
+          int clevel = Integer.parseInt(
+            compressionProperties.getOrDefault("clevel", "5").toString());
+          int blocksize = Integer.parseInt(
+            compressionProperties.getOrDefault("blocksize", "0").toString());
+          String shuffle = compressionProperties.getOrDefault(
+            "shuffle", "byteshuffle").toString();
+          builder =
+            builder.withBloscCompressor(cname, shuffle, clevel, blocksize);
         }
         else if (compressionType == ZarrCompression.zlib) {
-          builder = builder.withZlibCompressor();
+          int level = Integer.parseInt(
+            compressionProperties.getOrDefault("level", "1").toString());
+          builder = builder.withZlibCompressor(level);
         }
 
         dev.zarr.zarrjava.v2.Array.create(handle, builder.build());
