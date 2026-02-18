@@ -7,8 +7,6 @@
  */
 package com.glencoesoftware.bioformats2raw.test;
 
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.List;
@@ -16,16 +14,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
-import dev.zarr.zarrjava.ZarrException;
 import dev.zarr.zarrjava.core.Attributes;
-import dev.zarr.zarrjava.store.FilesystemStore;
 import dev.zarr.zarrjava.v3.Array;
 import dev.zarr.zarrjava.v3.ArrayMetadata;
 import dev.zarr.zarrjava.v3.Group;
 import dev.zarr.zarrjava.v3.codec.Codec;
 import dev.zarr.zarrjava.v3.codec.core.ShardingIndexedCodec;
 
-import loci.formats.in.FakeReader;
 import ome.xml.model.OME;
 
 import org.junit.jupiter.api.Test;
@@ -63,8 +58,6 @@ public class ZarrV3Test extends AbstractZarrTest {
   public void testDefault() throws Exception {
     input = fake();
     assertTool("--ngff-version", getNGFFVersion());
-
-    FilesystemStore store = new FilesystemStore(output);
 
     Group rootGroup = Group.open(store.resolve(""));
     Attributes attrs = rootGroup.metadata().attributes;
@@ -128,8 +121,6 @@ public class ZarrV3Test extends AbstractZarrTest {
       "fields", String.valueOf(fieldCount));
     assertTool("--ngff-version", getNGFFVersion());
 
-    FilesystemStore store = new FilesystemStore(output);
-
     Group rootGroup = Group.open(store.resolve(""));
     Group omeGroup = Group.open(store.resolve("OME"));
     Attributes omeAttrs = omeGroup.metadata().attributes.getAttributes("ome");
@@ -173,7 +164,6 @@ public class ZarrV3Test extends AbstractZarrTest {
     String[][] names = {{"orange"}, {"green", "blue"}, {"blue"}};
     String[][] colors = {{"FF7F00"}, {"00FF00", "0000FF"}, {"808080"}};
 
-    FilesystemStore store = new FilesystemStore(output);
     for (int i=0; i<names.length; i++) {
       Group z = Group.open(store.resolve(String.valueOf(i)));
       Attributes attrs = z.metadata().attributes;
@@ -237,8 +227,6 @@ public class ZarrV3Test extends AbstractZarrTest {
       "sizeT", String.valueOf(sizeT));
     assertTool("--ngff-version", getNGFFVersion());
 
-    FilesystemStore store = new FilesystemStore(output);
-
     int[] shape = new int[] {1, 1, 1, 512, 512};
     long[] arrayShape = new long[] {sizeT, sizeC, sizeZ, 512, 512};
     for (int s=0; s<seriesCount; s++) {
@@ -285,8 +273,6 @@ public class ZarrV3Test extends AbstractZarrTest {
       "--shard-height", String.valueOf(y),
       "--shard-depth", String.valueOf(z));
 
-    FilesystemStore store = new FilesystemStore(output);
-
     long[] arrayShape = new long[] {sizeT, sizeC, sizeZ, sizeY, sizeX};
     Array array = Array.open(store.resolve("0", "0"));
     assertArrayEquals(arrayShape, array.metadata().shape);
@@ -321,36 +307,12 @@ public class ZarrV3Test extends AbstractZarrTest {
       "--shard-width", String.valueOf(sizeX),
       "--shard-height", String.valueOf(sizeY));
 
-    FilesystemStore store = new FilesystemStore(output);
-
     long[] arrayShape = new long[] {1, 1, 1, sizeY, sizeX};
     Array array = Array.open(store.resolve("0", "0"));
     assertArrayEquals(arrayShape, array.metadata().shape);
     Optional<Codec> shardingCodec =
       ArrayMetadata.getShardingIndexedCodec(array.metadata().codecs);
     assertFalse(shardingCodec.isPresent());
-  }
-
-  void checkSpecialPixels(int s, int sizeZ, int sizeC, int sizeT,
-    int[] shape, Array array)
-    throws ZarrException
-  {
-    int plane = 0;
-    for (int t=0; t<sizeT; t++) {
-      for (int c=0; c<sizeC; c++) {
-        for (int z=0; z<sizeZ; z++, plane++) {
-          long[] offset = new long[] {t, c, z, 0, 0};
-          ucar.ma2.Array tile = array.read(offset, shape);
-          ByteBuffer buf = tile.getDataAsByteBuffer(ByteOrder.BIG_ENDIAN);
-          byte[] pixels = new byte[buf.remaining()];
-          buf.get(pixels);
-          assertEquals(pixels.length, shape[3] * shape[4]);
-
-          int[] specialPixels = FakeReader.readSpecialPixels(pixels);
-          assertArrayEquals(new int[] {s, plane, z, c, t}, specialPixels);
-        }
-      }
-    }
   }
 
 }

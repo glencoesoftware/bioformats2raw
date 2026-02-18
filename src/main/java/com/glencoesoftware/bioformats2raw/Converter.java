@@ -34,7 +34,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.IntStream;
 
 import loci.common.Constants;
 import loci.common.Region;
@@ -94,25 +93,16 @@ import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 import ucar.ma2.InvalidRangeException;
 
-// jzarr: v2
-
-import com.bc.zarr.ArrayParams;
-import com.bc.zarr.CompressorFactory;
-import com.bc.zarr.DataType;
-import com.bc.zarr.DimensionSeparator;
-import com.bc.zarr.ZarrArray;
-import com.bc.zarr.ZarrGroup;
-
-// zarr-java: v3
-
 import dev.zarr.zarrjava.ZarrException;
+import dev.zarr.zarrjava.core.Array;
 import dev.zarr.zarrjava.core.Attributes;
+import dev.zarr.zarrjava.core.Group;
+import dev.zarr.zarrjava.core.chunkkeyencoding.Separator;
 import dev.zarr.zarrjava.store.FilesystemStore;
 import dev.zarr.zarrjava.store.StoreHandle;
 import dev.zarr.zarrjava.utils.Utils;
-import dev.zarr.zarrjava.v3.Array;
+
 import dev.zarr.zarrjava.v3.ArrayMetadata;
-import dev.zarr.zarrjava.v3.Group;
 import dev.zarr.zarrjava.v3.codec.Codec;
 import dev.zarr.zarrjava.v3.codec.CodecBuilder;
 import dev.zarr.zarrjava.v3.codec.core.ShardingIndexedCodec;
@@ -184,7 +174,7 @@ public class Converter implements Callable<Integer> {
 
   private volatile SupportedVersions ngffVersion = SupportedVersions.NGFF_04;
   private volatile boolean v3 = false;
-  private volatile FilesystemStore v3Store = null;
+  private volatile FilesystemStore store = null;
 
   private volatile int maxWorkers;
   private volatile int maxCachedTiles;
@@ -637,15 +627,13 @@ public class Converter implements Callable<Integer> {
   }
 
   /**
-   * Compression-specific options as defined by jzarr.
+   * Compression-specific options as defined by zarr-java.
    *
    * @param properties compression properties
    */
   @Option(
           names = {"--compression-properties"},
-          description = "Properties for the chosen compression (see " +
-            "https://jzarr.readthedocs.io/en/latest/tutorial.html#compressors" +
-            " )",
+          description = "Properties for the chosen compression",
           defaultValue = Option.NULL_VALUE
   )
   public void setCompressionProperties(Map<String, Object> properties) {
@@ -1720,26 +1708,25 @@ public class Converter implements Callable<Integer> {
   }
 
   private void writeZarrMetadata() throws IOException, ZarrException {
-    if (getV3() && v3Store == null) {
-      v3Store = new FilesystemStore(getRootPath());
+    if (store == null) {
+      store = new FilesystemStore(getRootPath());
     }
 
     // fileset level metadata
     if (!noRootGroup) {
-      Map<String, Object> attributes = new HashMap<String, Object>();
+      Attributes attributes = new Attributes();
       attributes.put("bioformats2raw.layout", LAYOUT);
-
       if (getV3()) {
+        Group root = createGroup("");
         attributes.put("version", getNGFFVersion().toString());
-
-        Group v3Root = Group.create(v3Store.resolve());
         Attributes rootAttributes = new Attributes();
         rootAttributes.put("ome", attributes);
-        v3Root.setAttributes(rootAttributes);
+
+        ((dev.zarr.zarrjava.v3.Group) root).setAttributes(rootAttributes);
       }
       else {
-        final ZarrGroup root = ZarrGroup.create(getRootPath());
-        root.writeAttributes(attributes);
+        dev.zarr.zarrjava.v2.Group root =
+          dev.zarr.zarrjava.v2.Group.create(store.resolve(), attributes);
       }
     }
     if (!noOMEMeta) {
@@ -1759,28 +1746,23 @@ public class Converter implements Callable<Integer> {
         groups.add(seriesString);
       }
 
+      Attributes omeAttributes = new Attributes();
       if (getV3()) {
-        Group v3OME = Group.create(v3Store.resolve("OME"));
-        Attributes attributes = v3OME.metadata().attributes;
-        Attributes omeAttributes = null;
+        Group omeRoot = createGroup("OME");
+        Attributes attributes = omeRoot.metadata().attributes();
         if (attributes.containsKey("ome")) {
           omeAttributes = attributes.getAttributes("ome");
-        }
-        else {
-          omeAttributes = new Attributes();
         }
         omeAttributes.put("series", groups);
         omeAttributes.put("version", getNGFFVersion().toString());
         attributes.put("ome", omeAttributes);
-
-        v3OME.setAttributes(attributes);
+        ((dev.zarr.zarrjava.v3.Group) omeRoot).setAttributes(attributes);
       }
       else {
-        Map<String, Object> attributes = new HashMap<String, Object>();
-        attributes.put("series", groups);
-        Path metadataPath = getRootPath().resolve("OME");
-        final ZarrGroup root = ZarrGroup.create(metadataPath);
-        root.writeAttributes(attributes);
+        omeAttributes.put("series", groups);
+        dev.zarr.zarrjava.v2.Group omeRoot =
+          dev.zarr.zarrjava.v2.Group.create(store.resolve("OME"),
+          omeAttributes);
       }
     }
   }
@@ -1982,7 +1964,7 @@ public class Converter implements Callable<Integer> {
   }
 
   /**
-   * Read tile as bytes from typed Zarr v3 array.
+   * Read tile as bytes from typed Zarr array.
    * @param array Zarr array to read from
    * @param shape array describing the number of elements in each dimension to
    * be read
@@ -1991,73 +1973,18 @@ public class Converter implements Callable<Integer> {
    * @return tile data as bytes of size <code>shape * bytesPerPixel</code>
    * read from <code>offset</code>.
    */
-  public static byte[] readAsBytesV3(Array array, int[] shape, int[] offset)
+  public static byte[] readAsBytes(Array array, int[] shape, int[] offset)
     throws ZarrException
   {
     ucar.ma2.Array tile = array.read(Utils.toLongArray(offset), shape);
-    ByteBuffer buf = tile.getDataAsByteBuffer(ByteOrder.BIG_ENDIAN);
+    // assumes big endian order
+    // use caution getDataAsByteBuffer signatures that take a ByteOrder,
+    // as these are unsupported in the ArrayFloat and ArrayDouble subclasses
+    // of ucar.ma2.Array
+    ByteBuffer buf = tile.getDataAsByteBuffer();
     byte[] bytes = new byte[buf.remaining()];
     buf.get(bytes);
     return bytes;
-  }
-
-  /**
-   * Read tile as bytes from typed Zarr array.
-   * @param zArray Zarr array to read from
-   * @param shape array describing the number of elements in each dimension to
-   * be read
-   * @param offset array describing the offset in each dimension at which to
-   * begin reading
-   * @return tile data as bytes of size <code>shape * bytesPerPixel</code>
-   * read from <code>offset</code>.
-   * @throws IOException
-   * @throws InvalidRangeException
-   */
-  public static byte[] readAsBytes(ZarrArray zArray, int[] shape, int[] offset)
-      throws IOException, InvalidRangeException
-  {
-    DataType dataType = zArray.getDataType();
-    int bytesPerPixel = ZarrTypes.bytesPerPixel(dataType);
-    int size = IntStream.of(shape).reduce((a, b) -> a * b).orElse(0);
-    byte[] tileAsBytes = new byte[size * bytesPerPixel];
-    ByteBuffer tileAsByteBuffer = ByteBuffer.wrap(tileAsBytes);
-    switch (dataType) {
-      case i1:
-      case u1: {
-        zArray.read(tileAsBytes, shape, offset);
-        break;
-      }
-      case i2:
-      case u2: {
-        short[] tileAsShorts = new short[size];
-        zArray.read(tileAsShorts, shape, offset);
-        tileAsByteBuffer.asShortBuffer().put(tileAsShorts);
-        break;
-      }
-      case i4:
-      case u4: {
-        int[] tileAsInts = new int[size];
-        zArray.read(tileAsInts, shape, offset);
-        tileAsByteBuffer.asIntBuffer().put(tileAsInts);
-        break;
-      }
-      case f4: {
-        float[] tileAsFloats = new float[size];
-        zArray.read(tileAsFloats, shape, offset);
-        tileAsByteBuffer.asFloatBuffer().put(tileAsFloats);
-        break;
-      }
-      case f8: {
-        double[] tileAsDoubles = new double[size];
-        zArray.read(tileAsDoubles, shape, offset);
-        tileAsByteBuffer.asDoubleBuffer().put(tileAsDoubles);
-        break;
-      }
-      default:
-        throw new IllegalArgumentException(
-            "Unsupported data type: " + dataType);
-    }
-    return tileAsBytes;
   }
 
   /**
@@ -2076,72 +2003,10 @@ public class Converter implements Callable<Integer> {
       String pathName, int[] shape, int[] offset, ByteBuffer tile)
           throws IOException, InvalidRangeException, ZarrException
   {
-    if (getV3()) {
-      writeBytesV3(Array.open(v3Store.resolve(pathName)), shape, offset, tile);
-    }
-    else {
-      writeBytesV2(ZarrArray.open(getRootPath().resolve(pathName)),
-        shape, offset, tile);
-    }
-  }
-
-  private static void writeBytesV3(
-      Array array, int[] shape, int[] offset, ByteBuffer tile)
-        throws ZarrException
-  {
+    Array array = Array.open(store.resolve(pathName));
     final ucar.ma2.Array pixels = ucar.ma2.Array.factory(
-      array.metadata().dataType.getMA2DataType(), shape, tile);
+      array.metadata().dataType().getMA2DataType(), shape, tile);
     array.write(Utils.toLongArray(offset), pixels);
-  }
-
-  private static void writeBytesV2(
-      ZarrArray zArray, int[] shape, int[] offset, ByteBuffer tile)
-        throws IOException, InvalidRangeException
-  {
-    int size = IntStream.of(shape).reduce((a, b) -> a * b).orElse(0);
-    DataType dataType = zArray.getDataType();
-    Slf4JStopWatch t1 = stopWatch();
-    try {
-      switch (dataType) {
-        case i1:
-        case u1: {
-          zArray.write(tile.array(), shape, offset);
-          break;
-        }
-        case i2:
-        case u2: {
-          short[] tileAsShorts = new short[size];
-          tile.asShortBuffer().get(tileAsShorts);
-          zArray.write(tileAsShorts, shape, offset);
-          break;
-        }
-        case i4:
-        case u4: {
-          int[] tileAsInts = new int[size];
-          tile.asIntBuffer().get(tileAsInts);
-          zArray.write(tileAsInts, shape, offset);
-          break;
-        }
-        case f4: {
-          float[] tileAsFloats = new float[size];
-          tile.asFloatBuffer().get(tileAsFloats);
-          zArray.write(tileAsFloats, shape, offset);
-          break;
-        }
-        case f8: {
-          double[] tileAsDoubles = new double[size];
-          tile.asDoubleBuffer().put(tileAsDoubles);
-          zArray.write(tileAsDoubles, shape, offset);
-          break;
-        }
-        default:
-          throw new IllegalArgumentException(
-              "Unsupported data type: " + dataType);
-      }
-    }
-    finally {
-      t1.stop("writeBytes");
-    }
   }
 
   private byte[] getTileDownsampled(
@@ -2168,17 +2033,13 @@ public class Converter implements Callable<Integer> {
       readers.put(reader);
     }
 
-    int[] dimensions = null;
-    int[] blockSizes = null;
+    Array array = Array.open(store.resolve(pathName));
 
-    ZarrArray v2Array = null;
-    Array v3Array = null;
+    int[] dimensions = Utils.toIntArray(array.metadata().shape);
+    int[] blockSizes = array.metadata().chunkShape();
 
     if (getV3()) {
-      v3Array = Array.open(v3Store.resolve(pathName));
-      dimensions = Utils.toIntArray(v3Array.metadata().shape);
-      blockSizes = v3Array.metadata().chunkShape();
-
+      dev.zarr.zarrjava.v3.Array v3Array = (dev.zarr.zarrjava.v3.Array) array;
       Optional<Codec> shardingCodec =
         ArrayMetadata.getShardingIndexedCodec(v3Array.metadata().codecs);
       if (shardingCodec.isPresent() &&
@@ -2188,11 +2049,6 @@ public class Converter implements Callable<Integer> {
           (ShardingIndexedCodec) shardingCodec.get();
         blockSizes = shardIndex.configuration.chunkShape;
       }
-    }
-    else {
-      v2Array = ZarrArray.open(getRootPath().resolve(pathName));
-      dimensions = v2Array.getShape();
-      blockSizes = v2Array.getChunks();
     }
 
     int xDim = 1;
@@ -2218,13 +2074,7 @@ public class Converter implements Callable<Integer> {
     int height = (int) Math.min(activeTileHeight * PYRAMID_SCALE, yDim - yy);
 
     int[] shape = createShape(axes, width, height, 1);
-    byte[] tileAsBytes = null;
-    if (getV3()) {
-      tileAsBytes = readAsBytesV3(v3Array, shape, offset);
-    }
-    else {
-      tileAsBytes = readAsBytes(v2Array, shape, offset);
-    }
+    byte[] tileAsBytes = readAsBytes(array, shape, offset);
     int bytesPerPixel = FormatTools.getBytesPerPixel(pixelType);
 
     if (downsampling == Downsampling.SIMPLE) {
@@ -2639,27 +2489,28 @@ public class Converter implements Callable<Integer> {
 
       String resolutionString = String.format(
               scaleFormatString, getScaleFormatStringArgs(series, resolution));
+      StoreHandle handle = store.resolve(resolutionString);
+      int[] arrayShape = getShapeArray(activeAxes);
+      int[] chunkSizes = getChunkSizeArray(activeAxes);
 
       if (getV3()) {
         CodecBuilder codecBuilder =
           new CodecBuilder(ZarrTypes.getV3ZarrType(pixelType));
 
-        int[] chunkSizes = getChunkSizeArray(activeAxes);
         int[] shardSizes = getShardSizeArray(activeAxes);
-        int[] shape = getShapeArray(activeAxes);
         boolean useSharding = false;
 
-        for (int axis=0; axis<shape.length; axis++) {
+        for (int axis=0; axis<arrayShape.length; axis++) {
           // for smaller resolutions in particular, the selected
           // chunk size may be smaller than the image
           // the chunk size needs to be adjusted in this case,
           // otherwise an exception will be thrown when creating the array
-          if (shape[axis] < shardSizes[axis]) {
-            shardSizes[axis] = shape[axis];
+          if (arrayShape[axis] < shardSizes[axis]) {
+            shardSizes[axis] = arrayShape[axis];
           }
         }
 
-        if (chunkAndShardCompatible(chunkSizes, shardSizes, shape)) {
+        if (chunkAndShardCompatible(chunkSizes, shardSizes, arrayShape)) {
           useSharding = true;
           // always use inner chunk compression
           final CodecBuilder innerChunkBuilder =
@@ -2676,11 +2527,10 @@ public class Converter implements Callable<Integer> {
         }
 
         final CodecBuilder builder = codecBuilder;
-        StoreHandle v3Handle = v3Store.resolve(resolutionString);
-        Array v3Array = Array.create(v3Handle,
-          Array.metadataBuilder()
+        Array v3Array = dev.zarr.zarrjava.v3.Array.create(handle,
+          dev.zarr.zarrjava.v3.Array.metadataBuilder()
             .withDimensionNames(dimensionNames)
-            .withShape(Utils.toLongArray(shape))
+            .withShape(Utils.toLongArray(arrayShape))
             .withDataType(ZarrTypes.getV3ZarrType(pixelType))
             .withChunkShape(useSharding ? shardSizes : chunkSizes)
             .withCodecs(c -> builder)
@@ -2688,15 +2538,34 @@ public class Converter implements Callable<Integer> {
         );
       }
       else {
-        DataType dataType = ZarrTypes.getZarrType(pixelType);
-        ArrayParams arrayParams = new ArrayParams()
-            .shape(getShapeArray(activeAxes))
-            .chunks(getChunkSizeArray(activeAxes))
-            .dataType(dataType)
-            .dimensionSeparator(getDimensionSeparator())
-            .compressor(CompressorFactory.create(
-                compressionType.toString(), compressionProperties));
-        ZarrArray.create(getRootPath().resolve(resolutionString), arrayParams);
+        dev.zarr.zarrjava.v2.ArrayMetadataBuilder builder =
+          dev.zarr.zarrjava.v2.Array.metadataBuilder()
+            .withShape(Utils.toLongArray(arrayShape))
+            .withChunks(chunkSizes)
+            .withDataType(ZarrTypes.getZarrType(pixelType))
+            .withDimensionSeparator(getDimensionSeparator());
+
+        // currently uses defaults from jzarr, for easier
+        // comparison with old versions
+        if (compressionType == ZarrCompression.blosc) {
+          String cname =
+            compressionProperties.getOrDefault("cname", "lz4").toString();
+          int clevel = Integer.parseInt(
+            compressionProperties.getOrDefault("clevel", "5").toString());
+          int blocksize = Integer.parseInt(
+            compressionProperties.getOrDefault("blocksize", "0").toString());
+          String shuffle = compressionProperties.getOrDefault(
+            "shuffle", "byteshuffle").toString();
+          builder =
+            builder.withBloscCompressor(cname, shuffle, clevel, blocksize);
+        }
+        else if (compressionType == ZarrCompression.zlib) {
+          int level = Integer.parseInt(
+            compressionProperties.getOrDefault("level", "1").toString());
+          builder = builder.withZlibCompressor(level);
+        }
+
+        dev.zarr.zarrjava.v2.Array.create(handle, builder.build());
       }
 
       if (!writeImageData) {
@@ -2873,27 +2742,25 @@ public class Converter implements Callable<Integer> {
             }
           }
 
-          Map<String, Object> wellMap = new HashMap<String, Object>();
+          Attributes wellMap = new Attributes();
           wellMap.put("images", imageList);
-          Map<String, Object> columnAttrs = new HashMap<String, Object>();
+          Attributes columnAttrs = new Attributes();
           columnAttrs.put("well", wellMap);
 
           String rowPath = index.getRowPath();
           String columnPath = index.getColumnPath();
+          Group rowGroup = createGroup(rowPath);
           if (getV3()) {
-            Group rowGroup = Group.create(v3Store.resolve(rowPath));
-            Group columnGroup =
-              Group.create(v3Store.resolve(rowPath, columnPath));
+            Group columnGroup = createGroup(rowPath, columnPath);
             Attributes omeAttrs = new Attributes();
             omeAttrs.put("ome", columnAttrs);
-            columnGroup.setAttributes(omeAttrs);
+            ((dev.zarr.zarrjava.v3.Group) columnGroup).setAttributes(omeAttrs);
           }
           else {
-            Path rootPath = getRootPath();
-            ZarrGroup root = ZarrGroup.open(rootPath);
-            ZarrGroup rowGroup = root.createSubGroup(rowPath);
-            ZarrGroup columnGroup = rowGroup.createSubGroup(columnPath);
-            columnGroup.writeAttributes(columnAttrs);
+            dev.zarr.zarrjava.v2.Group columnGroup =
+              dev.zarr.zarrjava.v2.Group.create(
+                store.resolve(rowPath, columnPath),
+              columnAttrs);
           }
 
           // make sure the row/column indexes are added to the plate attributes
@@ -2943,9 +2810,9 @@ public class Converter implements Callable<Integer> {
 
     plateMap.put("field_count", maxField + 1);
 
+    Group group = openGroup();
+    Attributes attributes = group.metadata().attributes();
     if (getV3()) {
-      Group v3Group = Group.open(v3Store.resolve());
-      Attributes attributes = v3Group.metadata().attributes;
       Attributes omeAttributes = null;
       if (attributes.containsKey("ome")) {
         omeAttributes = attributes.getAttributes("ome");
@@ -2955,21 +2822,18 @@ public class Converter implements Callable<Integer> {
       }
       omeAttributes.put("plate", plateMap);
       attributes.put("ome", omeAttributes);
-      v3Group.setAttributes(attributes);
+
+      ((dev.zarr.zarrjava.v3.Group) group).setAttributes(attributes);
     }
     else {
       plateMap.put("version", getNGFFVersion().toString());
-      Path rootPath = getRootPath();
-      ZarrGroup root = ZarrGroup.open(rootPath);
-      Map<String, Object> attributes = root.getAttributes();
       attributes.put("plate", plateMap);
-      root.writeAttributes(attributes);
+      ((dev.zarr.zarrjava.v2.Group) group).setAttributes(attributes);
     }
   }
 
   /**
-   * Use {@link ZarrArray#writeAttributes(Map)}
-   * to attach the multiscales metadata to the group containing
+   * Attach the multiscales metadata to the group containing
    * the pyramids.
    *
    * @param series Series which is currently being written.
@@ -3140,8 +3004,8 @@ public class Converter implements Callable<Integer> {
     }
     multiscale.put("name", name);
 
-    Map<String, Object> attributes = new HashMap<String, Object>();
-    Map<String, Object> omeAttributes = new HashMap<String, Object>();
+    Attributes attributes = new Attributes();
+    Attributes omeAttributes = new Attributes();
     if (getV3()) {
       omeAttributes.put("version", getNGFFVersion().toString());
       omeAttributes.put("multiscales", multiscales);
@@ -3242,16 +3106,16 @@ public class Converter implements Callable<Integer> {
       }
     }
 
+    LOGGER.debug("  creating subgroup {}", seriesString);
     if (getV3()) {
+      Group seriesGroup = createGroup(seriesString);
       attributes.put("ome", omeAttributes);
-      Group v3Group = Group.create(v3Store.resolve(seriesString));
-      v3Group.setAttributes(new Attributes(attributes));
+      ((dev.zarr.zarrjava.v3.Group) seriesGroup).setAttributes(attributes);
     }
     else {
-      Path subGroupPath = getRootPath().resolve(seriesString);
-      LOGGER.debug("  creating subgroup {}", subGroupPath);
-      ZarrGroup subGroup = ZarrGroup.create(subGroupPath);
-      subGroup.writeAttributes(attributes);
+      dev.zarr.zarrjava.v2.Group seriesGroup =
+        dev.zarr.zarrjava.v2.Group.create(
+        store.resolve(seriesString), attributes);
     }
     LOGGER.debug("    finished writing subgroup attributes");
   }
@@ -3342,8 +3206,8 @@ public class Converter implements Callable<Integer> {
     }
   }
 
-  private DimensionSeparator getDimensionSeparator() {
-    return nested ? DimensionSeparator.SLASH : DimensionSeparator.DOT;
+  private Separator getDimensionSeparator() {
+    return nested ? Separator.SLASH : Separator.DOT;
   }
 
   private void checkOutputPaths() {
@@ -3615,6 +3479,18 @@ public class Converter implements Callable<Integer> {
       LOGGER.warn("Skipping unsupported compression: {}", getCompression());
     }
     return builder;
+  }
+
+  private Group createGroup(String... path) throws IOException, ZarrException {
+    if (getV3()) {
+      return dev.zarr.zarrjava.v3.Group.create(store.resolve(path));
+    }
+    return dev.zarr.zarrjava.v2.Group.create(
+      store.resolve(path), new Attributes());
+  }
+
+  private Group openGroup(String... path) throws IOException, ZarrException {
+    return Group.open(store.resolve(path));
   }
 
   private static Slf4JStopWatch stopWatch() {

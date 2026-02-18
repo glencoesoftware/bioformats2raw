@@ -7,7 +7,6 @@
  */
 package com.glencoesoftware.bioformats2raw;
 
-import com.bc.zarr.DataType;
 import loci.formats.FormatTools;
 
 public final class ZarrTypes {
@@ -77,57 +76,34 @@ public final class ZarrTypes {
   }
 
   /**
-   * Convert Bio-Formats pixel type to Zarr data type.
+   * Convert Bio-Formats pixel type to Zarr v2 data type.
    *
    * @param type Bio-Formats pixel type
    * @return corresponding Zarr data type
    */
-  public static DataType getZarrType(int type) {
+  public static dev.zarr.zarrjava.v2.DataType getZarrType(int type) {
     switch (type) {
+      case FormatTools.BIT:
+        return dev.zarr.zarrjava.v2.DataType.BOOL;
       case FormatTools.INT8:
-        return DataType.i1;
+        return dev.zarr.zarrjava.v2.DataType.INT8;
       case FormatTools.UINT8:
-        return DataType.u1;
+        return dev.zarr.zarrjava.v2.DataType.UINT8;
       case FormatTools.INT16:
-        return DataType.i2;
+        return dev.zarr.zarrjava.v2.DataType.INT16;
       case FormatTools.UINT16:
-        return DataType.u2;
+        return dev.zarr.zarrjava.v2.DataType.UINT16;
       case FormatTools.INT32:
-        return DataType.i4;
+        return dev.zarr.zarrjava.v2.DataType.INT32;
       case FormatTools.UINT32:
-        return DataType.u4;
+        return dev.zarr.zarrjava.v2.DataType.UINT32;
       case FormatTools.FLOAT:
-        return DataType.f4;
+        return dev.zarr.zarrjava.v2.DataType.FLOAT32;
       case FormatTools.DOUBLE:
-        return DataType.f8;
+        return dev.zarr.zarrjava.v2.DataType.FLOAT64;
       default:
         throw new IllegalArgumentException("Unsupported pixel type: "
             + FormatTools.getPixelTypeString(type));
-    }
-  }
-
-  /**
-   * Return the number of bytes per pixel for a JZarr data type.
-   * @param dataType type to return number of bytes per pixel for
-   * @return See above.
-   */
-  public static int bytesPerPixel(DataType dataType) {
-    switch (dataType) {
-      case i1:
-      case u1:
-        return 1;
-      case i2:
-      case u2:
-        return 2;
-      case i4:
-      case u4:
-      case f4:
-        return 4;
-      case f8:
-        return 8;
-      default:
-        throw new IllegalArgumentException(
-            "Unsupported data type: " + dataType);
     }
   }
 
