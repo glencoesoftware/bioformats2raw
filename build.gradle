@@ -8,9 +8,14 @@ plugins {
 group = 'com.glencoesoftware'
 version = '0.12.0-SNAPSHOT'
 
-mainClassName = 'com.glencoesoftware.bioformats2raw.Converter'
-sourceCompatibility = 1.8
-targetCompatibility = 1.8
+application {
+  mainClass = 'com.glencoesoftware.bioformats2raw.Converter'
+}
+java {
+  toolchain {
+    languageVersion = JavaLanguageVersion.of(11)
+  }
+}
 
 repositories {
     mavenLocal()
@@ -76,7 +81,7 @@ jar {
             "Implementation-Title": "bioformats2raw converter",
             "Implementation-Version": archiveVersion,
             "Implementation-Vendor": "Glencoe Software Inc.",
-            "Main-Class": mainClassName
+            "Main-Class": application.mainClass
         )
     }
 }

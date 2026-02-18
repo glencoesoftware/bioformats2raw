@@ -13,7 +13,7 @@ jobs:
       contents: read
     strategy:
       matrix:
-        java: [8, 11, 17, 21]
+        java: [17, 21, 25]
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     env:
@@ -41,7 +41,7 @@ jobs:
           path: build/distributions/*.zip
           retention-days: 30
       - name: Publish artifacts
-        if: github.event_name != 'pull_request' && matrix.java == 11
+        if: github.event_name != 'pull_request' && matrix.java == 17
         run: |
           ./gradlew -PArtifactoryUserName=${ArtifactoryUserName} -PArtifactoryPassword=${ArtifactoryPassword} publish
   release:
@@ -55,7 +55,7 @@ jobs:
       - name: Download artifacts from build
         uses: actions/download-artifact@v4
         with:
-          name: bioformats2raw 11
+          name: bioformats2raw 17
       - name: List artifacts
         run: ls -R
       - name: Create a GitHub release

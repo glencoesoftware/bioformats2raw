@@ -14,7 +14,7 @@ Bio-Formats 5.9.x ("Faas") or Bio-Formats 6.x (true OME-TIFF) pyramid.
 Requirements
 ============
 
-Java 8 or later is required.
+As of 0.12.0, Java 11 or later is required to run bioformats2raw.
 
 libblosc (https://github.com/Blosc/c-blosc) version 1.9.0 or later must be installed separately.
 The native libraries are not packaged with any relevant jars.  See also note in jzarr readme (https://github.com/bcdev/jzarr/blob/master/README.md)
@@ -67,6 +67,8 @@ Installation
 
 Development Installation
 ========================
+
+As of 0.12.0, Java 17 is required to build bioformats2raw.
 
 1. Clone the repository:
 
