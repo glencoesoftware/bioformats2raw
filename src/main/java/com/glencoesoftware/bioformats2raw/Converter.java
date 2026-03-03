@@ -98,7 +98,9 @@ import dev.zarr.zarrjava.core.Array;
 import dev.zarr.zarrjava.core.Attributes;
 import dev.zarr.zarrjava.core.Group;
 import dev.zarr.zarrjava.core.chunkkeyencoding.Separator;
+import dev.zarr.zarrjava.store.BufferedZipStore;
 import dev.zarr.zarrjava.store.FilesystemStore;
+import dev.zarr.zarrjava.store.Store;
 import dev.zarr.zarrjava.store.StoreHandle;
 import dev.zarr.zarrjava.utils.Utils;
 
@@ -118,6 +120,8 @@ public class Converter implements Callable<Integer> {
    * Relative path to OME-XML metadata file.
    */
   private static final String METADATA_FILE = "METADATA.ome.xml";
+
+  private static final String ZIP_EXTENSION = ".ozx";
 
   /**
    * Minimum size of the largest XY dimension in the smallest resolution,
@@ -174,7 +178,7 @@ public class Converter implements Callable<Integer> {
 
   private volatile SupportedVersions ngffVersion = SupportedVersions.NGFF_04;
   private volatile boolean v3 = false;
-  private volatile FilesystemStore store = null;
+  private volatile Store store = null;
 
   private volatile int maxWorkers;
   private volatile int maxCachedTiles;
@@ -1712,7 +1716,13 @@ public class Converter implements Callable<Integer> {
 
   private void writeZarrMetadata() throws IOException, ZarrException {
     if (store == null) {
-      store = new FilesystemStore(getRootPath());
+      Path rootPath = getRootPath();
+      if (rootPath.toString().endsWith(ZIP_EXTENSION)) {
+        store = new BufferedZipStore(rootPath);
+      }
+      else {
+        store = new FilesystemStore(rootPath);
+      }
     }
 
     // fileset level metadata
