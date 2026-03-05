@@ -911,7 +911,7 @@ public class ZarrTest extends AbstractZarrTest {
     assertArrayEquals(new long[] {1, 1, 1, 150, 30}, series1.metadata().shape);
     assertArrayEquals(
       new int[] {1, 1, 1, 75, 25}, series1.metadata().chunkShape());
-    int[] shape = new int[] {1, 1, 1, 75, 5};
+    long[] shape = new long[] {1, 1, 1, 75, 5};
     long[] offset = new long[] {0, 0, 0, 75, 25};
     ucar.ma2.Array tile = series1.read(offset, shape);
     // Last row first pixel should be the 2x2 downsampled value;
@@ -932,7 +932,7 @@ public class ZarrTest extends AbstractZarrTest {
     Array series0 = Array.open(store.resolve("0", "0"));
     assertEquals(DataType.UINT16, series0.metadata().dataType);
     assertArrayEquals(new long[] {1, 1, 1, 300, 60}, series0.metadata().shape);
-    int[] shape = new int[] {1, 1, 1, 10, 10};
+    long[] shape = new long[] {1, 1, 1, 10, 10};
     long[] offset = new long[] {0, 0, 0, 290, 0};
     ucar.ma2.Array tile = series0.read(offset, shape);
     for (int y=0; y<10; y++) {
@@ -947,7 +947,7 @@ public class ZarrTest extends AbstractZarrTest {
     assertArrayEquals(new long[] {1, 1, 1, 150, 30}, series1.metadata().shape);
     assertArrayEquals(
       new int[] {1, 1, 1, 75, 25}, series1.metadata().chunkShape());
-    shape = new int[] {1, 1, 1, 75, 5};
+    shape = new long[] {1, 1, 1, 75, 5};
     offset = new long[] {0, 0, 0, 75, 25};
     tile = series1.read(offset, shape);
     // Last row first pixel should be the 2x2 downsampled value;

@@ -30,6 +30,7 @@ import com.glencoesoftware.bioformats2raw.Converter;
 import dev.zarr.zarrjava.ZarrException;
 import dev.zarr.zarrjava.core.Array;
 import dev.zarr.zarrjava.store.FilesystemStore;
+import dev.zarr.zarrjava.utils.Utils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
@@ -303,7 +304,7 @@ public abstract class AbstractZarrTest {
           if (!noZ) {
             offset[nextPointer++] = z;
           }
-          ucar.ma2.Array tile = array.read(offset, shape);
+          ucar.ma2.Array tile = array.read(offset, Utils.toLongArray(shape));
           ByteBuffer buf = tile.getDataAsByteBuffer();
           byte[] pixels = new byte[buf.remaining()];
           buf.get(pixels);

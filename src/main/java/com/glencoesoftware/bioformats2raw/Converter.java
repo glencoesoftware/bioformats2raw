@@ -1976,7 +1976,9 @@ public class Converter implements Callable<Integer> {
   public static byte[] readAsBytes(Array array, int[] shape, int[] offset)
     throws ZarrException
   {
-    ucar.ma2.Array tile = array.read(Utils.toLongArray(offset), shape);
+    ucar.ma2.Array tile = array.read(
+      Utils.toLongArray(offset),
+      Utils.toLongArray(shape));
     // assumes big endian order
     // use caution getDataAsByteBuffer signatures that take a ByteOrder,
     // as these are unsupported in the ArrayFloat and ArrayDouble subclasses
