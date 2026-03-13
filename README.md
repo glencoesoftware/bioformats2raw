@@ -22,7 +22,7 @@ The native libraries are not packaged with any relevant jars.  See also note in 
  * macOS: `brew install c-blosc` then set `JAVA_OPTS=-Djna.library.path=$(echo $(brew --cellar c-blosc)/*/lib/)`
  * Windows: Pre-built blosc DLLs are available from the [Fiji project](https://sites.imagej.net/N5/lib/win64/).  Rename the downloaded DLL to `blosc.dll` and place in a fixed location then set `JAVA_OPTS="-Djna.library.path=C:\path\to\blosc\folder"`.
  * Ubuntu: `apt-get install libblosc1`
- * RHEL/Rocky Linux: `dnf install blosc` after enabling the appropriate EPEL repositories.
+ * RHEL/Rocky Linux: `dnf install blosc` after enabling the EPEL repository.
  * conda: Installing `bioformats2raw` via conda (see below) will include `blosc` as a dependency.
 
 If using features that rely on OpenCV (see the [Downsampling type](#downsampling-type) section below), minimum supported versions are:
