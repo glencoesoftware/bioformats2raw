@@ -1141,31 +1141,6 @@ public class MiraxReader extends FormatReader {
     }
   }
 
-  /**
-   * Set the fill value for missing tiles.
-   *
-   * @param fill the fill value, or null to use the reader's default value
-   * @deprecated used setFillColor(Byte)
-   */
-  @Deprecated
-  public void setFillValue(Byte fill) {
-    setFillColor(fill);
-  }
-
-  /**
-   * Get the fill value for missing tiles.
-   * If {@link setFillValue(Byte)} was not called or the fill value was
-   * set to null, assumes 0 (black) for fluorescence data and 255 (white)
-   * for brightfield.
-   *
-   * @return fill value for missing tiles
-   * @deprecated use getFillColor()
-   */
-  @Deprecated
-  public byte getFillValue() {
-    return getFillColor();
-  }
-
   @Override
   public Byte getFillColor() {
     // don't check super.getFillColor() here, as that is expected to
