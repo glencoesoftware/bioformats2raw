@@ -1147,6 +1147,7 @@ public class MiraxReader extends FormatReader {
    * @param fill the fill value, or null to use the reader's default value
    * @deprecated used setFillColor(Byte)
    */
+  @Deprecated
   public void setFillValue(Byte fill) {
     setFillColor(fill);
   }
@@ -1160,6 +1161,7 @@ public class MiraxReader extends FormatReader {
    * @return fill value for missing tiles
    * @deprecated use getFillColor()
    */
+  @Deprecated
   public byte getFillValue() {
     return getFillColor();
   }
