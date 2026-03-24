@@ -2566,6 +2566,10 @@ public class Converter implements Callable<Integer> {
             compressionProperties.getOrDefault("level", "1").toString());
           builder = builder.withZlibCompressor(level);
         }
+        else if (compressionType != ZarrCompression.raw) {
+          throw new IllegalArgumentException(
+            "Zarr v2 does not support " + compressionType + " compression");
+        }
 
         dev.zarr.zarrjava.v2.Array.create(handle, builder.build());
       }
@@ -3475,10 +3479,32 @@ public class Converter implements Callable<Integer> {
    */
   private CodecBuilder applyCompressionType(CodecBuilder builder) {
     if (getCompression() == ZarrCompression.blosc) {
-      return builder.withBlosc();
+      String cname =
+        compressionProperties.getOrDefault("cname", "lz4").toString();
+      int clevel = Integer.parseInt(
+        compressionProperties.getOrDefault("clevel", "5").toString());
+      int blocksize = Integer.parseInt(
+        compressionProperties.getOrDefault("blocksize", "0").toString());
+      String shuffle = compressionProperties.getOrDefault(
+        "shuffle", "byteshuffle").toString();
+
+      return builder.withBlosc(cname, shuffle, clevel, blocksize);
+    }
+    else if (getCompression() == ZarrCompression.gzip) {
+      int clevel = Integer.parseInt(
+        compressionProperties.getOrDefault("clevel", "5").toString());
+      return builder.withGzip(clevel);
+    }
+    else if (getCompression() == ZarrCompression.zstd) {
+      int clevel = Integer.parseInt(
+        compressionProperties.getOrDefault("clevel", "5").toString());
+      boolean checksum = Boolean.parseBoolean(
+        compressionProperties.getOrDefault("checksum", "true").toString());
+      return builder.withZstd(clevel, checksum);
     }
     else if (getCompression() != ZarrCompression.raw) {
-      LOGGER.warn("Skipping unsupported compression: {}", getCompression());
+      throw new IllegalArgumentException(
+        "Zarr v3 does not support " + getCompression() + " compression");
     }
     return builder;
   }

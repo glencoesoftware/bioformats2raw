@@ -11,7 +11,9 @@ package com.glencoesoftware.bioformats2raw;
 public enum ZarrCompression {
   raw("null"),
   zlib("zlib"),
-  blosc("blosc");
+  blosc("blosc"),
+  zstd("zstd"),
+  gzip("gzip");
 
   private final String value;
 
