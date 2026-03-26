@@ -183,7 +183,7 @@ Supported options for `blosc` are:
 
 Supported options for `gzip` are:
 
-* `clevel=<level>`, where the default is `clevel=5`. Valid values are integers from 0 to 9 inclusive.
+* `level=<level>`, where the default is `level=5`. Valid values are integers from 0 to 9 inclusive.
 
 Supported options for `zlib` are:
 
@@ -191,7 +191,7 @@ Supported options for `zlib` are:
 
 Supported options for `zstd` are:
 
-* `clevel=<level>`, where the default is `clevel=5`. Valid values are integers from -7 to 22 inclusive.
+* `level=<level>`, where the default is `level=5`. Valid values are integers from -7 to 22 inclusive.
 * `checksum=<calculate checksum>`, where the default is `checksum=true`. Value values are `true` or `false`.
 
 There are no supported compression options for type `null`, as this is uncompressed data.
@@ -201,7 +201,7 @@ some datasets perform better in time and/or space with different choices. For wo
 total conversion time, and/or time required to decompress a chunk are important, it is a good idea to
 benchmark several different options with the real input data being used. See also the [Performance](#performance) section below.
 
-In some tests, we have found that `--compression blosc --compression-properties cname=zstd --compression-properties clevel=3`
+In some tests, we have found that `--compression blosc --compression-properties cname=zstd --compression-properties level=3`
 may be a reasonable choice if compressed size is more important than conversion or decompression times.
 
 Output Formatting Options

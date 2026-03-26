@@ -3491,16 +3491,16 @@ public class Converter implements Callable<Integer> {
       return builder.withBlosc(cname, shuffle, clevel, blocksize);
     }
     else if (getCompression() == ZarrCompression.gzip) {
-      int clevel = Integer.parseInt(
-        compressionProperties.getOrDefault("clevel", "5").toString());
-      return builder.withGzip(clevel);
+      int level = Integer.parseInt(
+        compressionProperties.getOrDefault("level", "5").toString());
+      return builder.withGzip(level);
     }
     else if (getCompression() == ZarrCompression.zstd) {
-      int clevel = Integer.parseInt(
-        compressionProperties.getOrDefault("clevel", "5").toString());
+      int level = Integer.parseInt(
+        compressionProperties.getOrDefault("level", "5").toString());
       boolean checksum = Boolean.parseBoolean(
         compressionProperties.getOrDefault("checksum", "true").toString());
-      return builder.withZstd(clevel, checksum);
+      return builder.withZstd(level, checksum);
     }
     else if (getCompression() != ZarrCompression.raw) {
       throw new IllegalArgumentException(

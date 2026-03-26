@@ -330,7 +330,7 @@ public class ZarrV3Test extends AbstractZarrTest {
     return Stream.of(
       Arguments.of((Object) new String[] {"-c", "gzip"}),
       Arguments.of((Object) new String[] {"-c", "gzip",
-        "--compression-properties", "clevel=1"}),
+        "--compression-properties", "level=1"}),
       Arguments.of((Object) new String[] {"-c", "blosc",
         "--compression-properties", "cname=zlib",
         "--compression-properties", "blocksize=8"}),
@@ -338,7 +338,7 @@ public class ZarrV3Test extends AbstractZarrTest {
         "--compression-properties", "clevel=1",
         "--compression-properties", "shuffle=noshuffle"}),
       Arguments.of((Object) new String[] {"-c", "zstd",
-        "--compression-properties", "clevel=9",
+        "--compression-properties", "level=9",
         "--compression-properties", "checksum=false"})
     );
   }
@@ -379,7 +379,7 @@ public class ZarrV3Test extends AbstractZarrTest {
       if (options.length == 4) {
         GzipCodec c = (GzipCodec) codec;
         String[] option = options[3].split("=");
-        assertEquals(option[0], "clevel");
+        assertEquals(option[0], "level");
         assertEquals(Integer.parseInt(option[1]), c.configuration.level);
       }
     }
@@ -390,7 +390,7 @@ public class ZarrV3Test extends AbstractZarrTest {
         for (int i=2; i<options.length; i+=2) {
           assertEquals(options[i], "--compression-properties");
           String[] option = options[i + 1].split("=");
-          if (option[0].equals("clevel")) {
+          if (option[0].equals("level")) {
             assertEquals(Integer.parseInt(option[1]), c.configuration.level);
           }
           else if (option[0].equals("checksum")) {
