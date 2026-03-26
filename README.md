@@ -162,20 +162,37 @@ https://github.com/glencoesoftware/raw2ometiff for more information.
 Compression Options
 ===================
 
-By default, output is compressed with Blosc using the `lz4` codec.
+By default, output is compressed with Blosc using the `lz4` codec with `clevel` set to `5`.
 
-To change the overall compression type, use `--compression <type>`. Supported types are `blosc`, `zlib`, and `null` (uncompressed).
+To change the overall compression type, use `--compression <type>`. Supported types depend upon the Zarr/NGFF version being written:
+
+| Zarr/NGFF version | null (uncompressed) | blosc | gzip | zlib | zstd |
+|-------------------|---------------------|-------|------|------|------|
+| v2/0.4            | yes                 | yes   | no   | yes  | no   |
+| v3/0.5            | yes                 | yes   | yes  | no   | yes  |
+
 
 To change type-specific options, use `--compression-properties <key=value>`.
 
 Supported options for `blosc` are:
 
 * `cname=<codec>`, where the default is `cname=lz4`. `zstd`, `zlib`, `blosclz`, and `lz4hc` are also valid values of `cname`.
-* `clevel=<level>`, where the default is `clevel=5`. Valid values are integers from 1 to 9 inclusive.
+* `clevel=<level>`, where the default is `clevel=5`. Valid values are integers from 0 to 9 inclusive.
+* `blocksize=<blocksize>`, where the default is `blocksize=0`.
+* `shuffle=<shuffle type>`, where the default is `shuffle=byteshuffle`. Valid values are `noshuffle`, `shuffle`/`byteshuffle`, and `bitshuffle`.
+
+Supported options for `gzip` are:
+
+* `clevel=<level>`, where the default is `clevel=5`. Valid values are integers from 0 to 9 inclusive.
 
 Supported options for `zlib` are:
 
-* `level=<level>`, where the default is `level=1`. Valid values are integers from 1 to 9 inclusive.
+* `level=<level>`, where the default is `level=1`. Valid values are integers from 0 to 9 inclusive.
+
+Supported options for `zstd` are:
+
+* `clevel=<level>`, where the default is `clevel=5`. Valid values are integers from -7 to 22 inclusive.
+* `checksum=<calculate checksum>`, where the default is `checksum=true`. Value values are `true` or `false`.
 
 There are no supported compression options for type `null`, as this is uncompressed data.
 
