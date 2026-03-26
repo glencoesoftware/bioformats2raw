@@ -10,6 +10,7 @@ package com.glencoesoftware.bioformats2raw;
 import me.tongfei.progressbar.DelegatingProgressBarConsumer;
 import me.tongfei.progressbar.ProgressBar;
 import me.tongfei.progressbar.ProgressBarBuilder;
+import me.tongfei.progressbar.ProgressBarStyle;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,6 +53,7 @@ public class ProgressBarListener implements IProgressListener {
   @Override
   public void notifyResolutionStart(int resolution, int chunkCount) {
     ProgressBarBuilder builder = new ProgressBarBuilder()
+      .setStyle(ProgressBarStyle.ASCII)
       .setInitialMax(chunkCount)
       .setTaskName(String.format("[%d/%d]", currentSeries, resolution));
 
