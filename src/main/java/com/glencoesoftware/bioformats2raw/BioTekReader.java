@@ -568,10 +568,10 @@ public class BioTekReader extends FormatReader {
         FormatTools.getMaxFieldCount(maxField.get(pa) + 1);
       store.setPlateAcquisitionMaximumFieldCount(fieldCount, 0, pa);
 
-      if (pa == 0) {
+      if (pa == 0 && foundFluorescence) {
         store.setPlateAcquisitionName("Fluorescence", 0, pa);
       }
-      else if (pa == 1) {
+      else {
         store.setPlateAcquisitionName("Bright-field", 0, pa);
       }
     }
