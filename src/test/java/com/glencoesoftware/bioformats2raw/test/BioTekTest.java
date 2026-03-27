@@ -170,6 +170,60 @@ public class BioTekTest {
   }
 
   /**
+   * Test plate with only brightfield data.
+   */
+  @Test
+  public void testBrightfieldOnly() throws Exception {
+    Path testTiff = getTestFile("test-brightfield.tiff");
+
+    createPlate(new String[] {"D5_1_Stitched[A_b]_3_001_1.tif",
+      "D5_1_Stitched[A_g]_2_001_1.tif",
+      "D5_1_Stitched[A_r]_1_001_1.tif"
+    });
+
+    String[] channelName = new String[] {"b", "g", "r"};
+    int wellRow = 3;
+    int wellColumn = 4;
+    int fields = 1;
+    int sizeC = 3;
+    int sizeZ = 1;
+    int sizeT = 1;
+
+    try (BioTekReader reader = new BioTekReader()) {
+      OMEXMLMetadata metadata = getOMEMetadata();
+      reader.setMetadataStore(metadata);
+      reader.setId(input.toString());
+
+      // this should be the same as the series count
+      assertEquals(metadata.getImageCount(), fields);
+      assertEquals(metadata.getImageCount(), reader.getSeriesCount());
+      // there should be exactly one plate, with exactly one well
+      assertEquals(metadata.getPlateCount(), 1);
+      assertEquals(metadata.getWellCount(0), 1);
+      // the well's row and column indexes should match expectations
+      // this is especially important for "sparse" plates where the first
+      // row and/or column in the plate are missing
+      assertEquals(metadata.getWellRow(0, 0).getValue(), wellRow);
+      assertEquals(metadata.getWellColumn(0, 0).getValue(), wellColumn);
+      // all of the Images should be linked to the well
+      assertEquals(metadata.getWellSampleCount(0, 0), fields);
+      for (int f=0; f<fields; f++) {
+        // sanity check that the Images are linked to the
+        // well in the correct order
+        assertEquals(metadata.getWellSampleImageRef(0, 0, f), "Image:" + f);
+        // check that the number of Z sections, channels, and timepoints
+        // all match expectations
+        assertEquals(metadata.getPixelsSizeZ(f).getValue(), sizeZ);
+        assertEquals(metadata.getPixelsSizeC(f).getValue(), sizeC);
+        assertEquals(metadata.getPixelsSizeT(f).getValue(), sizeT);
+        for (int c=0; c<sizeC; c++) {
+          assertEquals(metadata.getChannelName(f, c), channelName[c]);
+        }
+      }
+    }
+  }
+
+  /**
    * Generate test cases that are given to testBioTek(...) above.
    * A list of file names, the well row and column index, number of fields,
    * and ZCT dimensions are all specified here.
