@@ -162,7 +162,7 @@ https://github.com/glencoesoftware/raw2ometiff for more information.
 Compression Options
 ===================
 
-By default, output is compressed with Blosc using the `lz4` codec with `clevel` set to `5`.
+By default, output is compressed with the Blosc codec using the `lz4` compression algorithm with `clevel` set to `5`.
 
 To change the overall compression type, use `--compression <type>`. Supported types depend upon the Zarr/NGFF version being written:
 
@@ -201,7 +201,7 @@ some datasets perform better in time and/or space with different choices. For wo
 total conversion time, and/or time required to decompress a chunk are important, it is a good idea to
 benchmark several different options with the real input data being used. See also the [Performance](#performance) section below.
 
-In some tests, we have found that `--compression blosc --compression-properties cname=zstd --compression-properties level=3`
+In some tests, we have found that `--compression blosc --compression-properties cname=zstd --compression-properties clevel=3`
 may be a reasonable choice if compressed size is more important than conversion or decompression times.
 
 Output Formatting Options
