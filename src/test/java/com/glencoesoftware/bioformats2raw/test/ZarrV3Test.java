@@ -14,14 +14,20 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+import com.scalableminds.bloscjava.Blosc;
 import dev.zarr.zarrjava.core.Attributes;
 import dev.zarr.zarrjava.v3.Array;
 import dev.zarr.zarrjava.v3.ArrayMetadata;
 import dev.zarr.zarrjava.v3.Group;
 import dev.zarr.zarrjava.v3.codec.Codec;
+import dev.zarr.zarrjava.v3.codec.core.BloscCodec;
+import dev.zarr.zarrjava.v3.codec.core.GzipCodec;
 import dev.zarr.zarrjava.v3.codec.core.ShardingIndexedCodec;
+import dev.zarr.zarrjava.v3.codec.core.ZstdCodec;
 
 import ome.xml.model.OME;
+
+import picocli.CommandLine.ExecutionException;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -30,7 +36,9 @@ import org.junit.jupiter.params.provider.MethodSource;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class ZarrV3Test extends AbstractZarrTest {
 
@@ -313,6 +321,126 @@ public class ZarrV3Test extends AbstractZarrTest {
     Optional<Codec> shardingCodec =
       ArrayMetadata.getShardingIndexedCodec(array.metadata().codecs);
     assertFalse(shardingCodec.isPresent());
+  }
+
+  /**
+   * @return compression settings
+   */
+  static Stream<Arguments> getCompressionSettings() {
+    return Stream.of(
+      Arguments.of((Object) new String[] {"-c", "gzip"}),
+      Arguments.of((Object) new String[] {"-c", "gzip",
+        "--compression-properties", "level=1"}),
+      Arguments.of((Object) new String[] {"-c", "blosc",
+        "--compression-properties", "cname=zlib",
+        "--compression-properties", "blocksize=8"}),
+      Arguments.of((Object) new String[] {"-c", "blosc",
+        "--compression-properties", "clevel=1",
+        "--compression-properties", "shuffle=noshuffle"}),
+      Arguments.of((Object) new String[] {"-c", "zstd",
+        "--compression-properties", "level=9",
+        "--compression-properties", "checksum=false"})
+    );
+  }
+
+  /**
+   * @return compression settings expected to throw an exception
+   */
+  static Stream<Arguments> getBadCompressionSettings() {
+    return Stream.of(
+      Arguments.of("zlib")
+    );
+  }
+
+  /**
+   * Test different compression options.
+   *
+   * @param options compression type and properties passed directly to converter
+   */
+  @ParameterizedTest
+  @MethodSource("getCompressionSettings")
+  public void testCompressionOptions(String[] options) throws Exception {
+    input = fake();
+    String[] allOptions = new String[options.length + 2];
+    allOptions[0] = "--ngff-version";
+    allOptions[1] = getNGFFVersion();
+    System.arraycopy(options, 0, allOptions, 2, options.length);
+    assertTool(allOptions);
+
+    Array array = Array.open(store.resolve("0", "0"));
+    assertEquals(array.metadata().codecs.length, 1);
+    assertTrue(array.metadata().codecs[0] instanceof ShardingIndexedCodec);
+    ShardingIndexedCodec shards =
+      (ShardingIndexedCodec) array.metadata().codecs[0];
+    assertEquals(shards.configuration.codecs.length, 2);
+    Codec codec = shards.configuration.codecs[1];
+    if (options[1].equals("gzip")) {
+      assertEquals(codec.getClass(), GzipCodec.class);
+      if (options.length == 4) {
+        GzipCodec c = (GzipCodec) codec;
+        String[] option = options[3].split("=");
+        assertEquals(option[0], "level");
+        assertEquals(Integer.parseInt(option[1]), c.configuration.level);
+      }
+    }
+    else if (options[1].equals("zstd")) {
+      assertEquals(codec.getClass(), ZstdCodec.class);
+      if (options.length > 3) {
+        ZstdCodec c = (ZstdCodec) codec;
+        for (int i=2; i<options.length; i+=2) {
+          assertEquals(options[i], "--compression-properties");
+          String[] option = options[i + 1].split("=");
+          if (option[0].equals("level")) {
+            assertEquals(Integer.parseInt(option[1]), c.configuration.level);
+          }
+          else if (option[0].equals("checksum")) {
+            assertEquals(
+              Boolean.parseBoolean(option[1]), c.configuration.checksum);
+          }
+        }
+      }
+    }
+    else if (options[1].equals("blosc")) {
+      assertEquals(codec.getClass(), BloscCodec.class);
+      if (options.length > 3) {
+        BloscCodec c = (BloscCodec) codec;
+        for (int i=2; i<options.length; i+=2) {
+          assertEquals(options[i], "--compression-properties");
+          String[] option = options[i + 1].split("=");
+          if (option[0].equals("clevel")) {
+            assertEquals(Integer.parseInt(option[1]), c.configuration.clevel);
+          }
+          else if (option[0].equals("cname")) {
+            assertEquals(option[1], c.configuration.cname.getValue());
+          }
+          else if (option[0].equals("blocksize")) {
+            assertEquals(
+              Integer.parseInt(option[1]), c.configuration.blocksize);
+          }
+          else if (option[0].equals("shuffle")) {
+            assertEquals(
+              Blosc.Shuffle.fromString(option[1]), c.configuration.shuffle);
+          }
+        }
+      }
+    }
+    else {
+      fail("Unexpected compression type " + options[1]);
+    }
+  }
+
+  /**
+   * Test different invalid compression options.
+   *
+   * @param codec codec name
+   */
+  @ParameterizedTest
+  @MethodSource("getBadCompressionSettings")
+  public void testBadCompressionOptions(String codec) throws Exception {
+    input = fake();
+    assertThrows(ExecutionException.class, () -> {
+      assertTool("--ngff-version", getNGFFVersion(), "-c", codec);
+    });
   }
 
 }
