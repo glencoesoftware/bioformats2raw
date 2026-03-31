@@ -1031,14 +1031,16 @@ public class BioTekReader extends FormatReader {
     }
 
     public String getFile(int fieldIndex, int[] zct) {
+      PlaneIndex[] indexes = filePlaneMap.keySet().toArray(new PlaneIndex[0]);
+      Arrays.sort(indexes);
       if (zct == null) {
-        for (PlaneIndex p : filePlaneMap.keySet()) {
+        for (PlaneIndex p : indexes) {
           if (p.fieldIndex == fieldIndex) {
             return getAllFiles().get(filePlaneMap.get(p));
           }
         }
       }
-      for (PlaneIndex p : filePlaneMap.keySet()) {
+      for (PlaneIndex p : indexes) {
         if (p.fieldIndex == fieldIndex &&
           p.z == zct[0] && p.c == zct[1] && p.t == zct[2])
         {
@@ -1064,7 +1066,7 @@ public class BioTekReader extends FormatReader {
     }
   }
 
-  class PlaneIndex {
+  class PlaneIndex implements Comparable<PlaneIndex> {
     public int fieldIndex;
     public int z;
     public int c;
@@ -1109,6 +1111,26 @@ public class BioTekReader extends FormatReader {
           p.c == c && p.t == t && p.brightfield == brightfield;
       }
       return false;
+    }
+
+    @Override
+    public int compareTo(PlaneIndex o) {
+      if (this.equals(o)) {
+        return 0;
+      }
+      if (this.brightfield != o.brightfield) {
+        return this.brightfield ? 1 : -1;
+      }
+      if (this.fieldIndex != o.fieldIndex) {
+        return this.fieldIndex - o.fieldIndex;
+      }
+      if (this.z != o.z) {
+        return this.z - o.z;
+      }
+      if (this.c != o.c) {
+        return this.c - o.c;
+      }
+      return this.t - o.t;
     }
 
     public String toString() {
