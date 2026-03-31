@@ -78,7 +78,6 @@ public class BioTekReader extends FormatReader {
   // -- Fields --
 
   private MinimalTiffReader helperReader;
-  private Location parent;
   private List<BioTekWell> wells = new ArrayList<BioTekWell>();
 
   // seriesMap[seriesIndex] = {wellIndex, fieldIndex}
@@ -166,7 +165,6 @@ public class BioTekReader extends FormatReader {
     }
     if (!fileOnly) {
       helperReader = null;
-      parent = null;
       wells.clear();
       xptFiles.clear();
       seriesMap = null;
@@ -213,7 +211,7 @@ public class BioTekReader extends FormatReader {
     super.initFile(id);
 
     Location currentPath = new Location(id).getAbsoluteFile();
-    parent = currentPath.getParentFile();
+    Location parent = currentPath.getParentFile();
 
     findXPTFiles(parent);
 
