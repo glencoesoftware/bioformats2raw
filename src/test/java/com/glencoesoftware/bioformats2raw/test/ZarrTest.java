@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
+import com.scalableminds.bloscjava.Blosc;
 import dev.zarr.zarrjava.ZarrException;
 import dev.zarr.zarrjava.core.Attributes;
 import dev.zarr.zarrjava.core.chunkkeyencoding.Separator;
@@ -27,6 +28,9 @@ import dev.zarr.zarrjava.utils.Utils;
 import dev.zarr.zarrjava.v2.Array;
 import dev.zarr.zarrjava.v2.DataType;
 import dev.zarr.zarrjava.v2.Group;
+import dev.zarr.zarrjava.v2.codec.Codec;
+import dev.zarr.zarrjava.v2.codec.core.BloscCodec;
+import dev.zarr.zarrjava.v2.codec.core.ZlibCodec;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -894,6 +898,96 @@ public class ZarrTest extends AbstractZarrTest {
       Arguments.of(new int[]{512, 512, 16, 1, 1}, "XYCTZ"),
       Arguments.of(new int[]{512, 512, 32, 3, 100}, "XYCTZ")
     );
+  }
+
+  /**
+   * @return compression settings
+   */
+  static Stream<Arguments> getCompressionSettings() {
+    return Stream.of(
+      Arguments.of((Object) new String[] {"-c", "zlib"}),
+      Arguments.of((Object) new String[] {"-c", "zlib",
+        "--compression-properties", "level=1"}),
+      Arguments.of((Object) new String[] {"-c", "blosc",
+        "--compression-properties", "cname=zlib",
+        "--compression-properties", "blocksize=8"}),
+      Arguments.of((Object) new String[] {"-c", "blosc",
+        "--compression-properties", "clevel=1",
+        "--compression-properties", "shuffle=noshuffle"})
+    );
+  }
+
+  /**
+   * @return compression settings expected to throw an exception
+   */
+  static Stream<Arguments> getBadCompressionSettings() {
+    return Stream.of(
+      Arguments.of("gzip"),
+      Arguments.of("zstd")
+    );
+  }
+
+  /**
+   * Test different compression options.
+   *
+   * @param options compression type and properties passed directly to converter
+   */
+  @ParameterizedTest
+  @MethodSource("getCompressionSettings")
+  public void testCompressionOptions(String[] options) throws Exception {
+    input = fake();
+    assertTool(options);
+
+    Array array = Array.open(store.resolve("0", "0"));
+    Codec codec = array.metadata().compressor;
+    if (options[1].equals("zlib")) {
+      assertEquals(codec.getClass(), ZlibCodec.class);
+      if (options.length == 4) {
+        ZlibCodec c = (ZlibCodec) codec;
+        String[] option = options[3].split("=");
+        assertEquals(option[0], "level");
+        assertEquals(Integer.parseInt(option[1]), c.level);
+      }
+    }
+    else if (options[1].equals("blosc")) {
+      assertEquals(codec.getClass(), BloscCodec.class);
+      if (options.length > 3) {
+        BloscCodec c = (BloscCodec) codec;
+        for (int i=2; i<options.length; i+=2) {
+          assertEquals(options[i], "--compression-properties");
+          String[] option = options[i + 1].split("=");
+          if (option[0].equals("clevel")) {
+            assertEquals(Integer.parseInt(option[1]), c.clevel);
+          }
+          else if (option[0].equals("cname")) {
+            assertEquals(option[1], c.cname.getValue());
+          }
+          else if (option[0].equals("blocksize")) {
+            assertEquals(Integer.parseInt(option[1]), c.blocksize);
+          }
+          else if (option[0].equals("shuffle")) {
+            assertEquals(Blosc.Shuffle.fromString(option[1]), c.shuffle);
+          }
+        }
+      }
+    }
+    else {
+      fail("Unexpected compression type " + options[1]);
+    }
+  }
+
+  /**
+   * Test different invalid compression options.
+   *
+   * @param codec codec name
+   */
+  @ParameterizedTest
+  @MethodSource("getBadCompressionSettings")
+  public void testBadCompressionOptions(String codec) throws IOException {
+    input = fake();
+    assertThrows(ExecutionException.class, () -> {
+      assertTool("-c", codec);
+    });
   }
 
   /**
