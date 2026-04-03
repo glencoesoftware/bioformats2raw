@@ -300,8 +300,8 @@ public class MCDReader extends FormatReader {
         // exposes both the name and label (which are often slightly different)
         // and this is the easiest way to do that in OME/OMERO model
         int channelIndex = getPlaneIndex(c);
-        store.setChannelName(channel.name, imageIndex, channelIndex);
-        store.setChannelFluor(channel.label, imageIndex, channelIndex);
+        store.setChannelName(channel.label, imageIndex, channelIndex);
+        store.setChannelFluor(channel.name, imageIndex, channelIndex);
       }
     }
     setSeries(0);
