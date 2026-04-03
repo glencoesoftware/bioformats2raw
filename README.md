@@ -177,22 +177,35 @@ To change type-specific options, use `--compression-properties <key=value>`.
 Supported options for `blosc` are:
 
 * `cname=<codec>`, where the default is `cname=lz4`. `zstd`, `zlib`, `blosclz`, and `lz4hc` are also valid values of `cname`.
-* `clevel=<level>`, where the default is `clevel=5`. Valid values are integers from 0 to 9 inclusive.
+* `clevel=<level>`, where the default is `clevel=5`. Valid values are integers from 0 to 9 inclusive, where 0 generally
+  indicates no compression and 9 generally indicates most compression.
 * `blocksize=<blocksize>`, where the default is `blocksize=0`.
 * `shuffle=<shuffle type>`, where the default is `shuffle=byteshuffle`. Valid values are `noshuffle`, `shuffle`/`byteshuffle`, and `bitshuffle`.
 
+See also the blosc codec definition in the [Zarr v3 specification](https://zarr-specs.readthedocs.io/en/latest/v3/codecs/blosc/index.html#configuration-parameters).
+
 Supported options for `gzip` are:
 
-* `level=<level>`, where the default is `level=5`. Valid values are integers from 0 to 9 inclusive.
+* `level=<level>`, where the default is `level=5`. Valid values are integers from 0 to 9 inclusive,
+  where 0 indicates no compression and 9 indicates most compression.
+
+See also the gzip codec definition in the [Zarr v3 specification](https://zarr-specs.readthedocs.io/en/latest/v3/codecs/gzip/index.html#configuration-parameters).
 
 Supported options for `zlib` are:
 
-* `level=<level>`, where the default is `level=1`. Valid values are integers from 0 to 9 inclusive.
+* `level=<level>`, where the default is `level=1`. Valid values are integers from 0 to 9 inclusive,
+  where 0 indicates no compression and 9 indicates most compression.
+
+See also the zlib codec description in the [Zarr codecs registry](https://zarr.dev/codecs-registry/Others/Research.html#zlib-deflate).
 
 Supported options for `zstd` are:
 
-* `level=<level>`, where the default is `level=5`. Valid values are integers from -7 to 22 inclusive.
+* `level=<level>`, where the default is `level=5`. Valid values are integers from -7 to 22 inclusive;
+  negative values generally indicate that faster compression should be preferred, where positive values
+  generally indicate how much the data should be compressed with 22 indicating most compression.
 * `checksum=<calculate checksum>`, where the default is `checksum=true`. Value values are `true` or `false`.
+
+See also the zstd codec description in the [Zarr codecs registry](https://zarr.dev/codecs-registry/Others/Research.html#zstandard-zstd).
 
 There are no supported compression options for type `null`, as this is uncompressed data.
 
