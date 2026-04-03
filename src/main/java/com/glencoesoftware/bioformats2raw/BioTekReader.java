@@ -78,13 +78,15 @@ public class BioTekReader extends FormatReader {
   // -- Fields --
 
   private MinimalTiffReader helperReader;
-  private Location parent;
   private List<BioTekWell> wells = new ArrayList<BioTekWell>();
 
   // seriesMap[seriesIndex] = {wellIndex, fieldIndex}
   private int[][] seriesMap;
 
   private List<String> xptFiles = new ArrayList<String>();
+
+  private transient Map<String, Element> xmlRoots =
+    new HashMap<String, Element>();
 
   // -- Constructor --
 
@@ -163,10 +165,10 @@ public class BioTekReader extends FormatReader {
     }
     if (!fileOnly) {
       helperReader = null;
-      parent = null;
       wells.clear();
       xptFiles.clear();
       seriesMap = null;
+      xmlRoots.clear();
     }
   }
 
@@ -209,7 +211,7 @@ public class BioTekReader extends FormatReader {
     super.initFile(id);
 
     Location currentPath = new Location(id).getAbsoluteFile();
-    parent = currentPath.getParentFile();
+    Location parent = currentPath.getParentFile();
 
     findXPTFiles(parent);
 
@@ -282,6 +284,9 @@ public class BioTekReader extends FormatReader {
 
     ArrayList<String> foundWellSamples = new ArrayList<String>();
 
+    boolean foundBrightfield = false;
+    boolean foundFluorescence = false;
+
     for (String absolutePath : files) {
       String f = new Location(absolutePath).getName();
       Matcher m = regexA.matcher(f);
@@ -292,17 +297,19 @@ public class BioTekReader extends FormatReader {
       int z = 0;
       int t = 0;
       String channelName = "";
+      int channelNameGroupIndex = 6;
 
       if (m.matches()) {
         rowIndex = getWellRow(m.group(1));
         colIndex = Integer.parseInt(m.group(2)) - 1;
         fieldIndex = Integer.parseInt(m.group(5)) - 1;
-        channelName = m.group(6);
+        channelName = m.group(channelNameGroupIndex);
       }
       else {
         m = regexB.matcher(f);
         if (!m.matches()) {
           m = regexZ.matcher(f);
+          channelNameGroupIndex = 5;
         }
 
         if (m.matches()) {
@@ -321,7 +328,7 @@ public class BioTekReader extends FormatReader {
           }
           // recorded T index may be negative if no timepoints
           t = (int) Math.max(0, Integer.parseInt(m.group(8)) - 1);
-          channelName += m.group(6);
+          channelName += m.group(channelNameGroupIndex);
         }
         else {
           m = regexROI.matcher(f);
@@ -374,7 +381,16 @@ public class BioTekReader extends FormatReader {
           well.setFieldCount(fieldIndex + 1);
         }
         int c = well.addChannelName(fieldIndex, channelName);
-        well.addFile(new PlaneIndex(fieldIndex, z, c, t), absolutePath);
+        Element root = getXMLRoot(absolutePath);
+        boolean brightfield = isBrightField(root);
+        if (!foundBrightfield) {
+          foundBrightfield = brightfield;
+        }
+        if (!foundFluorescence) {
+          foundFluorescence = !brightfield;
+        }
+        well.addFile(
+          new PlaneIndex(fieldIndex, z, c, t, brightfield), absolutePath);
 
         if (rowIndex > maxRow) {
           maxRow = rowIndex;
@@ -397,6 +413,7 @@ public class BioTekReader extends FormatReader {
     validWellRowCol.sort(null);
 
     // split brightfield channels into a separate plate acquisition
+    // if both brightfield and fluorescence data was found
     maxField.put(1, -1);
     int originalWellCount = wells.size();
     Set<Integer> removedChannels = new HashSet<Integer>();
@@ -409,11 +426,10 @@ public class BioTekReader extends FormatReader {
           LOGGER.trace("found file {} for well index {}, field index {}",
             file, well, f);
           Element root = getXMLRoot(file);
-          boolean brightfield = isBrightField(root);
 
           PlaneIndex index = w.getIndex(file);
 
-          if (brightfield) {
+          if (index.brightfield && foundBrightfield && foundFluorescence) {
             LOGGER.trace("found brightfield file: {}", file);
             w.removeFile(index, file);
             removedChannels.add(index.c);
@@ -444,7 +460,7 @@ public class BioTekReader extends FormatReader {
         }
       }
     }
-    // correct the channel indexes in the non-brightfield plate acquisition
+    // correct the channel indexes in the first plate acquisition
     for (BioTekWell well : wells) {
       if (well.getPlateAcquisition() == 0) {
         Map<PlaneIndex, Integer> planeMap = well.getFilePlaneMap();
@@ -550,10 +566,10 @@ public class BioTekReader extends FormatReader {
         FormatTools.getMaxFieldCount(maxField.get(pa) + 1);
       store.setPlateAcquisitionMaximumFieldCount(fieldCount, 0, pa);
 
-      if (pa == 0) {
+      if (pa == 0 && foundFluorescence) {
         store.setPlateAcquisitionName("Fluorescence", 0, pa);
       }
-      else if (pa == 1) {
+      else {
         store.setPlateAcquisitionName("Bright-field", 0, pa);
       }
     }
@@ -652,6 +668,9 @@ public class BioTekReader extends FormatReader {
   }
 
   private Element getXMLRoot(String file) throws FormatException, IOException {
+    if (xmlRoots.containsKey(file)) {
+      return xmlRoots.get(file);
+    }
     try (TiffParser p = new TiffParser(file)) {
       String xml = p.getComment();
       if (xml == null) {
@@ -665,6 +684,7 @@ public class BioTekReader extends FormatReader {
       catch (ParserConfigurationException|SAXException e) {
         throw new FormatException(e);
       }
+      xmlRoots.put(file, root);
       return root;
     }
   }
@@ -1011,16 +1031,24 @@ public class BioTekReader extends FormatReader {
     }
 
     public String getFile(int fieldIndex, int[] zct) {
+      PlaneIndex[] indexes = filePlaneMap.keySet().toArray(new PlaneIndex[0]);
+      Arrays.sort(indexes);
       if (zct == null) {
-        for (PlaneIndex p : filePlaneMap.keySet()) {
+        for (PlaneIndex p : indexes) {
           if (p.fieldIndex == fieldIndex) {
             return getAllFiles().get(filePlaneMap.get(p));
           }
         }
       }
-      PlaneIndex p = new PlaneIndex(fieldIndex, zct[0], zct[1], zct[2]);
-      Integer index = filePlaneMap.get(p);
-      return index == null ? null : getAllFiles().get(index);
+      for (PlaneIndex p : indexes) {
+        if (p.fieldIndex == fieldIndex &&
+          p.z == zct[0] && p.c == zct[1] && p.t == zct[2])
+        {
+          Integer index = filePlaneMap.get(p);
+          return index == null ? null : getAllFiles().get(index);
+        }
+      }
+      return null;
     }
 
     public PlaneIndex getIndex(String file) {
@@ -1038,17 +1066,23 @@ public class BioTekReader extends FormatReader {
     }
   }
 
-  class PlaneIndex {
+  class PlaneIndex implements Comparable<PlaneIndex> {
     public int fieldIndex;
     public int z;
     public int c;
     public int t;
+    public boolean brightfield = false;
 
     public PlaneIndex(int f, int z, int c, int t) {
+      this(f, z, c, t, false);
+    }
+
+    public PlaneIndex(int f, int z, int c, int t, boolean brightfield) {
       this.fieldIndex = f;
       this.z = z;
       this.c = c;
       this.t = t;
+      this.brightfield = brightfield;
     }
 
     public PlaneIndex(PlaneIndex copy) {
@@ -1056,15 +1090,17 @@ public class BioTekReader extends FormatReader {
       this.z = copy.z;
       this.c = copy.c;
       this.t = copy.t;
+      this.brightfield = copy.brightfield;
     }
 
     @Override
     public int hashCode() {
-      int fc = (fieldIndex & 0xff) << 24;
+      int fc = (fieldIndex & 0x7f) << 24;
       int zc = (z & 0xff) << 16;
       int cc = (c & 0xff) << 8;
       int tc = (t & 0xff);
-      return fc | zc | cc | tc;
+      int coord = fc | zc | cc | tc;
+      return brightfield ? coord | 0x80000000 : 0;
     }
 
     @Override
@@ -1072,14 +1108,34 @@ public class BioTekReader extends FormatReader {
       if (o instanceof PlaneIndex) {
         PlaneIndex p = (PlaneIndex) o;
         return p.fieldIndex == fieldIndex && p.z == z &&
-          p.c == c && p.t == t;
+          p.c == c && p.t == t && p.brightfield == brightfield;
       }
       return false;
     }
 
+    @Override
+    public int compareTo(PlaneIndex o) {
+      if (this.equals(o)) {
+        return 0;
+      }
+      if (this.brightfield != o.brightfield) {
+        return this.brightfield ? 1 : -1;
+      }
+      if (this.fieldIndex != o.fieldIndex) {
+        return this.fieldIndex - o.fieldIndex;
+      }
+      if (this.z != o.z) {
+        return this.z - o.z;
+      }
+      if (this.c != o.c) {
+        return this.c - o.c;
+      }
+      return this.t - o.t;
+    }
+
     public String toString() {
       return "fieldIndex=" + fieldIndex + ", z=" + z +
-        ", c=" + c + ", t=" + t;
+        ", c=" + c + ", t=" + t + ", brightfield=" + brightfield;
     }
 
   }
