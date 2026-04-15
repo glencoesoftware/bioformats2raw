@@ -147,7 +147,18 @@ public class ZarrV3Test extends AbstractZarrTest {
     long[] arrayShape = new long[] {1, 1, 1, 512, 512};
     for (int r=0; r<rowCount; r++) {
       for (int c=0; c<colCount; c++) {
+        Group wellGroup = Group.open(store.resolve(
+          String.valueOf((char) ('A' + r)),
+          String.valueOf(c + 1)));
+        omeAttrs = wellGroup.metadata().attributes.getAttributes("ome");
+        assertEquals(getNGFFVersion(), omeAttrs.get("version"));
+        Map<String, Object> well = (Map<String, Object>) omeAttrs.get("well");
+        List<Map<String, Object>> images =
+          (List<Map<String, Object>>) well.get("images");
+        assertEquals(fieldCount, images.size());
         for (int f=0; f<fieldCount; f++) {
+          Map<String, Object> image = (Map<String, Object>) images.get(f);
+          assertEquals(image.get("path"), String.valueOf(f));
           Array array = Array.open(store.resolve(
             String.valueOf((char) ('A' + r)),
             String.valueOf(c + 1),
