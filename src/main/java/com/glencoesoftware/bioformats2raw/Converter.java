@@ -2752,7 +2752,6 @@ public class Converter implements Callable<Integer> {
           wellMap.put("images", imageList);
           Attributes columnAttrs = new Attributes();
           columnAttrs.put("well", wellMap);
-          columnAttrs.put("version", getNGFFVersion().toString());
 
           String rowPath = index.getRowPath();
           String columnPath = index.getColumnPath();
@@ -2760,6 +2759,7 @@ public class Converter implements Callable<Integer> {
           if (getV3()) {
             Group columnGroup = createGroup(rowPath, columnPath);
             Attributes omeAttrs = new Attributes();
+            columnAttrs.put("version", getNGFFVersion().toString());
             omeAttrs.put("ome", columnAttrs);
             ((dev.zarr.zarrjava.v3.Group) columnGroup).setAttributes(omeAttrs);
           }
