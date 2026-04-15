@@ -2752,6 +2752,7 @@ public class Converter implements Callable<Integer> {
           wellMap.put("images", imageList);
           Attributes columnAttrs = new Attributes();
           columnAttrs.put("well", wellMap);
+          columnAttrs.put("version", getNGFFVersion().toString());
 
           String rowPath = index.getRowPath();
           String columnPath = index.getColumnPath();
