@@ -2759,6 +2759,7 @@ public class Converter implements Callable<Integer> {
           if (getV3()) {
             Group columnGroup = createGroup(rowPath, columnPath);
             Attributes omeAttrs = new Attributes();
+            columnAttrs.put("version", getNGFFVersion().toString());
             omeAttrs.put("ome", columnAttrs);
             ((dev.zarr.zarrjava.v3.Group) columnGroup).setAttributes(omeAttrs);
           }

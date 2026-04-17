@@ -221,14 +221,19 @@ Output Formatting Options
 =========================
 
 By default, the output of `bioformats2raw` will be a
-[Zarr dataset](https://zarr.readthedocs.io/en/stable/spec/v2.html) which follows the
+[Zarr dataset](https://zarr-specs.readthedocs.io/en/latest/specs.html) which follows the
 metadata conventions defined by the
-[OME-NGFF 0.4 specification](https://ngff.openmicroscopy.org/0.4/) including the
-[bioformats2raw.layout specification](https://ngff.openmicroscopy.org/0.4/#bf2raw).
+[version 0.4](https://ngff.openmicroscopy.org/specifications/0.4/) of the OME-Zarr specification including the
+[bioformats2raw.layout specification](https://ngff.openmicroscopy.org/specifications/0.4/#bioformats2raw-layout-transitional).
 
 Several formatting options can be passed to the converter and will result in a Zarr dataset
 that is not compatible with raw2ometiff and does not strictly follow the OME-NGFF
 specification but may be suitable for other applications.
+
+#### --ngff-version
+
+Specifies the version of the [OME-Zarr specification](https://ngff.openmicroscopy.org/specifications/index.html)
+that should be used while writing Zarr. Current supported values are 0.4 and 0.5.
 
 #### --pyramid-name
 
