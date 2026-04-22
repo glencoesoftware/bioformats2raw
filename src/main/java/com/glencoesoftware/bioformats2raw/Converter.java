@@ -2545,6 +2545,7 @@ public class Converter implements Callable<Integer> {
             .withShape(Utils.toLongArray(arrayShape))
             .withChunks(chunkSizes)
             .withDataType(ZarrTypes.getZarrType(pixelType))
+            .withFillValue(0)
             .withDimensionSeparator(getDimensionSeparator());
 
         // currently uses defaults from jzarr, for easier
