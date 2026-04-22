@@ -27,6 +27,7 @@ import dev.zarr.zarrjava.store.FilesystemStore;
 import dev.zarr.zarrjava.utils.Utils;
 import dev.zarr.zarrjava.v2.Array;
 import dev.zarr.zarrjava.v2.DataType;
+import dev.zarr.zarrjava.v2.Endianness;
 import dev.zarr.zarrjava.v2.Group;
 import dev.zarr.zarrjava.v2.codec.Codec;
 import dev.zarr.zarrjava.v2.codec.core.BloscCodec;
@@ -866,6 +867,7 @@ public class ZarrTest extends AbstractZarrTest {
     // Check series dimensions and special pixels
     Array series0 = Array.open(store.resolve("0", "0"));
     assertEquals(dataType, series0.metadata().dataType);
+    assertEquals(Endianness.LITTLE, series0.metadata().endianness);
     assertArrayEquals(new long[] {1, 1, 1, 512, 512}, series0.metadata().shape);
     assertArrayEquals(
       new int[] {1, 1, 1, 512, 512}, series0.metadata().chunkShape());
@@ -873,6 +875,9 @@ public class ZarrTest extends AbstractZarrTest {
 
     int pixelType = FormatTools.pixelTypeFromString(type);
     checkSpecialPixels(0, 1, 1, 1, shape, series0, pixelType);
+
+    OME ome = getOMEMetadata();
+    assertFalse(ome.getImage(0).getPixels().getBigEndian());
   }
 
   /**

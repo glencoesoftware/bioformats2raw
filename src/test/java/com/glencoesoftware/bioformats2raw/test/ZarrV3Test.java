@@ -7,6 +7,7 @@
  */
 package com.glencoesoftware.bioformats2raw.test;
 
+import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.List;
@@ -18,13 +19,16 @@ import com.scalableminds.bloscjava.Blosc;
 import dev.zarr.zarrjava.core.Attributes;
 import dev.zarr.zarrjava.v3.Array;
 import dev.zarr.zarrjava.v3.ArrayMetadata;
+import dev.zarr.zarrjava.v3.DataType;
 import dev.zarr.zarrjava.v3.Group;
 import dev.zarr.zarrjava.v3.codec.Codec;
 import dev.zarr.zarrjava.v3.codec.core.BloscCodec;
+import dev.zarr.zarrjava.v3.codec.core.BytesCodec;
 import dev.zarr.zarrjava.v3.codec.core.GzipCodec;
 import dev.zarr.zarrjava.v3.codec.core.ShardingIndexedCodec;
 import dev.zarr.zarrjava.v3.codec.core.ZstdCodec;
 
+import loci.formats.FormatTools;
 import ome.xml.model.OME;
 
 import picocli.CommandLine.ExecutionException;
@@ -452,6 +456,51 @@ public class ZarrV3Test extends AbstractZarrTest {
     assertThrows(ExecutionException.class, () -> {
       assertTool("--ngff-version", getNGFFVersion(), "-c", codec);
     });
+  }
+
+  /**
+   * Test pixel type preservation.
+   *
+   * @param type string representation of Bio-Formats pixel type
+   * @param dataType expected corresponding Zarr data type
+   */
+  @ParameterizedTest
+  @MethodSource("getPixelTypes")
+  public void testPixelType(String type, DataType dataType) throws Exception {
+    input = fake("pixelType", type);
+    assertTool("--ngff-version", getNGFFVersion());
+    Group z = Group.open(store.resolve(""));
+
+    // Check series dimensions and special pixels
+    Array series0 = Array.open(store.resolve("0", "0"));
+    assertEquals(dataType, series0.metadata().dataType);
+    for (Codec codec : series0.metadata().codecs) {
+      if (codec instanceof BytesCodec) {
+        assertEquals(((BytesCodec) codec).configuration.endian.getByteOrder(),
+          ByteOrder.LITTLE_ENDIAN);
+      }
+    }
+    assertArrayEquals(new long[] {1, 1, 1, 512, 512}, series0.metadata().shape);
+    int[] shape = new int[] {1, 1, 1, 512, 512};
+    assertArrayEquals(shape, series0.metadata().chunkShape());
+
+    int pixelType = FormatTools.pixelTypeFromString(type);
+    checkSpecialPixels(0, 1, 1, 1, shape, series0, pixelType);
+
+    OME ome = getOMEMetadata();
+    assertFalse(ome.getImage(0).getPixels().getBigEndian());
+  }
+
+  /**
+   * @return pairs of pixel type strings and Zarr data types
+   */
+  static Stream<Arguments> getPixelTypes() {
+    return Stream.of(
+      Arguments.of("float", DataType.FLOAT32),
+      Arguments.of("double", DataType.FLOAT64),
+      Arguments.of("uint32", DataType.UINT32),
+      Arguments.of("int32", DataType.INT32)
+    );
   }
 
 }

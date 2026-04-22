@@ -363,6 +363,11 @@ by default. This includes calculating the minimum and maximum pixel values for t
 We recommend keeping this metadata for maximum compatibility with downstream applications, but it can
 be omitted by using the `--no-minmax` option.
 
+Version 0.12.0 and later switches the underlying library that reads and writes Zarr from jzarr to
+[zarr-java](https://github.com/zarr-developers/zarr-java). This allows Zarr v2 and Zarr v3 to be
+supported with a single library. A consequence of this change is that all data is now written
+as little-endian.
+
 Performance
 ===========
 

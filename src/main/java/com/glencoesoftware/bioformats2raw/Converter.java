@@ -1607,7 +1607,10 @@ public class Converter implements Callable<Integer> {
         }
 
         for (int s=0; s<meta.getImageCount(); s++) {
-          meta.setPixelsBigEndian(true, s);
+          // zarr-java writes little-endian data by default
+          // easier for downstream tools especially to standardize
+          // on one byte ordering
+          meta.setPixelsBigEndian(false, s);
 
           if (dimensionOrder != null) {
             meta.setPixelsDimensionOrder(dimensionOrder, s);
