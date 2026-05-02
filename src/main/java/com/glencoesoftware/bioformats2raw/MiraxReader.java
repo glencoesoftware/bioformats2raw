@@ -297,7 +297,7 @@ public class MiraxReader extends FormatReader {
           lookupTileForPlane(index, col, row, z, c, lookupCounter);
         if (thisOffset != null) {
           int channel = hasFocusStack() ? getStoredChannel(index, c) :
-            getLegacyStoredChannel(index, no);
+            getSingleLayerStoredChannel(index, no);
           String file = files.get(thisOffset.fileIndex + 1);
           LOGGER.debug("  * got file = {}, offset = {}",
             file, thisOffset.offset);
@@ -513,7 +513,7 @@ public class MiraxReader extends FormatReader {
       parseFocusBlocks(indexData, listOffsets, hierarchy);
     if (!useTilePositionCounterLookup) {
       offsets.clear();
-      parseClassicRootOffsets(indexData, hierarchicalRoot, nHierarchies);
+      parseSingleLayerRootOffsets(indexData, hierarchicalRoot, nHierarchies);
     }
 
     // read offset to barcode image
@@ -1293,7 +1293,7 @@ public class MiraxReader extends FormatReader {
     return true;
   }
 
-  private void parseClassicRootOffsets(RandomAccessInputStream indexData,
+  private void parseSingleLayerRootOffsets(RandomAccessInputStream indexData,
     long hierarchicalRoot, int nHierarchies) throws IOException
   {
     indexData.seek(hierarchicalRoot);
@@ -1525,7 +1525,7 @@ public class MiraxReader extends FormatReader {
     return storedFocusLevels > 1;
   }
 
-  private int getLegacyStoredChannel(int resolution, int plane) {
+  private int getSingleLayerStoredChannel(int resolution, int plane) {
     int channel = plane % MAX_CHANNELS;
     if (fluorescence &&
       (getSizeC() != 2 || format.get(resolution).equals("JPEG")))

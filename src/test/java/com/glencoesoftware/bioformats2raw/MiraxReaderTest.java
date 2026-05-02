@@ -189,7 +189,7 @@ public class MiraxReaderTest {
   }
 
   @Test
-  public void testLegacyStoredChannelKeepsOriginalNonStackBehavior()
+  public void testSingleLayerStoredChannelKeepsOriginalNonStackBehavior()
     throws Exception
   {
     MiraxReader reader = new MiraxReader();
@@ -204,7 +204,7 @@ public class MiraxReaderTest {
     setSuperclassField(reader, "core", core);
 
     Method method = MiraxReader.class.getDeclaredMethod(
-      "getLegacyStoredChannel", int.class, int.class);
+      "getSingleLayerStoredChannel", int.class, int.class);
     method.setAccessible(true);
 
     assertEquals(2, method.invoke(reader, 0, 0));
@@ -275,9 +275,9 @@ public class MiraxReaderTest {
       (TreeMap<MiraxReader.TilePointer, List<MiraxReader.TilePointer>>) getField(
         reader, "offsets");
 
-    List<MiraxReader.TilePointer> classicTile = new java.util.ArrayList<>();
-    classicTile.add(reader.new TilePointer(0, 1, 10, 32, 5));
-    offsets.put(reader.new TilePointer(0, 32), classicTile);
+    List<MiraxReader.TilePointer> singleLayerTile = new java.util.ArrayList<>();
+    singleLayerTile.add(reader.new TilePointer(0, 1, 10, 32, 5));
+    offsets.put(reader.new TilePointer(0, 32), singleLayerTile);
 
     List<MiraxReader.TilePointer> tilePositionTile = new java.util.ArrayList<>();
     tilePositionTile.add(reader.new TilePointer(0, 1, 20, 999, 5));
@@ -470,20 +470,20 @@ public class MiraxReaderTest {
   }
 
   @Test
-  public void testParseClassicRootOffsetsSkipsNonZeroResolutions()
+  public void testParseSingleLayerRootOffsetsSkipsNonZeroResolutions()
     throws Exception
   {
     MiraxReader reader = new MiraxReader();
     setField(reader, "pyramidDepth", 2);
     setField(reader, "offsets", new TreeMap<>());
 
-    byte[] bytes = createClassicRootIndex();
+    byte[] bytes = createSingleLayerRootIndex();
     try (RandomAccessInputStream indexData =
       new RandomAccessInputStream(new ByteArrayHandle(bytes)))
     {
       indexData.order(true);
       Method method = MiraxReader.class.getDeclaredMethod(
-        "parseClassicRootOffsets", RandomAccessInputStream.class, long.class,
+        "parseSingleLayerRootOffsets", RandomAccessInputStream.class, long.class,
         int.class);
       method.setAccessible(true);
       method.invoke(reader, indexData, 8L, 1);
@@ -596,7 +596,7 @@ public class MiraxReaderTest {
     return buffer.array();
   }
 
-  private static byte[] createClassicRootIndex() {
+  private static byte[] createSingleLayerRootIndex() {
     ByteBuffer buffer = ByteBuffer.allocate(128).order(ByteOrder.LITTLE_ENDIAN);
 
     buffer.position(8);
