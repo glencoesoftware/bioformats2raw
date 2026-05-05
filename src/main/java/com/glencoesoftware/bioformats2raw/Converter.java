@@ -1506,6 +1506,7 @@ public class Converter implements Callable<Integer> {
              EnumerationException, ZarrException
   {
     checkOutputPaths();
+    initializeStore();
 
     Cache<TilePointer, byte[]> tileCache = CacheBuilder.newBuilder()
         .maximumSize(maxCachedTiles)
@@ -1635,13 +1636,9 @@ public class Converter implements Callable<Integer> {
           }
           String xml = service.getOMEXML(meta);
 
-          // write the original OME-XML to a file
-          Path metadataPath = getRootPath().resolve("OME");
-          if (!Files.exists(metadataPath)) {
-            Files.createDirectories(metadataPath);
-          }
-          Path omexmlFile = metadataPath.resolve(METADATA_FILE);
-          Files.write(omexmlFile, xml.getBytes(Constants.ENCODING));
+          // write the original OME-XML to the store
+          store.set(new String[] {"OME", METADATA_FILE},
+            ByteBuffer.wrap(xml.getBytes(Constants.ENCODING)));
         }
       }
       catch (ServiceException se) {
@@ -1703,6 +1700,9 @@ public class Converter implements Callable<Integer> {
           LOGGER.error("Exception while closing reader", e);
         }
       });
+      if (store != null && store instanceof BufferedZipStore) {
+        ((BufferedZipStore) store).close();
+      }
     }
 
     // delete the memo file if it was saved and it's not explicitly kept
@@ -1714,17 +1714,19 @@ public class Converter implements Callable<Integer> {
     }
   }
 
-  private void writeZarrMetadata() throws IOException, ZarrException {
+  private void initializeStore() throws IOException, ZarrException {
     if (store == null) {
       Path rootPath = getRootPath();
-      if (rootPath.toString().endsWith(ZIP_EXTENSION)) {
-        store = new BufferedZipStore(rootPath);
+      if (rootPath.toString().endsWith(ZIP_EXTENSION) && getV3()) {
+        store = new BufferedZipStore(rootPath, true);
       }
       else {
         store = new FilesystemStore(rootPath);
       }
     }
+  }
 
+  private void writeZarrMetadata() throws IOException, ZarrException {
     // fileset level metadata
     if (!noRootGroup) {
       Attributes attributes = new Attributes();
