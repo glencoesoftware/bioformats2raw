@@ -235,6 +235,9 @@ specification but may be suitable for other applications.
 Specifies the version of the [OME-Zarr specification](https://ngff.openmicroscopy.org/specifications/index.html)
 that should be used while writing Zarr. Current supported values are 0.4 and 0.5.
 
+If `--ngff-version 0.5` is used, and the output file name ends with `.ozx`, then a single Zip file
+will be written in accordance with [RFC-9](https://ngff.openmicroscopy.org/rfc/9/index.html).
+
 #### --pyramid-name
 
 Specifies a subdirectory of the output directory where Zarr data should be written.
