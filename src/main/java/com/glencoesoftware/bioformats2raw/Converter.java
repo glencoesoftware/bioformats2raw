@@ -2897,12 +2897,35 @@ public class Converter implements Callable<Integer> {
     IMetadata meta = null;
     List<Axis> activeAxes = null;
 
+    List<Double> resolutionScalesX = new ArrayList<Double>();
+    List<Double> resolutionScalesY = new ArrayList<Double>();
     try {
       v = readers.take();
       meta = (IMetadata) v.getMetadataStore();
+      v.setResolution(0);
 
-      activeAxes = getDimensions(v, v.getSizeX(), v.getSizeY(),
-        v.getSizeZ(), 1, 1, 1);
+      int baseX = v.getSizeX();
+      int baseY = v.getSizeY();
+      activeAxes = getDimensions(v, baseX, baseY, v.getSizeZ(), 1, 1, 1);
+
+      for (int r=0; r<resolutions; r++) {
+        if (v.getResolutionCount() > 1 && reuseExistingResolutions) {
+          v.setResolution(r);
+          if (r == 0) {
+            resolutionScalesX.add(1.0);
+            resolutionScalesY.add(1.0);
+          }
+          else {
+            resolutionScalesX.add((double) baseX / v.getSizeX());
+            resolutionScalesY.add((double) baseY / v.getSizeY());
+          }
+        }
+        else {
+          double scale = Math.pow(PYRAMID_SCALE, r);
+          resolutionScalesX.add(scale);
+          resolutionScalesY.add(scale);
+        }
+      }
     }
     finally {
       readers.put(v);
@@ -2929,7 +2952,6 @@ public class Converter implements Callable<Integer> {
       Map<String, Object> scale = new HashMap<String, Object>();
       scale.put("type", "scale");
       List<Double> axisValues = new ArrayList<Double>();
-      double resolutionScale = Math.pow(PYRAMID_SCALE, r);
       for (int i=0; i<activeAxes.size(); i++) {
         String axisChar =
           String.valueOf(activeAxes.get(i).getType()).toLowerCase();
@@ -2940,19 +2962,26 @@ public class Converter implements Callable<Integer> {
           // use it directly for dimensions that aren't scaled (Z and T)
           // increase it according to the resolution number for dimensions that
           // are scaled (X and Y)
-          if (axisChar.equals("x") || axisChar.equals("y")) {
-            axisValues.add(axisScale.value().doubleValue() * resolutionScale);
+          double as = axisScale.value().doubleValue();
+          if (axisChar.equals("x")) {
+            axisValues.add(as * resolutionScalesX.get(r));
+          }
+          else if (axisChar.equals("y")) {
+            axisValues.add(as * resolutionScalesY.get(r));
           }
           else {
-            axisValues.add(axisScale.value().doubleValue());
+            axisValues.add(as);
           }
         }
         else {
           // if physical dimension information is not defined,
           // store the scale factor for the dimension in the current resolution,
           // i.e. 1.0 for everything other than X and Y
-          if (axisChar.equals("x") || axisChar.equals("y")) {
-            axisValues.add(resolutionScale);
+          if (axisChar.equals("x")) {
+            axisValues.add(resolutionScalesX.get(r));
+          }
+          else if (axisChar.equals("y")) {
+            axisValues.add(resolutionScalesY.get(r));
           }
           else {
             axisValues.add(1.0);
