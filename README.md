@@ -116,6 +116,7 @@ Run the conversion:
     bioformats2raw /path/to/file.svs /path/to/zarr-pyramid
 
 By default, the resolutions will be set so that the smallest resolution is no greater than 256x256.
+A scaling factor of 2 is used between consecutive resolutions.
 The target of the smallest resolution can be configured with `--target-min-size` e.g. to ensure
 that the smallest resolution is no greater than 128x128
 
@@ -411,8 +412,11 @@ conversions, but if they are needed for troubleshooting then the `--keep-memo-fi
 need to be created, `--keep-memo-files` will still result in no `.*.bfmemo` files at the end of conversion. This is particularly common
 for small datasets that can be read very quickly.
 
+Downsampling options
+====================
+
 Downsampling type
-=================
+-----------------
 
 By default, pyramid resolutions are generated using a [very simple downsampling algorithm](https://github.com/ome/ome-common-java/blob/master/src/main/java/loci/common/image/SimpleImageScaler.java).
 For some input data types, this may not be ideal. The `--downsample-type` option can be used to specify an alternative algorithm.
@@ -421,6 +425,17 @@ No additional downsampling algorithms are directly implemented in bioformats2raw
 
 If the minimum system requirements (see above) are not met, or the input data type is int8 or int32 (see https://github.com/glencoesoftware/bioformats2raw/pull/199),
 then any value of `--downsample-type` other than the default is expected to throw an exception.
+
+Converting an existing pyramid
+------------------------------
+
+Some input file formats will already contain pyramid resolutions. By default, all resolutions other than the largest will be ignored, and the pyramid will be recalculated.
+To preserve the existing pyramid instead of recalculating, use the `--use-existing-resolutions` option.
+
+If `--use-existing-resolutions` is specified for an image with no existing pyramid, then a pyramid will still be calculated according to the image dimensions.
+
+Note that an existing pyramid may have a scaling factor other than 2, may have inconsistent scaling factors between different resolutions in the same pyramid,
+and may have a smallest resolution that is larger than expected. This can lead to sub-optimal performance when viewing, particularly when viewing data imported into OMERO.
 
 Additional readers
 ==================
