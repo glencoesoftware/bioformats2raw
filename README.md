@@ -16,15 +16,6 @@ Requirements
 
 As of 0.12.0, Java 11 or later is required to run bioformats2raw.
 
-libblosc (https://github.com/Blosc/c-blosc) version 1.9.0 or later must be installed separately.
-The native libraries are not packaged with any relevant jars.  See also note in jzarr readme (https://github.com/bcdev/jzarr/blob/master/README.md)
-
- * macOS: `brew install c-blosc` then set `JAVA_OPTS=-Djna.library.path=$(echo $(brew --cellar c-blosc)/*/lib/)`
- * Windows: Pre-built blosc DLLs are available from the [Fiji project](https://sites.imagej.net/N5/lib/win64/).  Rename the downloaded DLL to `blosc.dll` and place in a fixed location then set `JAVA_OPTS="-Djna.library.path=C:\path\to\blosc\folder"`.
- * Ubuntu: `apt-get install libblosc1`
- * RHEL/Rocky Linux: `dnf install blosc` after enabling the EPEL repository.
- * conda: Installing `bioformats2raw` via conda (see below) will include `blosc` as a dependency.
-
 If using features that rely on OpenCV (see the [Downsampling type](#downsampling-type) section below), minimum supported versions are:
 
  * Ubuntu 18.04
