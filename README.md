@@ -434,8 +434,8 @@ To preserve the existing pyramid instead of recalculating, use the `--use-existi
 
 If `--use-existing-resolutions` is specified for an image with no existing pyramid, then a pyramid will still be calculated according to the image dimensions.
 
-Note that an existing pyramid may have a scaling factor other than 2, may have inconsistent scaling factors between different resolutions in the same pyramid,
-and may have a smallest resolution that is larger than expected. This can lead to sub-optimal performance when viewing, particularly when viewing data imported into OMERO.
+Note that an existing pyramid may not be ideal for viewing. It may have a scaling factor other than 2, use different scaling factors at different resolution levels,
+or contain fewer resolutions than are ideal. This can lead to sub-optimal viewing performance, especially for data imported into OMERO.
 
 Additional readers
 ==================
