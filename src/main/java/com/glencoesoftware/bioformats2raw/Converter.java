@@ -36,6 +36,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import loci.common.Constants;
+import loci.common.DataTools;
 import loci.common.Region;
 import loci.common.image.IImageScaler;
 import loci.common.image.SimpleImageScaler;
@@ -194,6 +195,7 @@ public class Converter implements Callable<Integer> {
   private volatile File memoDirectory;
   private volatile boolean keepMemoFiles = false;
   private volatile Downsampling downsampling;
+  private volatile boolean downsampleZ = false;
   private volatile boolean overwrite = false;
   private volatile Short fillValue = null;
   private volatile List<String> readerOptions;
@@ -836,6 +838,20 @@ public class Converter implements Callable<Integer> {
   }
 
   /**
+   * Set whether or not to downsample along Z.
+   *
+   * @param canDownsampleZ true if downsampling in Z
+   */
+  @Option(
+          names = "--downsample-z",
+          description = "Downsample along Z axis",
+          defaultValue = "false"
+  )
+  public void setDownsampleZ(boolean canDownsampleZ) {
+    downsampleZ = canDownsampleZ;
+  }
+
+  /**
    * Set whether or not to overwrite an existing output directory.
    *
    * @param canOverwrite whether or not overwriting is allowed
@@ -1269,6 +1285,13 @@ public class Converter implements Callable<Integer> {
    */
   public Downsampling getDownsampling() {
     return downsampling;
+  }
+
+  /**
+   * @return true if Z downsampling enabled
+   */
+  public boolean getDownsampleZ() {
+    return downsampleZ;
   }
 
   /**
@@ -1844,6 +1867,9 @@ public class Converter implements Callable<Integer> {
       int scaledWidth = sizeX / scale;
       int scaledHeight = sizeY / scale;
       int scaledDepth = sizeZ;
+      if (getDownsampleZ()) {
+        scaledDepth /= scale;
+      }
 
       workingReader = readers.take();
       try {
@@ -2091,6 +2117,61 @@ public class Converter implements Callable<Integer> {
 
     return OpenCVTools.downsample(
       tileAsBytes, pixelType, width, height, PYRAMID_SCALE, downsampling);
+  }
+
+  private byte[][] getZTiles(int series, int resolution, int[] plane,
+    Region boundingBox, List<Axis> axes)
+          throws FormatException, IOException, InterruptedException,
+                 EnumerationException, InvalidRangeException,
+                 ZarrException
+  {
+    byte[][] zs = new byte[plane.length][];
+    for (int p=0; p<plane.length; p++) {
+      zs[p] = getTile(series, resolution, plane[p], boundingBox, axes);
+    }
+    return zs;
+  }
+
+  private byte[] downsampleZ(byte[][] zs) {
+    if (zs.length == 1) {
+      return zs[0];
+    }
+    int bpp = FormatTools.getBytesPerPixel(pixelType);
+    boolean isFloat = FormatTools.isFloatingPoint(pixelType);
+    Object[] arrays = new Object[zs.length];
+    for (int i=0; i<arrays.length; i++) {
+      arrays[i] = DataTools.makeDataArray(zs[i], bpp, isFloat, true);
+    }
+    int numPixels = java.lang.reflect.Array.getLength(arrays[0]);
+    Object rtn = arrays[0];
+    Object[] pixel = new Object[zs.length];
+    int middle = (int) Math.ceil(pixel.length / 2.0) - 1;
+    for (int p=0; p<numPixels; p++) {
+      for (int z=0; z<zs.length; z++) {
+        pixel[z] = java.lang.reflect.Array.get(arrays[z], p);
+      }
+      Arrays.sort(pixel);
+      java.lang.reflect.Array.set(rtn, p, pixel[middle]);
+    }
+    if (rtn instanceof byte[]) {
+      return (byte[]) rtn;
+    }
+    else if (rtn instanceof short[]) {
+      return DataTools.shortsToBytes((short[]) rtn, true);
+    }
+    else if (rtn instanceof int[]) {
+      return DataTools.intsToBytes((int[]) rtn, true);
+    }
+    else if (rtn instanceof long[]) {
+      return DataTools.longsToBytes((long[]) rtn, true);
+    }
+    else if (rtn instanceof float[]) {
+      return DataTools.floatsToBytes((float[]) rtn, true);
+    }
+    else if (rtn instanceof double[]) {
+      return DataTools.doublesToBytes((double[]) rtn, true);
+    }
+    return null;
   }
 
   private byte[] getTile(
@@ -2358,20 +2439,29 @@ public class Converter implements Callable<Integer> {
     getProgressListener().notifyChunkStart(
       plane, xOffset, yOffset, zOffset);
     Slf4JStopWatch t0 = new Slf4JStopWatch("getChunk");
+    boolean reallyDownsampleZ = getDownsampleZ() && resolution > 0;
     try {
       for (int z = zOffset; z < zOffset + zShape; z++) {
         //Get plane index for current Z
         reader = readers.take();
-        int planeIndex;
+
+        // use 3 planes (not 2) so that median values are easy to pick
+        int zsToSample = reallyDownsampleZ ? PYRAMID_SCALE + 1 : 1;
+        int[] planeIndex = new int[zsToSample];
         try {
-          planeIndex = FormatTools.getIndex(reader, z, zct[1], zct[2]);
+          for (int dz=0; dz<planeIndex.length; dz++) {
+            int zIndex = reallyDownsampleZ ? z * PYRAMID_SCALE + dz : z;
+            zIndex = (int) Math.min(zIndex, reader.getSizeZ() - 1);
+            planeIndex[dz] =
+              FormatTools.getIndex(reader, zIndex, zct[1], zct[2]);
+          }
         }
         finally {
           readers.put(reader);
         }
         Region boundingBox = new Region(xOffset, yOffset, xShape, yShape);
-        byte[] tileAsBytes = getTile(series, resolution, planeIndex,
-                                    boundingBox, axes);
+        byte[] tileAsBytes = downsampleZ(
+          getZTiles(series, resolution, planeIndex, boundingBox, axes));
         if (tileAsBytes == null) {
           return;
         }
@@ -2454,6 +2544,9 @@ public class Converter implements Callable<Integer> {
       int scaledWidth = sizeX / scale;
       int scaledHeight = sizeY / scale;
       int scaledDepth = sizeZ;
+      if (getDownsampleZ()) {
+        scaledDepth /= scale;
+      }
 
       workingReader = readers.take();
       try {
