@@ -2177,7 +2177,22 @@ public class Converter implements Callable<Integer> {
           spatialDims++;
           break;
         case 'Z':
-          axes.add(new Axis(c, scaledDepth, scaledChunkDepth));
+          if (mz != null && mz.length() > 1) {
+            Axis actualZ =
+              new Axis(c, scaledDepth / mz.length(), scaledChunkDepth);
+            Axis moduloZ = new Axis(mz.type, mz.length(), 1);
+            if (Math.abs(mz.step - 1) < Constants.EPSILON) {
+              axes.add(moduloZ);
+              axes.add(actualZ);
+            }
+            else {
+              axes.add(actualZ);
+              axes.add(moduloZ);
+            }
+          }
+          else {
+            axes.add(new Axis(c, scaledDepth, scaledChunkDepth));
+          }
           spatialDims++;
           break;
         case 'C':
@@ -2315,6 +2330,9 @@ public class Converter implements Callable<Integer> {
     int[] offset = new int[axes.size()];
     Arrays.fill(offset, 0);
 
+    Modulo mz = reader.getModuloZ();
+    int[] zLengths = new int[mz.length() > 1 ? 2 : 1];
+    int zLengthIndex = 0;
     Modulo mc = reader.getModuloC();
     int[] cLengths = new int[mc.length() > 1 ? 2 : 1];
     int cLengthIndex = 0;
@@ -2331,8 +2349,9 @@ public class Converter implements Callable<Integer> {
       else if (axisType.equals("Y")) {
         offset[i] = y;
       }
-      else if (axisType.equals("Z")) {
-        offset[i] = zct[0];
+      else if (axisType.equals("Z") || axisType.equals(mz.type)) {
+        zLengths[zLengthIndex] = a.getLength();
+        zLengthIndex++;
       }
       else if (axisType.equals("C") || axisType.equals(mc.type)) {
         cLengths[cLengthIndex] = a.getLength();
@@ -2346,6 +2365,12 @@ public class Converter implements Callable<Integer> {
         LOGGER.trace("ignoring axis type {}", axes.get(i).getType());
       }
 
+      if (zLengthIndex == zLengths.length) {
+        int[] zOffset = FormatTools.rasterToPosition(zLengths, zct[0]);
+        System.arraycopy(zOffset, 0,
+          offset, i - (zOffset.length - 1), zOffset.length);
+        zLengthIndex = 0;
+      }
       if (cLengthIndex == cLengths.length) {
         int[] cOffset = FormatTools.rasterToPosition(cLengths, zct[1]);
         System.arraycopy(cOffset, 0,
@@ -3067,7 +3092,9 @@ public class Converter implements Callable<Integer> {
       }
       Map<String, String> thisAxis = new HashMap<String, String>();
       thisAxis.put("name", axis);
-      thisAxis.put("type", type);
+      if (type != null) {
+        thisAxis.put("type", type);
+      }
       if (scale != null) {
         String symbol = scale.unit().getSymbol();
         String unitName = null;
