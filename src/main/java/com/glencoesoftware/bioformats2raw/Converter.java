@@ -51,6 +51,7 @@ import loci.formats.ImageReader;
 import loci.formats.Memoizer;
 import loci.formats.MinMaxCalculator;
 import loci.formats.MissingLibraryException;
+import loci.formats.Modulo;
 import loci.formats.in.DynamicMetadataOptions;
 import loci.formats.meta.IMetadata;
 import loci.formats.ome.OMEXMLMetadata;
@@ -2061,17 +2062,17 @@ public class Converter implements Callable<Integer> {
     int activeTileWidth = 1;
     int activeTileHeight = 1;
     for (int i=0; i<axes.size(); i++) {
-      switch (axes.get(i).getType()) {
-        case 'X':
-          activeTileWidth = blockSizes[i];
-          xDim = dimensions[i];
-          break;
-        case 'Y':
-          activeTileHeight = blockSizes[i];
-          yDim = dimensions[i];
-          break;
-        default:
-          LOGGER.trace("ignoring axis type {}", axes.get(i).getType());
+      String axisType = axes.get(i).getType();
+      if (axisType.equals("X")) {
+        activeTileWidth = blockSizes[i];
+        xDim = dimensions[i];
+      }
+      else if (axisType.equals("Y")) {
+        activeTileHeight = blockSizes[i];
+        yDim = dimensions[i];
+      }
+      else {
+        LOGGER.trace("ignoring axis type {}", axes.get(i).getType());
       }
     }
 
@@ -2160,6 +2161,10 @@ public class Converter implements Callable<Integer> {
         dimensionOrder != null? dimensionOrder.toString()
         : reader.getDimensionOrder()).reverse().toString();
 
+    Modulo mz = reader.getModuloZ();
+    Modulo mc = reader.getModuloC();
+    Modulo mt = reader.getModuloT();
+
     int spatialDims = 0;
     for (char c : o.toCharArray()) {
       switch (c) {
@@ -2176,10 +2181,34 @@ public class Converter implements Callable<Integer> {
           spatialDims++;
           break;
         case 'C':
-          axes.add(new Axis(c, sizeC, 1));
+          if (mc != null && mc.length() > 1) {
+            if (Math.abs(mc.step - 1) < Constants.EPSILON) {
+              axes.add(new Axis(mc.type, mc.length(), 1));
+              axes.add(new Axis(c, sizeC / mc.length(), 1));
+            }
+            else {
+              axes.add(new Axis(c, sizeC / mc.length(), 1));
+              axes.add(new Axis(mc.type, mc.length(), 1));
+            }
+          }
+          else {
+            axes.add(new Axis(c, sizeC, 1));
+          }
           break;
         case 'T':
-          axes.add(new Axis(c, sizeT, 1));
+          if (mt != null && mt.length() > 1) {
+            if (Math.abs(mt.step - 1) < Constants.EPSILON) {
+              axes.add(new Axis(mt.type, mt.length(), 1));
+              axes.add(new Axis(c, sizeT / mt.length(), 1));
+            }
+            else {
+              axes.add(new Axis(c, sizeT / mt.length(), 1));
+              axes.add(new Axis(mt.type, mt.length(), 1));
+            }
+          }
+          else {
+            axes.add(new Axis(c, sizeT, 1));
+          }
           break;
         default:
           LOGGER.trace("ignoring axis type {}", c);
@@ -2192,8 +2221,8 @@ public class Converter implements Callable<Integer> {
       for (int a=0; a<axes.size(); a++) {
         Axis axis = axes.get(a);
         if (axis.getLength() == 1) {
-          char type = axis.getType();
-          if (type == 'X' || type == 'Y' || type == 'Z') {
+          String type = axis.getType();
+          if (type.equals("X") || type.equals("Y") || type.equals("Z")) {
             spatialDims--;
           }
           axes.remove(axis);
@@ -2229,18 +2258,18 @@ public class Converter implements Callable<Integer> {
     int[] shard = new int[axes.size()];
     for (int i=0; i<axes.size(); i++) {
       Axis axis = axes.get(i);
-      switch (axis.getType()) {
-        case 'X':
-          shard[i] = getShardWidth();
-          break;
-        case 'Y':
-          shard[i] = getShardHeight();
-          break;
-        case 'Z':
-          shard[i] = getShardDepth();
-          break;
-        default:
-          shard[i] = axis.getChunkSize();
+      String axisType = axis.getType();
+      if (axisType.equals("X")) {
+        shard[i] = getShardWidth();
+      }
+      else if (axisType.equals("Y")) {
+        shard[i] = getShardHeight();
+      }
+      else if (axisType.equals("Z")) {
+        shard[i] = getShardDepth();
+      }
+      else {
+        shard[i] = axis.getChunkSize();
       }
     }
     return shard;
@@ -2250,18 +2279,18 @@ public class Converter implements Callable<Integer> {
     int[] shape = new int[axes.size()];
     Arrays.fill(shape, 1);
     for (int i=0; i<axes.size(); i++) {
-      switch (axes.get(i).getType()) {
-        case 'X':
-          shape[i] = width;
-          break;
-        case 'Y':
-          shape[i] = height;
-          break;
-        case 'Z':
-          shape[i] = depth;
-          break;
-        default:
-          LOGGER.trace("ignoring axis type {}", axes.get(i).getType());
+      String axisType = axes.get(i).getType();
+      if (axisType.equals("X")) {
+        shape[i] = width;
+      }
+      else if (axisType.equals("Y")) {
+        shape[i] = height;
+      }
+      else if (axisType.equals("Z")) {
+        shape[i] = depth;
+      }
+      else {
+        LOGGER.trace("ignoring axis type {}", axisType);
       }
     }
     return shape;
@@ -2285,26 +2314,49 @@ public class Converter implements Callable<Integer> {
     int[] zct = reader.getZCTCoords(plane);
     int[] offset = new int[axes.size()];
     Arrays.fill(offset, 0);
+
+    Modulo mc = reader.getModuloC();
+    int[] cLengths = new int[mc.length() > 1 ? 2 : 1];
+    int cLengthIndex = 0;
+    Modulo mt = reader.getModuloT();
+    int[] tLengths = new int[mt.length() > 1 ? 2 : 1];
+    int tLengthIndex = 0;
+
     for (int i=0; i<axes.size(); i++) {
       Axis a = axes.get(i);
-      switch (a.getType()) {
-        case 'X':
-          offset[i] = x;
-          break;
-        case 'Y':
-          offset[i] = y;
-          break;
-        case 'Z':
-          offset[i] = zct[0];
-          break;
-        case 'C':
-          offset[i] = zct[1];
-          break;
-        case 'T':
-          offset[i] = zct[2];
-          break;
-        default:
-          LOGGER.trace("ignoring axis type {}", axes.get(i).getType());
+      String axisType = a.getType();
+      if (axisType.equals("X")) {
+        offset[i] = x;
+      }
+      else if (axisType.equals("Y")) {
+        offset[i] = y;
+      }
+      else if (axisType.equals("Z")) {
+        offset[i] = zct[0];
+      }
+      else if (axisType.equals("C") || axisType.equals(mc.type)) {
+        cLengths[cLengthIndex] = a.getLength();
+        cLengthIndex++;
+      }
+      else if (axisType.equals("T") || axisType.equals(mt.type)) {
+        tLengths[tLengthIndex] = a.getLength();
+        tLengthIndex++;
+      }
+      else {
+        LOGGER.trace("ignoring axis type {}", axes.get(i).getType());
+      }
+
+      if (cLengthIndex == cLengths.length) {
+        int[] cOffset = FormatTools.rasterToPosition(cLengths, zct[1]);
+        System.arraycopy(cOffset, 0,
+          offset, i - (cOffset.length - 1), cOffset.length);
+        cLengthIndex = 0;
+      }
+      if (tLengthIndex == tLengths.length) {
+        int[] tOffset = FormatTools.rasterToPosition(tLengths, zct[2]);
+        System.arraycopy(tOffset, 0,
+          offset, i - (tOffset.length - 1), tOffset.length);
+        tLengthIndex = 0;
       }
     }
     return offset;
@@ -2334,21 +2386,21 @@ public class Converter implements Callable<Integer> {
       //Get coords of current series
       zct = reader.getZCTCoords(plane);
       for (int i=0; i<axes.size(); i++) {
-        switch (axes.get(i).getType()) {
-          case 'X':
-            xOffset = offset[i];
-            xShape = shape[i];
-            break;
-          case 'Y':
-            yOffset = offset[i];
-            yShape = shape[i];
-            break;
-          case 'Z':
-            zOffset = offset[i];
-            zShape = shape[i];
-            break;
-          default:
-            LOGGER.trace("ignoring axis type {}", axes.get(i).getType());
+        String axisType = axes.get(i).getType();
+        if (axisType.equals("X")) {
+          xOffset = offset[i];
+          xShape = shape[i];
+        }
+        else if (axisType.equals("Y")) {
+          yOffset = offset[i];
+          yShape = shape[i];
+        }
+        else if (axisType.equals("Z")) {
+          zOffset = offset[i];
+          zShape = shape[i];
+        }
+        else {
+          LOGGER.trace("ignoring axis type {}", axisType);
         }
       }
     }
@@ -2953,9 +3005,9 @@ public class Converter implements Callable<Integer> {
       scale.put("type", "scale");
       List<Double> axisValues = new ArrayList<Double>();
       for (int i=0; i<activeAxes.size(); i++) {
-        String axisChar =
+        String axisType =
           String.valueOf(activeAxes.get(i).getType()).toLowerCase();
-        Quantity axisScale = getScale(meta, series, axisChar.charAt(0));
+        Quantity axisScale = getScale(meta, series, axisType);
 
         if (axisScale != null) {
           // if physical dimension information is defined,
@@ -2963,10 +3015,10 @@ public class Converter implements Callable<Integer> {
           // increase it according to the resolution number for dimensions that
           // are scaled (X and Y)
           double as = axisScale.value().doubleValue();
-          if (axisChar.equals("x")) {
+          if (axisType.equals("x")) {
             axisValues.add(as * resolutionScalesX.get(r));
           }
-          else if (axisChar.equals("y")) {
+          else if (axisType.equals("y")) {
             axisValues.add(as * resolutionScalesY.get(r));
           }
           else {
@@ -2977,10 +3029,10 @@ public class Converter implements Callable<Integer> {
           // if physical dimension information is not defined,
           // store the scale factor for the dimension in the current resolution,
           // i.e. 1.0 for everything other than X and Y
-          if (axisChar.equals("x")) {
+          if (axisType.equals("x")) {
             axisValues.add(resolutionScalesX.get(r));
           }
-          else if (axisChar.equals("y")) {
+          else if (axisType.equals("y")) {
             axisValues.add(resolutionScalesY.get(r));
           }
           else {
@@ -3002,9 +3054,12 @@ public class Converter implements Callable<Integer> {
     List<Map<String, String>> axes = new ArrayList<Map<String, String>>();
     for (int i=0; i<activeAxes.size(); i++) {
       String axis = String.valueOf(activeAxes.get(i).getType()).toLowerCase();
-      String type = "space";
-      Quantity scale = getScale(meta, series, axis.charAt(0));
-      if (axis.equals("t")) {
+      String type = null;
+      Quantity scale = getScale(meta, series, axis);
+      if (axis.equals("x") || axis.equals("y") || axis.equals("z")) {
+        type = "space";
+      }
+      else if (axis.equals("t") || axis.toLowerCase().indexOf("time") >= 0) {
         type = "time";
       }
       else if (axis.equals("c")) {
@@ -3160,7 +3215,7 @@ public class Converter implements Callable<Integer> {
     LOGGER.debug("    finished writing subgroup attributes");
   }
 
-  private Quantity getScale(IMetadata meta, int series, char axisChar) {
+  private Quantity getScale(IMetadata meta, int series, String axisType) {
     if (meta == null) {
       return null;
     }
@@ -3170,24 +3225,25 @@ public class Converter implements Callable<Integer> {
       return null;
     }
 
-    switch (axisChar) {
-      case 'x':
-        return meta.getPixelsPhysicalSizeX(seriesIndex);
-      case 'y':
-        return meta.getPixelsPhysicalSizeY(seriesIndex);
-      case 'z':
-        return meta.getPixelsPhysicalSizeZ(seriesIndex);
-      case 't':
-        Quantity timeIncrement = meta.getPixelsTimeIncrement(seriesIndex);
-        if (timeIncrement != null && timeIncrement.value().doubleValue() > 0) {
-          return timeIncrement;
-        }
-        else {
-          return null;
-        }
-      default:
-        return null;
+    if (axisType.equalsIgnoreCase("x")) {
+      return meta.getPixelsPhysicalSizeX(seriesIndex);
     }
+    else if (axisType.equalsIgnoreCase("y")) {
+      return meta.getPixelsPhysicalSizeY(seriesIndex);
+    }
+    else if (axisType.equalsIgnoreCase("z")) {
+      return meta.getPixelsPhysicalSizeZ(seriesIndex);
+    }
+    else if (axisType.equalsIgnoreCase("t")) {
+      Quantity timeIncrement = meta.getPixelsTimeIncrement(seriesIndex);
+      if (timeIncrement != null && timeIncrement.value().doubleValue() > 0) {
+        return timeIncrement;
+      }
+      else {
+        return null;
+      }
+    }
+    return null;
   }
 
   /**
