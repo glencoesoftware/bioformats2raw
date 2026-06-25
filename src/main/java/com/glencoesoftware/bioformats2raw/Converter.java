@@ -1248,7 +1248,8 @@ public class Converter implements Callable<Integer> {
    * @return true if Zarr v3 data should be written
    */
   public boolean getV3() {
-    return getNGFFVersion() == SupportedVersions.NGFF_05;
+    return getNGFFVersion() == SupportedVersions.NGFF_05 ||
+      getNGFFVersion() == SupportedVersions.NGFF_DEV;
   }
 
   /**
@@ -2161,9 +2162,14 @@ public class Converter implements Callable<Integer> {
         dimensionOrder != null? dimensionOrder.toString()
         : reader.getDimensionOrder()).reverse().toString();
 
-    Modulo mz = reader.getModuloZ();
-    Modulo mc = reader.getModuloC();
-    Modulo mt = reader.getModuloT();
+    Modulo mz = null;
+    Modulo mc = null;
+    Modulo mt = null;
+    if (getNGFFVersion() == SupportedVersions.NGFF_DEV) {
+      mz = reader.getModuloZ();
+      mc = reader.getModuloC();
+      mt = reader.getModuloT();
+    }
 
     int spatialDims = 0;
     for (char c : o.toCharArray()) {
@@ -2330,14 +2336,15 @@ public class Converter implements Callable<Integer> {
     int[] offset = new int[axes.size()];
     Arrays.fill(offset, 0);
 
-    Modulo mz = reader.getModuloZ();
-    int[] zLengths = new int[mz.length() > 1 ? 2 : 1];
+    boolean useModulo = getNGFFVersion() == SupportedVersions.NGFF_DEV;
+    Modulo mz = useModulo ? reader.getModuloZ() : null;
+    int[] zLengths = new int[mz != null && mz.length() > 1 ? 2 : 1];
     int zLengthIndex = 0;
-    Modulo mc = reader.getModuloC();
-    int[] cLengths = new int[mc.length() > 1 ? 2 : 1];
+    Modulo mc = useModulo ? reader.getModuloC() : null;
+    int[] cLengths = new int[mc != null && mc.length() > 1 ? 2 : 1];
     int cLengthIndex = 0;
-    Modulo mt = reader.getModuloT();
-    int[] tLengths = new int[mt.length() > 1 ? 2 : 1];
+    Modulo mt = useModulo ? reader.getModuloT() : null;
+    int[] tLengths = new int[mt != null && mt.length() > 1 ? 2 : 1];
     int tLengthIndex = 0;
 
     for (int i=0; i<axes.size(); i++) {
@@ -2349,15 +2356,21 @@ public class Converter implements Callable<Integer> {
       else if (axisType.equals("Y")) {
         offset[i] = y;
       }
-      else if (axisType.equals("Z") || axisType.equals(mz.type)) {
+      else if (axisType.equals("Z") ||
+        (mz != null && axisType.equals(mz.type)))
+      {
         zLengths[zLengthIndex] = a.getLength();
         zLengthIndex++;
       }
-      else if (axisType.equals("C") || axisType.equals(mc.type)) {
+      else if (axisType.equals("C") ||
+        (mc != null && axisType.equals(mc.type)))
+      {
         cLengths[cLengthIndex] = a.getLength();
         cLengthIndex++;
       }
-      else if (axisType.equals("T") || axisType.equals(mt.type)) {
+      else if (axisType.equals("T") ||
+        (mt != null && axisType.equals(mt.type)))
+      {
         tLengths[tLengthIndex] = a.getLength();
         tLengthIndex++;
       }
@@ -2442,6 +2455,12 @@ public class Converter implements Callable<Integer> {
         int planeIndex;
         try {
           planeIndex = FormatTools.getIndex(reader, z, zct[1], zct[2]);
+          if (getNGFFVersion() == SupportedVersions.NGFF_DEV) {
+            Modulo mz = reader.getModuloZ();
+            if (mz != null && mz.length() > 1) {
+              planeIndex = plane;
+            }
+          }
         }
         finally {
           readers.put(reader);

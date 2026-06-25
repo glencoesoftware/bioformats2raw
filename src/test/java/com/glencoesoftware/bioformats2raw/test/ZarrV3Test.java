@@ -83,7 +83,7 @@ public class ZarrV3Test extends AbstractZarrTest {
     rootGroup = Group.open(store.resolve("0"));
     attrs = rootGroup.metadata().attributes;
     omeAttrs = attrs.getAttributes("ome");
-    assertEquals("0.5", omeAttrs.get("version"));
+    assertEquals(getNGFFVersion(), omeAttrs.get("version"));
 
     List<Map<String, Object>> multiscales =
       (List<Map<String, Object>>) omeAttrs.get("multiscales");

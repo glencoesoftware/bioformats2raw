@@ -10,7 +10,8 @@ package com.glencoesoftware.bioformats2raw;
 public enum SupportedVersions {
   NGFF_01("0.1"),
   NGFF_04("0.4"),
-  NGFF_05("0.5");
+  NGFF_05("0.5"),
+  NGFF_DEV("1.0-DEV");
 
   private final String value;
 
