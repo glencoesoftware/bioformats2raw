@@ -100,6 +100,7 @@ import dev.zarr.zarrjava.core.Group;
 import dev.zarr.zarrjava.core.chunkkeyencoding.Separator;
 import dev.zarr.zarrjava.store.FilesystemStore;
 import dev.zarr.zarrjava.store.StoreHandle;
+import dev.zarr.zarrjava.utils.IndexingUtils;
 import dev.zarr.zarrjava.utils.Utils;
 
 import dev.zarr.zarrjava.v3.ArrayMetadata;
@@ -241,6 +242,8 @@ public class Converter implements Callable<Integer> {
 
   private IProgressListener progressListener;
   private Map<Integer, int[]> tileCounts = new HashMap<Integer, int[]>();
+  private Map<String, List<long[]>> shardOffsets =
+    new HashMap<String, List<long[]>>();
 
   // Option setters
 
@@ -2011,7 +2014,53 @@ public class Converter implements Callable<Integer> {
     Array array = Array.open(store.resolve(pathName));
     final ucar.ma2.Array pixels = ucar.ma2.Array.factory(
       array.metadata().dataType().getMA2DataType(), shape, tile);
-    array.write(Utils.toLongArray(offset), pixels);
+
+    // if writing sharded data, we need to ensure that only one chunk
+    // is written to each shard at a time (since one shard == one file)
+    if (shardOffsets.containsKey(pathName) &&
+      !isWholeShard(array, shape, offset))
+    {
+      dev.zarr.zarrjava.v3.Array v3Array = (dev.zarr.zarrjava.v3.Array) array;
+      int[] shardSizes = array.metadata().chunkShape();
+      long[] shard = new long[shardSizes.length];
+      for (int i=0; i<offset.length; i++) {
+        shard[i] = offset[i] / shardSizes[i];
+      }
+      // lock on one of the pre-computed shard offsets, as locking on
+      // 'shard' won't be sufficient
+      // this still allows chunks in other shards to be written,
+      // so minimizes the performance impact compared to just
+      // synchronizing the method
+      long[] shardLock = null;
+      for (long[] computedOffset : shardOffsets.get(pathName)) {
+        if (Arrays.equals(computedOffset, shard)) {
+          shardLock = computedOffset;
+          break;
+        }
+      }
+      synchronized (shardLock) {
+        array.write(Utils.toLongArray(offset), pixels);
+      }
+    }
+    else {
+      // if not writing sharded data, each chunk gets written to a separate file
+      // so we're not worried about conflicting writes to the same file
+      array.write(Utils.toLongArray(offset), pixels);
+    }
+  }
+
+  private boolean isWholeShard(Array array, int[] shape, int[] offset) {
+    if (!getV3()) {
+      return true;
+    }
+    dev.zarr.zarrjava.v3.Array v3Array = (dev.zarr.zarrjava.v3.Array) array;
+    int[] shardSizes = v3Array.metadata().chunkShape();
+    for (int i=0; i<shardSizes.length; i++) {
+      if (shape[i] != shardSizes[i] || offset[i] % shardSizes[i] != 0) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private byte[] getTileDownsampled(
@@ -2541,6 +2590,18 @@ public class Converter implements Callable<Integer> {
             .withCodecs(c -> builder)
             .build()
         );
+        // pre-compute a list of shard offsets
+        // these will get used when writing to ensure that
+        // only one chunk gets written to a shard at a time
+        if (useSharding) {
+          ArrayList<long[]> shards = new ArrayList<long[]>();
+          long[][] shardCoords =
+            IndexingUtils.computeChunkCoords(arrayShape, shardSizes);
+          for (long[] shard : shardCoords) {
+            shards.add(shard);
+          }
+          shardOffsets.put(resolutionString, shards);
+        }
       }
       else {
         dev.zarr.zarrjava.v2.ArrayMetadataBuilder builder =
