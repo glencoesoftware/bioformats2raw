@@ -2622,7 +2622,7 @@ public class Converter implements Callable<Integer> {
           int blocksize = Integer.parseInt(
             compressionProperties.getOrDefault("blocksize", "0").toString());
           String shuffle = compressionProperties.getOrDefault(
-            "shuffle", "byteshuffle").toString();
+            "shuffle", "shuffle").toString();
           builder =
             builder.withBloscCompressor(cname, shuffle, clevel, blocksize);
         }
@@ -3581,7 +3581,7 @@ public class Converter implements Callable<Integer> {
       int blocksize = Integer.parseInt(
         compressionProperties.getOrDefault("blocksize", "0").toString());
       String shuffle = compressionProperties.getOrDefault(
-        "shuffle", "byteshuffle").toString();
+        "shuffle", "shuffle").toString();
 
       return builder.withBlosc(cname, shuffle, clevel, blocksize);
     }

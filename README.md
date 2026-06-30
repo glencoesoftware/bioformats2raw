@@ -172,7 +172,7 @@ Supported options for `blosc` are:
 * `clevel=<level>`, where the default is `clevel=5`. Valid values are integers from 0 to 9 inclusive, where 0 generally
   indicates no compression and 9 generally indicates most compression.
 * `blocksize=<blocksize>`, where the default is `blocksize=0`.
-* `shuffle=<shuffle type>`, where the default is `shuffle=byteshuffle`. Valid values are `noshuffle`, `shuffle`/`byteshuffle`, and `bitshuffle`.
+* `shuffle=<shuffle type>`, where the default is `shuffle=shuffle`. Valid values are `noshuffle`, `shuffle`, and `bitshuffle`.
 
 See also the blosc codec definition in the [Zarr v3 specification](https://zarr-specs.readthedocs.io/en/latest/v3/codecs/blosc/index.html#configuration-parameters).
 
