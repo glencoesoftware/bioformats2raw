@@ -17,6 +17,7 @@ import java.util.stream.Stream;
 
 import com.scalableminds.bloscjava.Blosc;
 import dev.zarr.zarrjava.core.Attributes;
+import dev.zarr.zarrjava.store.ReadOnlyZipStore;
 import dev.zarr.zarrjava.v3.Array;
 import dev.zarr.zarrjava.v3.ArrayMetadata;
 import dev.zarr.zarrjava.v3.DataType;
@@ -81,6 +82,69 @@ public class ZarrV3Test extends AbstractZarrTest {
     assertArrayEquals(new long[] {1, 1, 1, 512, 512}, array.metadata().shape);
 
     rootGroup = Group.open(store.resolve("0"));
+    attrs = rootGroup.metadata().attributes;
+    omeAttrs = attrs.getAttributes("ome");
+    assertEquals("0.5", omeAttrs.get("version"));
+
+    List<Map<String, Object>> multiscales =
+      (List<Map<String, Object>>) omeAttrs.get("multiscales");
+    assertEquals(1, multiscales.size());
+    Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "image");
+
+    List<Map<String, Object>> datasets =
+      (List<Map<String, Object>>) multiscale.get("datasets");
+    assertTrue(datasets.size() > 0);
+    assertEquals("0", datasets.get(0).get("path"));
+
+    List<Map<String, Object>> axes =
+      (List<Map<String, Object>>) multiscale.get("axes");
+    checkAxes(axes, "TCZYX", null);
+
+    for (int r=0; r<datasets.size(); r++) {
+      Map<String, Object> dataset = datasets.get(r);
+      List<Map<String, Object>> transforms =
+        (List<Map<String, Object>>) dataset.get("coordinateTransformations");
+      assertEquals(1, transforms.size());
+      Map<String, Object> scale = transforms.get(0);
+      assertEquals("scale", scale.get("type"));
+      List<Double> axisValues = (List<Double>) scale.get("scale");
+
+      assertEquals(5, axisValues.size());
+      double factor = Math.pow(2, r);
+      // X and Y are the only dimensions that are downsampled,
+      // so the TCZ physical scales remain the same across all resolutions
+      assertEquals(axisValues, Arrays.asList(new Double[] {
+        1.0, 1.0, 1.0, factor, factor}));
+    }
+  }
+
+ /**
+   * Test basic v3 .ozx conversion.
+   */
+  @Test
+  public void testDefaultZip() throws Exception {
+    input = fake();
+    output = output.resolve("zipstore.ozx");
+    assertTool("--ngff-version", getNGFFVersion());
+
+    assertFalse(Files.exists(output.resolve("zarr.json")));
+    assertFalse(
+      Files.exists(output.resolve("OME").resolve("METADATA.ome.xml")));
+    assertTrue(Files.exists(output));
+
+    ReadOnlyZipStore zipStore = new ReadOnlyZipStore(output);
+
+    Group rootGroup = Group.open(zipStore.resolve());
+    Attributes attrs = rootGroup.metadata().attributes;
+    Attributes omeAttrs = attrs.getAttributes("ome");
+    assertEquals(getNGFFVersion(), omeAttrs.get("version"));
+    assertEquals(3, omeAttrs.get("bioformats2raw.layout"));
+
+    Array array = Array.open(zipStore.resolve("0", "0"));
+    assertArrayEquals(new long[] {1, 1, 1, 512, 512}, array.metadata().shape);
+
+    rootGroup = Group.open(zipStore.resolve("0"));
     attrs = rootGroup.metadata().attributes;
     omeAttrs = attrs.getAttributes("ome");
     assertEquals("0.5", omeAttrs.get("version"));
@@ -231,8 +295,8 @@ public class ZarrV3Test extends AbstractZarrTest {
     input = fake();
     assertTool("--no-ome-meta-export", "--ngff-version", getNGFFVersion());
 
-    assertTrue(
-      !Files.exists(output.resolve("OME").resolve("METADATA.ome.xml")));
+    assertFalse(
+      Files.exists(output.resolve("OME").resolve("METADATA.ome.xml")));
   }
 
   /**
