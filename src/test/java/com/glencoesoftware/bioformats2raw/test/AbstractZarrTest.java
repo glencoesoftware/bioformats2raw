@@ -18,13 +18,17 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import loci.common.LogbackTools;
 import loci.common.services.ServiceFactory;
 import loci.formats.FormatTools;
 import loci.formats.in.FakeReader;
+import loci.formats.in.OMETiffReader;
+import loci.formats.ome.OMEXMLMetadata;
 import loci.formats.services.OMEXMLService;
 import ome.xml.model.OME;
+import ome.xml.model.Pixels;
 
 import com.glencoesoftware.bioformats2raw.Converter;
 import dev.zarr.zarrjava.ZarrException;
@@ -34,6 +38,9 @@ import dev.zarr.zarrjava.utils.Utils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -162,6 +169,57 @@ public abstract class AbstractZarrTest {
     }
   }
 
+  /**
+   * Test modulo dimension handling.
+   * As written, this tests correct behavior for OME-Zarr 0.5 and earlier,
+   * which is to ignore the modulo dimensions in favor of the parent dimension.
+   *
+   * @param moduloFile OME-TIFF file with modulo dimension(s)
+   */
+  @ParameterizedTest
+  @MethodSource("getModuloFiles")
+  public void testModulo(String moduloFile) throws Exception {
+    input = getTestFile(moduloFile);
+    assertTool();
+
+    OME ome = getOMEMetadata();
+    Pixels pix = ome.getImage(0).getPixels();
+    int x = pix.getSizeX().getValue().intValue();
+    int y = pix.getSizeY().getValue().intValue();
+    int z = pix.getSizeZ().getValue().intValue();
+    int c = pix.getSizeC().getValue().intValue();
+    int t = pix.getSizeT().getValue().intValue();
+
+    Array series0 = Array.open(store.resolve("0", "0"));
+    assertArrayEquals(new long[] {t, c, z, y, x}, series0.metadata().shape);
+    assertArrayEquals(
+      new int[] {1, 1, 1, y, x}, series0.metadata().chunkShape());
+
+    try (OMETiffReader r = new OMETiffReader()) {
+      r.setId(input.toString());
+      for (int p=0; p<r.getImageCount(); p++) {
+        int[] zct = r.getZCTCoords(p);
+        byte[] src = r.openBytes(p);
+        ucar.ma2.Array dest = series0.read(
+          new long[] {zct[2], zct[1], zct[0], 0, 0},
+          Utils.toLongArray(series0.metadata().chunkShape()));
+        ByteBuffer buf = dest.getDataAsByteBuffer();
+        byte[] destBytes = new byte[buf.remaining()];
+        buf.get(destBytes);
+
+        assertArrayEquals(src, destBytes);
+      }
+    }
+  }
+
+  static Stream<Arguments> getModuloFiles() {
+    return Stream.of(
+      Arguments.of("mini-flim-moduloC.ome.tiff"),
+      Arguments.of("mini-flim-moduloT.ome.tiff"),
+      Arguments.of("mini-spim-moduloZ.ome.tiff")
+    );
+  }
+
   void checkAxes(List<Map<String, Object>> axes, String order,
     String[] units)
   {
@@ -195,6 +253,15 @@ public abstract class AbstractZarrTest {
     String omexml = new String(Files.readAllBytes(xml), StandardCharsets.UTF_8);
     assertTrue(xmlService.validateOMEXML(omexml));
     return (OME) xmlService.createOMEXMLRoot(omexml);
+  }
+
+  OMEXMLMetadata getOMEMetadataStore() throws Exception {
+    Path xml = output.resolve("OME").resolve("METADATA.ome.xml");
+    String omexml = new String(Files.readAllBytes(xml), StandardCharsets.UTF_8);
+    ServiceFactory sf = new ServiceFactory();
+    OMEXMLService xmlService = sf.getInstance(OMEXMLService.class);
+    assertTrue(xmlService.validateOMEXML(omexml));
+    return xmlService.createOMEXMLMetadata(omexml);
   }
 
   void checkPlateSeriesMetadata(List<String> groupMap,
@@ -329,4 +396,5 @@ public abstract class AbstractZarrTest {
   abstract void checkMultiscale(Map<String, Object> multiscale, String name);
 
   abstract String getNGFFVersion();
+
 }
