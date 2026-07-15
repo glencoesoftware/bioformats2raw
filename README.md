@@ -80,14 +80,29 @@ You can configure logging by editing the provided `logback.xml` or by specifying
     JAVA_OPTS="-Dlogback.configurationFile=/path/to/external/logback.xml" \
     bioformats2raw ...
 
-Alternatively you can use the `--debug` flag, optionally writing the stdout to a file:
+Alternatively you can use the `--debug` flag, optionally writing the log output to a file:
 
-    bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --debug > bf2raw.log
+    bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --debug 2> bf2raw.log
 
 The `--log-level` option takes an [slf4j logging level](https://www.slf4j.org/faq.html#fatal) for additional simple logging configuration.
 `--log-level DEBUG` is equivalent to `--debug`. For even more verbose logging:
 
     bioformats2raw /path/to/file.mrxs /path/to/zarr-pyramid --log-level TRACE
+
+Command output and exit status
+==============================
+
+Help and version information are written to standard output. Logging,
+progress bars, warnings, and errors are written to standard error. A successful
+conversion does not otherwise write to standard output.
+
+Routine errors are concise. Use `--debug` or `--log-level DEBUG` to include a
+Java stack trace for troubleshooting.
+
+If conversion fails or is interrupted after writing starts, the output is kept
+and may be incomplete. When `--overwrite` is used, input is checked before the
+existing local output is removed. Each old path is deleted with error checking,
+but a deletion failure can still leave the existing output partially removed.
 
 Eclipse Configuration
 =====================
