@@ -37,6 +37,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 
 import loci.common.Constants;
 import loci.common.Region;
@@ -225,6 +226,7 @@ public class Converter implements Callable<Integer> {
   private volatile BlockingQueue<Runnable> queue;
 
   private volatile ExecutorService executor;
+  private volatile Class<?> baseReaderClass;
 
   /**
    * The source file's pixel type.  Retrieved from
@@ -244,6 +246,7 @@ public class Converter implements Callable<Integer> {
   private volatile Path outputPath;
 
   private IProgressListener progressListener;
+  private volatile boolean outputStarted = false;
   private Map<Integer, int[]> tileCounts = new HashMap<Integer, int[]>();
   private Map<String, List<long[]>> shardOffsets =
     new HashMap<String, List<long[]>>();
@@ -1388,6 +1391,7 @@ public class Converter implements Callable<Integer> {
   }
 
   private void validateConfiguration() {
+    outputStarted = false;
     if (maxWorkers <= 0 || tileWidth <= 0 || tileHeight <= 0 ||
       chunkDepth <= 0 || shardWidth <= 0 || shardHeight <= 0 ||
       shardDepth <= 0 || minSize <= 0)
@@ -1615,6 +1619,9 @@ public class Converter implements Callable<Integer> {
       setProgressListener(new ProgressBarListener(logLevel));
     }
 
+    // Verify that the input can be opened before modifying an existing output.
+    baseReaderClass = getBaseReaderClass();
+
     if (outputLocation.contains("://")) {
 
       LOGGER.info("*** experimental remote filesystem support ***");
@@ -1632,14 +1639,16 @@ public class Converter implements Callable<Integer> {
       LOGGER.debug("path: {}", rest);
       LOGGER.debug("opts: {}", outputOptions);
 
-      FileSystem fs = FileSystems.newFileSystem(endpoint, outputOptions);
+      Map<String, String> options = outputOptions == null ?
+        new HashMap<String, String>() : outputOptions;
+      FileSystem fs = FileSystems.newFileSystem(endpoint, options);
       outputPath = fs.getPath(bucket, rest);
       if (Files.exists(outputPath)) {
         if (overwrite) {
-          LOGGER.warn("overwriting on remote filesystem not yet supported");
+          throw new IOException(
+            "overwriting on remote filesystems is not supported");
         }
-        throw new IllegalArgumentException(
-                "Output path " + outputPath + " already exists.");
+        throw new IOException("output path " + outputPath + " already exists");
       }
     }
     else {
@@ -1647,14 +1656,9 @@ public class Converter implements Callable<Integer> {
 
       if (Files.exists(outputPath)) {
         if (!overwrite) {
-          throw new IllegalArgumentException(
-                  "Output path " + outputPath + " already exists");
+          throw new IOException(
+            "output path " + outputPath + " already exists");
         }
-        LOGGER.warn("Overwriting output path {}", outputPath);
-        Files.walk(outputPath)
-                .sorted(Comparator.reverseOrder())
-                .map(Path::toFile)
-                .forEach(File::delete);
       }
     }
 
@@ -1686,7 +1690,8 @@ public class Converter implements Callable<Integer> {
         .build();
 
     // First find which reader class we need
-    Class<?> readerClass = getBaseReaderClass();
+    Class<?> readerClass = baseReaderClass == null ?
+      getBaseReaderClass() : baseReaderClass;
 
     // Now with our found type instantiate our queue of readers for use
     // during conversion
@@ -1743,6 +1748,7 @@ public class Converter implements Callable<Integer> {
       // Finally, perform conversion on all series
       IFormatReader v = readers.take();
       IMetadata meta = null;
+      String originalMetadataXml = null;
       try {
         meta = (IMetadata) v.getMetadataStore();
         ((OMEXMLMetadata) meta).resolveReferences();
@@ -1812,15 +1818,7 @@ public class Converter implements Callable<Integer> {
           for (int s=0; s<meta.getImageCount(); s++) {
             service.addMetadataOnly((OMEXMLMetadata) meta, s, s == 0);
           }
-          String xml = service.getOMEXML(meta);
-
-          // write the original OME-XML to a file
-          Path metadataPath = getRootPath().resolve("OME");
-          if (!Files.exists(metadataPath)) {
-            Files.createDirectories(metadataPath);
-          }
-          Path omexmlFile = metadataPath.resolve(METADATA_FILE);
-          Files.write(omexmlFile, xml.getBytes(Constants.ENCODING));
+          originalMetadataXml = service.getOMEXML(meta);
         }
       }
       catch (ServiceException se) {
@@ -1841,6 +1839,17 @@ public class Converter implements Callable<Integer> {
         scaleFormatString = "%s/%s/%d/%d";
       }
       validateScaleFormat();
+      prepareOutput();
+
+      if (originalMetadataXml != null) {
+        Path metadataPath = getRootPath().resolve("OME");
+        if (!Files.exists(metadataPath)) {
+          Files.createDirectories(metadataPath);
+        }
+        Path omexmlFile = metadataPath.resolve(METADATA_FILE);
+        Files.write(omexmlFile,
+          originalMetadataXml.getBytes(Constants.ENCODING));
+      }
 
       writeZarrMetadata();
 
@@ -2124,10 +2133,41 @@ public class Converter implements Callable<Integer> {
    * @return directory into which Zarr and OME-XML data is written
    */
   private Path getRootPath() {
-    if (pyramidName == null) {
-      return outputPath;
+    Path rootPath = outputPath;
+    if (rootPath == null) {
+      throw new IllegalStateException("output path has not been initialized");
     }
-    return outputPath.resolve(pyramidName);
+    String name = pyramidName;
+    if (name == null) {
+      return rootPath;
+    }
+    return rootPath.resolve(name);
+  }
+
+  private void prepareOutput() throws IOException {
+    Path path = outputPath;
+    if (path == null) {
+      throw new IllegalStateException("output path has not been initialized");
+    }
+    if (Files.exists(path)) {
+      if (outputLocation.contains("://")) {
+        throw new IOException(
+          "overwriting on remote filesystems is not supported");
+      }
+      if (!overwrite) {
+        throw new IOException("output path " + path + " already exists");
+      }
+      LOGGER.warn("Overwriting output path {}", path);
+      outputStarted = true;
+      try (Stream<Path> paths = Files.walk(path)) {
+        Iterable<Path> ordered = () ->
+          paths.sorted(Comparator.reverseOrder()).iterator();
+        for (Path existing : ordered) {
+          Files.delete(existing);
+        }
+      }
+    }
+    outputStarted = true;
   }
 
   /**
