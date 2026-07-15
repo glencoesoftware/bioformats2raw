@@ -22,7 +22,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.IllegalFormatException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -174,7 +177,7 @@ public class Converter implements Callable<Integer> {
   private volatile boolean originalMetadata = true;
 
   private volatile SupportedVersions ngffVersion = SupportedVersions.NGFF_04;
-  private volatile boolean v3 = false;
+  private volatile boolean ngffVersionSet = false;
   private volatile FilesystemStore store = null;
 
   private volatile int maxWorkers;
@@ -301,6 +304,12 @@ public class Converter implements Callable<Integer> {
     defaultValue = Option.NULL_VALUE
   )
   public void setOutputOptions(Map<String, String> options) {
+    if (options != null && (options.containsKey(null) ||
+      options.containsValue(null)))
+    {
+      throw new InvalidConfigurationException(
+        "--output-options entries must use key=value syntax");
+    }
     outputOptions = options;
   }
 
@@ -324,7 +333,8 @@ public class Converter implements Callable<Integer> {
       pyramidResolutions = resolutions;
     }
     else {
-      LOGGER.warn("Ignoring invalid resolution count: {}", resolutions);
+      throw new InvalidConfigurationException(
+        "--resolutions must be greater than zero");
     }
   }
 
@@ -344,6 +354,10 @@ public class Converter implements Callable<Integer> {
   )
   public void setSeriesList(List<Integer> seriesToConvert) {
     if (seriesToConvert != null) {
+      if (seriesToConvert.stream().anyMatch((index) -> index < 0)) {
+        throw new InvalidConfigurationException(
+          "--series indexes must be zero or greater");
+      }
       seriesList = seriesToConvert;
     }
     else {
@@ -365,12 +379,8 @@ public class Converter implements Callable<Integer> {
     defaultValue = "1024"
   )
   public void setTileWidth(int width) {
-    if (width > 0) {
-      tileWidth = width;
-    }
-    else {
-      LOGGER.warn("Ignoring invalid tile width: {}", width);
-    }
+    requirePositive("--tile-width", width);
+    tileWidth = width;
   }
 
   /**
@@ -387,12 +397,8 @@ public class Converter implements Callable<Integer> {
     defaultValue = "1024"
   )
   public void setTileHeight(int height) {
-    if (height > 0) {
-      tileHeight = height;
-    }
-    else {
-      LOGGER.warn("Ignoring invalid tile height: {}", height);
-    }
+    requirePositive("--tile-height", height);
+    tileHeight = height;
   }
 
   /**
@@ -406,12 +412,8 @@ public class Converter implements Callable<Integer> {
     defaultValue = "1"
   )
   public void setChunkDepth(int depth) {
-    if (depth > 0) {
-      chunkDepth = depth;
-    }
-    else {
-      LOGGER.warn("Ignoring invalid chunk depth: {}", depth);
-    }
+    requirePositive("--chunk-depth", depth);
+    chunkDepth = depth;
   }
 
   /**
@@ -426,12 +428,8 @@ public class Converter implements Callable<Integer> {
     defaultValue = "1024"
   )
   public void setShardWidth(int width) {
-    if (width > 0) {
-      shardWidth = width;
-    }
-    else {
-      LOGGER.warn("Ignoring invalid shard width: {}", width);
-    }
+    requirePositive("--shard-width", width);
+    shardWidth = width;
   }
 
   /**
@@ -446,12 +444,8 @@ public class Converter implements Callable<Integer> {
     defaultValue = "1024"
   )
   public void setShardHeight(int height) {
-    if (height > 0) {
-      shardHeight = height;
-    }
-    else {
-      LOGGER.warn("Ignoring invalid shard height: {}", height);
-    }
+    requirePositive("--shard-height", height);
+    shardHeight = height;
   }
 
   /**
@@ -465,12 +459,8 @@ public class Converter implements Callable<Integer> {
     defaultValue = "1"
   )
   public void setShardDepth(int depth) {
-    if (depth > 0) {
-      shardDepth = depth;
-    }
-    else {
-      LOGGER.warn("Ignoring invalid shard depth: {}", depth);
-    }
+    requirePositive("--shard-depth", depth);
+    shardDepth = depth;
   }
 
   /**
@@ -503,7 +493,14 @@ public class Converter implements Callable<Integer> {
   )
   public void setLogLevel(String level) {
     if (level != null) {
-      logLevel = level;
+      String normalized = level.toUpperCase(Locale.ROOT);
+      List<String> levels = Arrays.asList(
+        "OFF", "ERROR", "WARN", "INFO", "DEBUG", "TRACE", "ALL");
+      if (!levels.contains(normalized)) {
+        throw new InvalidConfigurationException(
+          "--log-level must be one of " + String.join(", ", levels));
+      }
+      logLevel = normalized;
     }
   }
 
@@ -582,15 +579,13 @@ public class Converter implements Callable<Integer> {
     defaultValue = "4"
   )
   public void setMaxWorkers(int workers) {
+    requirePositive("--max-workers", workers);
     int availableProcessors = Runtime.getRuntime().availableProcessors();
     if (workers > availableProcessors) {
       maxWorkers = availableProcessors;
     }
-    else if (workers > 0) {
-      maxWorkers = workers;
-    }
     else {
-      LOGGER.warn("Ignoring invalid worker count: {}", workers);
+      maxWorkers = workers;
     }
   }
 
@@ -609,6 +604,10 @@ public class Converter implements Callable<Integer> {
     defaultValue = "64"
   )
   public void setMaxCachedTiles(int maxTiles) {
+    if (maxTiles < 0) {
+      throw new InvalidConfigurationException(
+        "--max-cached-tiles must be zero or greater");
+    }
     maxCachedTiles = maxTiles;
   }
 
@@ -641,6 +640,10 @@ public class Converter implements Callable<Integer> {
   )
   public void setCompressionProperties(Map<String, Object> properties) {
     if (properties != null) {
+      if (properties.containsKey(null) || properties.containsValue(null)) {
+        throw new InvalidConfigurationException(
+          "--compression-properties entries must use key=value syntax");
+      }
       compressionProperties = properties;
     }
     else {
@@ -672,6 +675,12 @@ public class Converter implements Callable<Integer> {
   )
   public void setExtraReaders(Class<?>[] extraReaderList) {
     if (extraReaderList != null) {
+      for (Class<?> reader : extraReaderList) {
+        if (reader == null || !IFormatReader.class.isAssignableFrom(reader)) {
+          throw new InvalidConfigurationException(
+            "--extra-readers classes must implement IFormatReader");
+        }
+      }
       extraReaders = extraReaderList;
     }
   }
@@ -710,7 +719,12 @@ public class Converter implements Callable<Integer> {
   public void setUnnested(boolean unnested) {
     nested = !unnested;
     if (!nested) {
+      if (ngffVersionSet && ngffVersion != SupportedVersions.NGFF_01) {
+        throw new InvalidConfigurationException(
+          "--no-nested is only compatible with --ngff-version 0.1");
+      }
       setNGFFVersion(SupportedVersions.NGFF_01);
+      ngffVersionSet = false;
     }
   }
 
@@ -748,9 +762,11 @@ public class Converter implements Callable<Integer> {
           defaultValue = "%d/%d"
   )
   public void setScaleFormat(String formatString) {
-    if (formatString != null) {
-      scaleFormatString = formatString;
+    if (formatString == null || formatString.isEmpty()) {
+      throw new InvalidConfigurationException(
+        "--scale-format-string must not be empty");
     }
+    scaleFormatString = formatString;
   }
 
   /**
@@ -780,16 +796,16 @@ public class Converter implements Callable<Integer> {
    */
   @Option(
           names = "--ngff-version",
-          description = "Write the specified NGFF version, if supported",
-          defaultValue = "0.4"
+          description = "Write the specified NGFF version, if supported " +
+            "(default: 0.4)"
   )
   public void setNGFFVersion(SupportedVersions version) {
     if (!getNested() && version != SupportedVersions.NGFF_01) {
-      LOGGER.warn("Cannot use unnested storage with version {}", version);
+      throw new InvalidConfigurationException(
+        "--no-nested is only compatible with --ngff-version 0.1");
     }
-    else {
-      ngffVersion = version;
-    }
+    ngffVersion = version;
+    ngffVersionSet = true;
   }
 
   /**
@@ -868,7 +884,8 @@ public class Converter implements Callable<Integer> {
       fillValue = tileFill;
     }
     else {
-      LOGGER.warn("Ignoring invalid fill value (must be 0-255): {}", tileFill);
+      throw new InvalidConfigurationException(
+        "--fill-value must be between 0 and 255");
     }
   }
 
@@ -888,6 +905,13 @@ public class Converter implements Callable<Integer> {
   )
   public void setReaderOptions(List<String> readerOpts) {
     if (readerOpts != null) {
+      for (String option : readerOpts) {
+        String[] pair = option.split("=", 2);
+        if (pair.length != 2 || pair[0].isEmpty() || pair[1].isEmpty()) {
+          throw new InvalidConfigurationException(
+            "--options entries must use non-empty key=value syntax");
+        }
+      }
       readerOptions = readerOpts;
     }
     else {
@@ -997,12 +1021,8 @@ public class Converter implements Callable<Integer> {
       defaultValue = "" + MIN_SIZE
   )
   public void setMinImageSize(int min) {
-    if (min > 0) {
-      minSize = min;
-    }
-    else {
-      LOGGER.warn("Ignoring invalid minimum image size: {}", min);
-    }
+    requirePositive("--target-min-size", min);
+    minSize = min;
   }
 
   /**
@@ -1360,6 +1380,164 @@ public class Converter implements Callable<Integer> {
     return dimensionOrder;
   }
 
+  private static void requirePositive(String option, int value) {
+    if (value <= 0) {
+      throw new InvalidConfigurationException(
+        option + " must be greater than zero");
+    }
+  }
+
+  private void validateConfiguration() {
+    if (maxWorkers <= 0 || tileWidth <= 0 || tileHeight <= 0 ||
+      chunkDepth <= 0 || shardWidth <= 0 || shardHeight <= 0 ||
+      shardDepth <= 0 || minSize <= 0)
+    {
+      throw new InvalidConfigurationException(
+        "converter defaults have not been initialized");
+    }
+    if (!nested && ngffVersion != SupportedVersions.NGFF_01) {
+      throw new InvalidConfigurationException(
+        "--no-nested is only compatible with --ngff-version 0.1");
+    }
+    validateCompressionProperties();
+  }
+
+  private void validateCompressionProperties() {
+    if (compressionType == null || compressionProperties == null) {
+      throw new InvalidConfigurationException(
+        "compression settings have not been initialized");
+    }
+    List<String> allowed;
+    switch (compressionType) {
+      case raw:
+        allowed = new ArrayList<String>();
+        break;
+      case blosc:
+        allowed = Arrays.asList("cname", "clevel", "blocksize", "shuffle");
+        break;
+      case zlib:
+      case gzip:
+        allowed = Arrays.asList("level");
+        break;
+      case zstd:
+        allowed = Arrays.asList("level", "checksum");
+        break;
+      default:
+        throw new InvalidConfigurationException(
+          "unsupported compression type " + compressionType);
+    }
+    for (String key : compressionProperties.keySet()) {
+      if (!allowed.contains(key)) {
+        throw new InvalidConfigurationException(
+          "unsupported " + compressionType + " compression property: " + key);
+      }
+    }
+    if (getV3() && compressionType == ZarrCompression.zlib) {
+      throw new InvalidConfigurationException(
+        "Zarr v3 does not support zlib compression");
+    }
+    if (!getV3() && (compressionType == ZarrCompression.gzip ||
+      compressionType == ZarrCompression.zstd))
+    {
+      throw new InvalidConfigurationException(
+        "Zarr v2 does not support " + compressionType + " compression");
+    }
+    if (compressionType == ZarrCompression.raw &&
+      !compressionProperties.isEmpty())
+    {
+      throw new InvalidConfigurationException(
+        "uncompressed output does not accept compression properties");
+    }
+    if (compressionType == ZarrCompression.blosc) {
+      validateIntegerProperty("clevel", 0, 9, 5);
+      validateIntegerProperty("blocksize", 0, Integer.MAX_VALUE, 0);
+      String cname = property("cname", "lz4");
+      if (!Arrays.asList("lz4", "zstd", "zlib", "blosclz", "lz4hc")
+        .contains(cname))
+      {
+        throw new InvalidConfigurationException(
+          "invalid blosc cname: " + cname);
+      }
+      String shuffle = property("shuffle", "shuffle");
+      if (!Arrays.asList("noshuffle", "shuffle", "bitshuffle")
+        .contains(shuffle))
+      {
+        throw new InvalidConfigurationException(
+          "invalid blosc shuffle value: " + shuffle);
+      }
+    }
+    else if (compressionType == ZarrCompression.zlib ||
+      compressionType == ZarrCompression.gzip)
+    {
+      validateIntegerProperty("level", 0, 9,
+        compressionType == ZarrCompression.zlib ? 1 : 5);
+    }
+    else if (compressionType == ZarrCompression.zstd) {
+      validateIntegerProperty("level", -7, 22, 5);
+      String checksum = property("checksum", "true");
+      if (!(checksum.equals("true") || checksum.equals("false"))) {
+        throw new InvalidConfigurationException(
+          "zstd checksum must be true or false");
+      }
+    }
+  }
+
+  private String property(String key, String fallback) {
+    return compressionProperties.getOrDefault(key, fallback).toString();
+  }
+
+  private void validateIntegerProperty(
+    String key, int minimum, int maximum, int fallback)
+  {
+    String value = property(key, Integer.toString(fallback));
+    try {
+      int parsed = Integer.parseInt(value);
+      if (parsed < minimum || parsed > maximum) {
+        throw new InvalidConfigurationException(
+          key + " must be between " + minimum + " and " + maximum);
+      }
+    }
+    catch (NumberFormatException e) {
+      throw new InvalidConfigurationException(
+        key + " must be an integer", e);
+    }
+  }
+
+  private void validateSeriesSelection(int imageCount) {
+    if (additionalScaleFormatStringArgs != null &&
+      additionalScaleFormatStringArgs.size() != imageCount)
+    {
+      throw new InvalidConfigurationException(
+        "--additional-scale-format-string-args must contain exactly " +
+        imageCount + " rows");
+    }
+    HashSet<Integer> unique = new HashSet<Integer>();
+    for (Integer index : seriesList) {
+      if (index < 0 || index >= imageCount) {
+        throw new InvalidConfigurationException(
+          "--series index " + index + " is outside the valid range 0-" +
+          (imageCount - 1));
+      }
+      if (!unique.add(index)) {
+        throw new InvalidConfigurationException(
+          "--series index " + index + " was specified more than once");
+      }
+    }
+  }
+
+  private void validateScaleFormat() {
+    try {
+      for (Integer index : seriesList) {
+        String.format(scaleFormatString,
+          getScaleFormatStringArgs(index, 0));
+      }
+    }
+    catch (IllegalFormatException | IndexOutOfBoundsException e) {
+      throw new InvalidConfigurationException(
+        "invalid --scale-format-string or additional argument CSV", e);
+    }
+  }
+
   // Conversion methods
 
   /**
@@ -1388,15 +1566,12 @@ public class Converter implements Callable<Integer> {
     }
 
     if (inputPath == null) {
-      throw new IllegalArgumentException("Input path not specified");
+      throw new InvalidConfigurationException("input path not specified");
     }
     if (outputLocation == null) {
-      throw new IllegalArgumentException("Output location not specified");
+      throw new InvalidConfigurationException("output location not specified");
     }
-
-    if (fillValue != null && (fillValue < 0 || fillValue > 255)) {
-      throw new IllegalArgumentException("Invalid fill value: " + fillValue);
-    }
+    validateConfiguration();
     if (tileWidth != 1024 || tileHeight != 1024) {
       LOGGER.warn("Non-default tile size: {} x {}. " +
         "This may cause performance issues in some applications.",
@@ -1568,6 +1743,8 @@ public class Converter implements Callable<Integer> {
       try {
         meta = (IMetadata) v.getMetadataStore();
         ((OMEXMLMetadata) meta).resolveReferences();
+        int originalImageCount = meta.getImageCount();
+        validateSeriesSelection(originalImageCount);
 
         if (!noHCS) {
           noHCS = !hasValidPlate(meta);
@@ -1661,6 +1838,7 @@ public class Converter implements Callable<Integer> {
       if (!noHCS) {
         scaleFormatString = "%s/%s/%d/%d";
       }
+      validateScaleFormat();
 
       writeZarrMetadata();
 
@@ -3334,7 +3512,7 @@ public class Converter implements Callable<Integer> {
         ImageReader.getDefaultReaderClasses();
 
     for (Class<?> reader : extraReaders) {
-      readerClasses.addClass(0, (Class<IFormatReader>) reader);
+      readerClasses.addClass(0, reader.asSubclass(IFormatReader.class));
       LOGGER.debug("Added extra reader: {}", reader);
     }
 
