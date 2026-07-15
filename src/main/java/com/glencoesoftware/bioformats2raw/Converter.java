@@ -1026,7 +1026,7 @@ public class Converter implements Callable<Integer> {
       names = "--target-min-size",
       description = "Specifies the desired size for the largest XY dimension " +
           "of the smallest resolution, when calculating the number " +
-          "of resolutions generate. If the target size cannot be matched " +
+          "of resolutions to generate. If the target size cannot be matched " +
           "exactly, the largest XY dimension of the smallest resolution " +
           "should be smaller than the target size.",
       defaultValue = "" + MIN_SIZE
@@ -1062,7 +1062,7 @@ public class Converter implements Callable<Integer> {
   @Option(
           names = "--dimension-order",
           description = "Override the input file dimension order in the " +
-                  "output file [DEPRECRATED, results in " +
+                  "output file [DEPRECATED, results in " +
                   "invalid OME-NGFF data] " +
                   "(${COMPLETION-CANDIDATES})",
           converter = DimensionOrderConverter.class,
@@ -1930,8 +1930,7 @@ public class Converter implements Callable<Integer> {
         ((dev.zarr.zarrjava.v3.Group) root).setAttributes(rootAttributes);
       }
       else {
-        dev.zarr.zarrjava.v2.Group root =
-          dev.zarr.zarrjava.v2.Group.create(store.resolve(), attributes);
+        dev.zarr.zarrjava.v2.Group.create(store.resolve(), attributes);
       }
     }
     if (!noOMEMeta) {
@@ -1965,8 +1964,7 @@ public class Converter implements Callable<Integer> {
       }
       else {
         omeAttributes.put("series", groups);
-        dev.zarr.zarrjava.v2.Group omeRoot =
-          dev.zarr.zarrjava.v2.Group.create(store.resolve("OME"),
+        dev.zarr.zarrjava.v2.Group.create(store.resolve("OME"),
           omeAttributes);
       }
     }
@@ -2250,7 +2248,6 @@ public class Converter implements Callable<Integer> {
     if (shardOffsets.containsKey(pathName) &&
       !isWholeShard(array, shape, offset))
     {
-      dev.zarr.zarrjava.v3.Array v3Array = (dev.zarr.zarrjava.v3.Array) array;
       int[] shardSizes = array.metadata().chunkShape();
       long[] shard = new long[shardSizes.length];
       for (int i=0; i<offset.length; i++) {
@@ -2432,7 +2429,6 @@ public class Converter implements Callable<Integer> {
       throws EnumerationException
   {
     ArrayList<Axis> axes = new ArrayList<Axis>();
-    int sizeZ = reader.getSizeZ();
     int sizeC = reader.getSizeC();
     int sizeT = reader.getSizeT();
     String o = new StringBuilder(
@@ -2811,7 +2807,7 @@ public class Converter implements Callable<Integer> {
         }
 
         final CodecBuilder builder = codecBuilder;
-        Array v3Array = dev.zarr.zarrjava.v3.Array.create(handle,
+        dev.zarr.zarrjava.v3.Array.create(handle,
           dev.zarr.zarrjava.v3.Array.metadataBuilder()
             .withDimensionNames(dimensionNames)
             .withShape(Utils.toLongArray(arrayShape))
@@ -3050,7 +3046,7 @@ public class Converter implements Callable<Integer> {
 
           String rowPath = index.getRowPath();
           String columnPath = index.getColumnPath();
-          Group rowGroup = createGroup(rowPath);
+          createGroup(rowPath);
           if (getV3()) {
             Group columnGroup = createGroup(rowPath, columnPath);
             Attributes omeAttrs = new Attributes();
@@ -3059,9 +3055,8 @@ public class Converter implements Callable<Integer> {
             ((dev.zarr.zarrjava.v3.Group) columnGroup).setAttributes(omeAttrs);
           }
           else {
-            dev.zarr.zarrjava.v2.Group columnGroup =
-              dev.zarr.zarrjava.v2.Group.create(
-                store.resolve(rowPath, columnPath),
+            dev.zarr.zarrjava.v2.Group.create(
+              store.resolve(rowPath, columnPath),
               columnAttrs);
           }
 
@@ -3446,8 +3441,7 @@ public class Converter implements Callable<Integer> {
       ((dev.zarr.zarrjava.v3.Group) seriesGroup).setAttributes(attributes);
     }
     else {
-      dev.zarr.zarrjava.v2.Group seriesGroup =
-        dev.zarr.zarrjava.v2.Group.create(
+      dev.zarr.zarrjava.v2.Group.create(
         store.resolve(seriesString), attributes);
     }
     LOGGER.debug("    finished writing subgroup attributes");
@@ -3846,10 +3840,6 @@ public class Converter implements Callable<Integer> {
 
   private Group openGroup(String... path) throws IOException, ZarrException {
     return Group.open(store.resolve(path));
-  }
-
-  private static Slf4JStopWatch stopWatch() {
-    return new Slf4JStopWatch(LOGGER, Slf4JStopWatch.DEBUG_LEVEL);
   }
 
   /**
