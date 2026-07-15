@@ -1691,53 +1691,56 @@ public class Converter implements Callable<Integer> {
     // Now with our found type instantiate our queue of readers for use
     // during conversion
     boolean savedMemoFile = false;
-    for (int i=0; i < maxWorkers; i++) {
-      IFormatReader reader;
-      Memoizer memoizer;
-      try {
-        reader = (IFormatReader) readerClass.getConstructor().newInstance();
-        if (fillValue != null) {
-          reader.setFillColor(fillValue.byteValue());
+    List<IFormatReader> initializedReaders =
+      new ArrayList<IFormatReader>();
+    try {
+      for (int i=0; i < maxWorkers; i++) {
+        IFormatReader reader;
+        Memoizer memoizer;
+        try {
+          reader = (IFormatReader) readerClass.getConstructor().newInstance();
+          if (fillValue != null) {
+            reader.setFillColor(fillValue.byteValue());
+          }
+          memoizer = createMemoizer(reader);
         }
-        memoizer = createMemoizer(reader);
-      }
-      catch (Exception e) {
-        LOGGER.error("Failed to instantiate reader: {}", readerClass, e);
-        return;
-      }
+        catch (Exception e) {
+          throw new FormatException(
+            "failed to instantiate reader " + readerClass.getName(), e);
+        }
 
-      if (readerOptions.size() > 0) {
-        DynamicMetadataOptions options = new DynamicMetadataOptions();
-        for (String option : readerOptions) {
-          String[] pair = option.split("=");
-          if (pair.length == 2) {
+        if (readerOptions.size() > 0) {
+          DynamicMetadataOptions options = new DynamicMetadataOptions();
+          for (String option : readerOptions) {
+            String[] pair = option.split("=", 2);
             options.set(pair[0], pair[1]);
           }
+          memoizer.setMetadataOptions(options);
         }
-        memoizer.setMetadataOptions(options);
+
+        memoizer.setOriginalMetadataPopulated(!noOMEMeta && originalMetadata);
+        memoizer.setFlattenedResolutions(false);
+        memoizer.setMetadataFiltered(true);
+        memoizer.setMetadataStore(createMetadata());
+        ChannelSeparator separator = new ChannelSeparator(memoizer);
+        initializedReaders.add(separator);
+        separator.setId(inputPath.toString());
+        separator.setResolution(0);
+        if (reader instanceof MiraxReader) {
+          ((MiraxReader) reader).setTileCache(tileCache);
+        }
+        if (omeroMetadata) {
+          IFormatReader minMaxReader = new MinMaxCalculator(separator);
+          initializedReaders.set(initializedReaders.size() - 1, minMaxReader);
+          readers.add(minMaxReader);
+        }
+        else {
+          readers.add(separator);
+        }
+        savedMemoFile = savedMemoFile || memoizer.isSavedToMemo();
       }
 
-      memoizer.setOriginalMetadataPopulated(!noOMEMeta && originalMetadata);
-      memoizer.setFlattenedResolutions(false);
-      memoizer.setMetadataFiltered(true);
-      memoizer.setMetadataStore(createMetadata());
-      ChannelSeparator separator = new ChannelSeparator(memoizer);
-      separator.setId(inputPath.toString());
-      separator.setResolution(0);
-      if (reader instanceof MiraxReader) {
-        ((MiraxReader) reader).setTileCache(tileCache);
-      }
-      if (omeroMetadata) {
-        readers.add(new MinMaxCalculator(separator));
-      }
-      else {
-        readers.add(separator);
-      }
-      savedMemoFile = savedMemoFile || memoizer.isSavedToMemo();
-    }
-
-    // Finally, perform conversion on all series
-    try {
+      // Finally, perform conversion on all series
       IFormatReader v = readers.take();
       IMetadata meta = null;
       try {
@@ -1821,8 +1824,7 @@ public class Converter implements Callable<Integer> {
         }
       }
       catch (ServiceException se) {
-        LOGGER.error("Could not retrieve OME-XML", se);
-        return;
+        throw new FormatException("could not retrieve OME-XML", se);
       }
       finally {
         readers.put(v);
@@ -1857,10 +1859,8 @@ public class Converter implements Callable<Integer> {
         try {
           write(index);
         }
-        catch (Throwable t) {
-          LOGGER.error("Error while writing series {}", index, t);
-          unwrapException(t);
-          return;
+        catch (Exception e) {
+          unwrapException(e);
         }
       }
 
@@ -1871,23 +1871,42 @@ public class Converter implements Callable<Integer> {
     finally {
       // Shut down first, tasks may still be running
       executor.shutdown();
-      executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
-      readers.forEach((v) -> {
+      InterruptedException interrupted = null;
+      try {
+        executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+      }
+      catch (InterruptedException e) {
+        executor.shutdownNow();
+        interrupted = e;
+        try {
+          executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+        }
+        catch (InterruptedException shutdownInterrupted) {
+          interrupted.addSuppressed(shutdownInterrupted);
+        }
+      }
+      initializedReaders.forEach((v) -> {
         try {
           v.close();
         }
         catch (IOException e) {
-          LOGGER.error("Exception while closing reader", e);
+          LOGGER.warn("Exception while closing reader: {}", e.getMessage());
         }
       });
-    }
-
-    // delete the memo file if it was saved and it's not explicitly kept
-    // this should mean that memo files which existed before conversion
-    // started will not be deleted
-    if (savedMemoFile && !keepMemoFiles) {
-      File memoFile = createMemoizer(null).getMemoFile(inputPath.toString());
-      memoFile.delete();
+      // Only delete memo files that were created by this conversion.
+      if (savedMemoFile && !keepMemoFiles) {
+        File memoFile = createMemoizer(null).getMemoFile(inputPath.toString());
+        try {
+          Files.deleteIfExists(memoFile.toPath());
+        }
+        catch (IOException e) {
+          LOGGER.warn("Could not delete memo file {}: {}",
+            memoFile, e.getMessage());
+        }
+      }
+      if (interrupted != null) {
+        throw interrupted;
+      }
     }
   }
 
@@ -2869,7 +2888,7 @@ public class Converter implements Callable<Integer> {
                     }
                     catch (Throwable t) {
                       future.completeExceptionally(t);
-                      LOGGER.error(
+                      LOGGER.debug(
                         "Failure processing chunk; resolution={} plane={} " +
                         "xx={} yy={} zz={} width={} height={} depth={}",
                         resolution, plane, xx, yy, zz, width, height, depth, t);
@@ -3336,7 +3355,8 @@ public class Converter implements Callable<Integer> {
         readers.forEach((minmax) -> {
           try {
             if (!(minmax instanceof MinMaxCalculator)) {
-              LOGGER.error("Cannot set OMERO min/max data");
+              LOGGER.warn("Cannot set OMERO min/max data; using type range");
+              return;
             }
 
             MinMaxCalculator calc = (MinMaxCalculator) minmax;
@@ -3355,7 +3375,8 @@ public class Converter implements Callable<Integer> {
             }
           }
           catch (FormatException|IOException e) {
-            LOGGER.error("Cannot set OMERO min/max data", e);
+            LOGGER.warn("Cannot set OMERO min/max data; using type range: {}",
+              e.getMessage());
           }
         });
 
@@ -3451,7 +3472,7 @@ public class Converter implements Callable<Integer> {
         throw rt;
       }
       catch (Throwable t2) {
-        throw new RuntimeException(t);
+        throw new RuntimeException(t2);
       }
     }
     else if (t instanceof RuntimeException) {
