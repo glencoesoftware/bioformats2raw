@@ -30,6 +30,8 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -100,7 +102,6 @@ import dev.zarr.zarrjava.core.Group;
 import dev.zarr.zarrjava.core.chunkkeyencoding.Separator;
 import dev.zarr.zarrjava.store.FilesystemStore;
 import dev.zarr.zarrjava.store.StoreHandle;
-import dev.zarr.zarrjava.utils.IndexingUtils;
 import dev.zarr.zarrjava.utils.Utils;
 
 import dev.zarr.zarrjava.v3.ArrayMetadata;
@@ -242,8 +243,35 @@ public class Converter implements Callable<Integer> {
 
   private IProgressListener progressListener;
   private Map<Integer, int[]> tileCounts = new HashMap<Integer, int[]>();
-  private Map<String, List<long[]>> shardOffsets =
-    new HashMap<String, List<long[]>>();
+  private final ConcurrentMap<String, ConcurrentMap<ShardKey, Object>>
+    shardLocks =
+    new ConcurrentHashMap<String, ConcurrentMap<ShardKey, Object>>();
+
+  private static final class ShardKey {
+
+    private final long[] coordinates;
+
+    ShardKey(long[] coordinates) {
+      this.coordinates = Arrays.copyOf(coordinates, coordinates.length);
+    }
+
+    @Override
+    public boolean equals(Object other) {
+      if (this == other) {
+        return true;
+      }
+      if (!(other instanceof ShardKey)) {
+        return false;
+      }
+      ShardKey key = (ShardKey) other;
+      return Arrays.equals(coordinates, key.coordinates);
+    }
+
+    @Override
+    public int hashCode() {
+      return Arrays.hashCode(coordinates);
+    }
+  }
 
   // Option setters
 
@@ -2017,7 +2045,8 @@ public class Converter implements Callable<Integer> {
 
     // if writing sharded data, we need to ensure that only one chunk
     // is written to each shard at a time (since one shard == one file)
-    if (shardOffsets.containsKey(pathName) &&
+    ConcurrentMap<ShardKey, Object> arrayShardLocks = shardLocks.get(pathName);
+    if (arrayShardLocks != null &&
       !isWholeShard(array, shape, offset))
     {
       dev.zarr.zarrjava.v3.Array v3Array = (dev.zarr.zarrjava.v3.Array) array;
@@ -2026,18 +2055,14 @@ public class Converter implements Callable<Integer> {
       for (int i=0; i<offset.length; i++) {
         shard[i] = offset[i] / shardSizes[i];
       }
-      // lock on one of the pre-computed shard offsets, as locking on
-      // 'shard' won't be sufficient
+      // Lock on a shared object for these shard coordinates. Locking on
+      // 'shard' itself would not be sufficient because it is local to this
+      // invocation.
       // this still allows chunks in other shards to be written,
       // so minimizes the performance impact compared to just
       // synchronizing the method
-      long[] shardLock = null;
-      for (long[] computedOffset : shardOffsets.get(pathName)) {
-        if (Arrays.equals(computedOffset, shard)) {
-          shardLock = computedOffset;
-          break;
-        }
-      }
+      Object shardLock = arrayShardLocks.computeIfAbsent(
+        new ShardKey(shard), key -> new Object());
       synchronized (shardLock) {
         array.write(Utils.toLongArray(offset), pixels);
       }
@@ -2590,17 +2615,11 @@ public class Converter implements Callable<Integer> {
             .withCodecs(c -> builder)
             .build()
         );
-        // pre-compute a list of shard offsets
-        // these will get used when writing to ensure that
-        // only one chunk gets written to a shard at a time
-        if (useSharding) {
-          ArrayList<long[]> shards = new ArrayList<long[]>();
-          long[][] shardCoords =
-            IndexingUtils.computeChunkCoords(arrayShape, shardSizes);
-          for (long[] shard : shardCoords) {
-            shards.add(shard);
-          }
-          shardOffsets.put(resolutionString, shards);
+        // Set up per-shard locks so that only one chunk is written to a shard
+        // at a time.
+        if (useSharding && writeImageData) {
+          shardLocks.put(resolutionString,
+            new ConcurrentHashMap<ShardKey, Object>());
         }
       }
       else {
@@ -2651,6 +2670,7 @@ public class Converter implements Callable<Integer> {
 
       getProgressListener().notifyResolutionStart(resolution, tileCount);
 
+      boolean allTasksSubmitted = false;
       try {
         for (int j=0; j<scaledHeight; j+=tileHeight) {
           final int yy = j;
@@ -2702,6 +2722,7 @@ public class Converter implements Callable<Integer> {
             }
           }
         }
+        allTasksSubmitted = true;
 
         // Wait until the entire resolution has completed before proceeding to
         // the next one
@@ -2713,6 +2734,13 @@ public class Converter implements Callable<Integer> {
 
       }
       finally {
+        // allOf only returns or throws after every submitted task has
+        // completed, so removing the shared locks is safe in that case. If
+        // task submission itself failed, retain the locks for any tasks that
+        // may still be running.
+        if (allTasksSubmitted) {
+          shardLocks.remove(resolutionString);
+        }
         getProgressListener().notifyResolutionEnd(resolution);
       }
     }
