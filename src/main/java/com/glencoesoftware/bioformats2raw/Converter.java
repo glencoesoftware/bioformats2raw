@@ -10,6 +10,7 @@ package com.glencoesoftware.bioformats2raw;
 import java.io.File;
 import java.io.IOException;
 import java.io.ByteArrayOutputStream;
+import java.io.PrintWriter;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -93,6 +94,8 @@ import com.univocity.parsers.csv.CsvParserSettings;
 
 import ch.qos.logback.classic.Level;
 import picocli.CommandLine;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.IVersionProvider;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 import ucar.ma2.InvalidRangeException;
@@ -115,6 +118,11 @@ import dev.zarr.zarrjava.v3.codec.core.ShardingIndexedCodec;
 /**
  * Command line tool for converting whole slide imaging files to Zarr.
  */
+@Command(
+  name = "bioformats2raw",
+  description = "Convert microscopy image data to OME-Zarr.",
+  versionProvider = Converter.VersionProvider.class
+)
 public class Converter implements Callable<Integer> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(Converter.class);
@@ -548,7 +556,7 @@ public class Converter implements Callable<Integer> {
   @Option(
     names = "--version",
     description = "Print version information and exit",
-    help = true,
+    versionHelp = true,
     defaultValue = "false"
   )
   public void setPrintVersionOnly(boolean versionOnly) {
@@ -1545,8 +1553,7 @@ public class Converter implements Callable<Integer> {
   // Conversion methods
 
   /**
-   * @return 0 if conversion completed without error,
-   *         -1 if conversion was not performed
+   * @return 0 if conversion completed without error
    * @throws Exception on most conversion errors
    */
   @Override
@@ -1554,20 +1561,6 @@ public class Converter implements Callable<Integer> {
     ch.qos.logback.classic.Logger root = (ch.qos.logback.classic.Logger)
         LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
     root.setLevel(Level.toLevel(logLevel));
-
-    if (help) {
-      return -1;
-    }
-
-    if (printVersion) {
-      String version = Optional.ofNullable(
-        this.getClass().getPackage().getImplementationVersion()
-        ).orElse("development");
-      System.out.println("Version = " + version);
-      System.out.println("Bio-Formats version = " + FormatTools.VERSION);
-      System.out.println("NGFF specification version = " + getNGFFVersion());
-      return -1;
-    }
 
     if (inputPath == null) {
       throw new InvalidConfigurationException("input path not specified");
@@ -2144,7 +2137,7 @@ public class Converter implements Callable<Integer> {
     return rootPath.resolve(name);
   }
 
-  private void prepareOutput() throws IOException {
+  void prepareOutput() throws IOException {
     Path path = outputPath;
     if (path == null) {
       throw new IllegalStateException("output path has not been initialized");
@@ -3882,12 +3875,136 @@ public class Converter implements Callable<Integer> {
     return progressListener;
   }
 
+  /** Supplies version text for picocli's version-help handling. */
+  public static class VersionProvider implements IVersionProvider {
+
+    @Override
+    public String[] getVersion() {
+      String version = Optional.ofNullable(
+        Converter.class.getPackage().getImplementationVersion()
+        ).orElse("development");
+      return new String[] {
+        "bioformats2raw " + version,
+        "Bio-Formats version = " + FormatTools.VERSION,
+        "NGFF specification version = " + SupportedVersions.NGFF_04
+      };
+    }
+  }
+
+  static int execute(String[] args) {
+    return execute(args, new PrintWriter(System.out, true),
+      new PrintWriter(System.err, true));
+  }
+
+  static int execute(String[] args, PrintWriter out, PrintWriter err) {
+    return execute(new Converter(), args, out, err);
+  }
+
+  static int execute(
+    Converter converter, String[] args, PrintWriter out, PrintWriter err)
+  {
+    CommandLine commandLine = new CommandLine(converter);
+    commandLine.setOut(out);
+    commandLine.setErr(err);
+    commandLine.setParameterExceptionHandler((exception, arguments) -> {
+      Throwable invalid = findCause(
+        exception, InvalidConfigurationException.class);
+      printCliError(commandLine, invalid == null ?
+        exception.getMessage() : message(invalid));
+      return CommandLine.ExitCode.USAGE;
+    });
+    commandLine.setExecutionExceptionHandler(
+      (exception, cmd, parseResult) -> handleExecutionException(
+        converter, cmd, exception));
+    return commandLine.execute(args);
+  }
+
+  private static int handleExecutionException(
+    Converter converter, CommandLine commandLine, Exception exception)
+  {
+    if (hasCause(exception, InterruptedException.class)) {
+      Thread.currentThread().interrupt();
+      printCliError(commandLine, "conversion interrupted");
+      printPartialOutputWarning(converter, commandLine);
+      return 130;
+    }
+    if (hasCause(exception, InvalidConfigurationException.class)) {
+      Throwable invalid = findCause(
+        exception, InvalidConfigurationException.class);
+      printCliError(commandLine, message(invalid));
+      return CommandLine.ExitCode.USAGE;
+    }
+
+    printCliError(commandLine, message(exception));
+    if (isDebug(converter)) {
+      exception.printStackTrace(commandLine.getErr());
+    }
+    printPartialOutputWarning(converter, commandLine);
+    return CommandLine.ExitCode.SOFTWARE;
+  }
+
+  private static void printCliError(
+    CommandLine commandLine, String message)
+  {
+    commandLine.getErr().println(commandLine.getCommandName() + ": " + message);
+    commandLine.getErr().println(
+      "Try '" + commandLine.getCommandName() +
+      " --help' for more information.");
+  }
+
+  private static void printPartialOutputWarning(
+    Converter converter, CommandLine commandLine)
+  {
+    if (converter.outputStarted && converter.outputLocation != null) {
+      commandLine.getErr().println(
+        commandLine.getCommandName() + ": output '" +
+        converter.outputLocation + "' may be incomplete");
+    }
+  }
+
+  private static boolean isDebug(Converter converter) {
+    return "DEBUG".equals(converter.logLevel) ||
+      "TRACE".equals(converter.logLevel) ||
+      "ALL".equals(converter.logLevel);
+  }
+
+  private static boolean hasCause(
+    Throwable throwable, Class<? extends Throwable> type)
+  {
+    return findCause(throwable, type) != null;
+  }
+
+  private static Throwable findCause(
+    Throwable throwable, Class<? extends Throwable> type)
+  {
+    Throwable current = throwable;
+    while (current != null) {
+      if (type.isInstance(current)) {
+        return current;
+      }
+      current = current.getCause();
+    }
+    return null;
+  }
+
+  private static String message(Throwable throwable) {
+    Throwable current = throwable;
+    while (current.getCause() != null &&
+      (current.getMessage() == null || current.getMessage().isEmpty()))
+    {
+      current = current.getCause();
+    }
+    String value = current.getMessage();
+    return value == null || value.isEmpty() ?
+      current.getClass().getSimpleName() : value;
+  }
+
   /**
    * Perform file conversion as specified by command line arguments.
    * @param args command line arguments
    */
   public static void main(String[] args) {
-    int exitCode = new CommandLine(new Converter()).execute(args);
+    int exitCode = execute(args);
     System.exit(exitCode);
   }
 
