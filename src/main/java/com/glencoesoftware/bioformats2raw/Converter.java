@@ -30,8 +30,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -243,34 +241,21 @@ public class Converter implements Callable<Integer> {
 
   private IProgressListener progressListener;
   private Map<Integer, int[]> tileCounts = new HashMap<Integer, int[]>();
-  private final ConcurrentMap<String, ConcurrentMap<ShardKey, Object>>
-    shardLocks =
-    new ConcurrentHashMap<String, ConcurrentMap<ShardKey, Object>>();
+  private final ShardLockRegistry shardLocks;
 
-  private static final class ShardKey {
+  /**
+   * Construct a converter.
+   */
+  public Converter() {
+    this(new ShardLockRegistry());
+  }
 
-    private final long[] coordinates;
-
-    ShardKey(long[] coordinates) {
-      this.coordinates = Arrays.copyOf(coordinates, coordinates.length);
-    }
-
-    @Override
-    public boolean equals(Object other) {
-      if (this == other) {
-        return true;
-      }
-      if (!(other instanceof ShardKey)) {
-        return false;
-      }
-      ShardKey key = (ShardKey) other;
-      return Arrays.equals(coordinates, key.coordinates);
-    }
-
-    @Override
-    public int hashCode() {
-      return Arrays.hashCode(coordinates);
-    }
+  /**
+   * Construct a converter using the supplied shard lock registry.
+   * @param shardLocks registry for active Zarr v3 shard locks
+   */
+  Converter(ShardLockRegistry shardLocks) {
+    this.shardLocks = shardLocks;
   }
 
   // Option setters
@@ -2045,33 +2030,24 @@ public class Converter implements Callable<Integer> {
 
     // if writing sharded data, we need to ensure that only one chunk
     // is written to each shard at a time (since one shard == one file)
-    ConcurrentMap<ShardKey, Object> arrayShardLocks = shardLocks.get(pathName);
-    if (arrayShardLocks != null &&
-      !isWholeShard(array, shape, offset))
-    {
-      dev.zarr.zarrjava.v3.Array v3Array = (dev.zarr.zarrjava.v3.Array) array;
+    if (!isWholeShard(array, shape, offset)) {
       int[] shardSizes = array.metadata().chunkShape();
       long[] shard = new long[shardSizes.length];
       for (int i=0; i<offset.length; i++) {
         shard[i] = offset[i] / shardSizes[i];
       }
-      // Lock on a shared object for these shard coordinates. Locking on
-      // 'shard' itself would not be sufficient because it is local to this
-      // invocation.
-      // this still allows chunks in other shards to be written,
-      // so minimizes the performance impact compared to just
-      // synchronizing the method
-      Object shardLock = arrayShardLocks.computeIfAbsent(
-        new ShardKey(shard), key -> new Object());
-      synchronized (shardLock) {
-        array.write(Utils.toLongArray(offset), pixels);
+      // Lock on the shared stripe for these shard coordinates. The fixed
+      // number of stripes bounds memory use while still allowing writes to
+      // shards assigned to different stripes to proceed in parallel.
+      if (shardLocks.runWithLock(pathName, shard,
+        () -> array.write(Utils.toLongArray(offset), pixels)))
+      {
+        return;
       }
     }
-    else {
-      // if not writing sharded data, each chunk gets written to a separate file
-      // so we're not worried about conflicting writes to the same file
-      array.write(Utils.toLongArray(offset), pixels);
-    }
+    // if not writing sharded data, each chunk gets written to a separate file
+    // so we're not worried about conflicting writes to the same file
+    array.write(Utils.toLongArray(offset), pixels);
   }
 
   private boolean isWholeShard(Array array, int[] shape, int[] offset) {
@@ -2615,11 +2591,10 @@ public class Converter implements Callable<Integer> {
             .withCodecs(c -> builder)
             .build()
         );
-        // Set up per-shard locks so that only one chunk is written to a shard
-        // at a time.
+        // Set up bounded lock stripes so that only one chunk is written to a
+        // shard at a time without retaining one lock for every touched shard.
         if (useSharding && writeImageData) {
-          shardLocks.put(resolutionString,
-            new ConcurrentHashMap<ShardKey, Object>());
+          shardLocks.register(resolutionString);
         }
       }
       else {

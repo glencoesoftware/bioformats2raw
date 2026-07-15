@@ -316,6 +316,36 @@ public class ZarrV3Test extends AbstractZarrTest {
   }
 
   /**
+   * Test that metadata-only conversion does not enumerate every possible
+   * shard.  The number of shards here is greater than Integer.MAX_VALUE,
+   * which cannot be represented by the array previously used to store all
+   * shard coordinates.
+   */
+  @Test
+  public void testNoTilesWithManyShards() throws Exception {
+    int size = 65536;
+    assertTrue((long) size * size > Integer.MAX_VALUE);
+    input = fake(
+      "sizeX", String.valueOf(size),
+      "sizeY", String.valueOf(size));
+    assertTool(
+      "--ngff-version", getNGFFVersion(),
+      "--no-tiles",
+      "--resolutions", "1",
+      "--tile-width", "1",
+      "--tile-height", "1",
+      "--shard-width", "1",
+      "--shard-height", "1");
+
+    Array array = Array.open(store.resolve("0", "0"));
+    assertArrayEquals(
+      new long[] {1, 1, 1, size, size}, array.metadata().shape);
+    Optional<Codec> shardingCodec =
+      ArrayMetadata.getShardingIndexedCodec(array.metadata().codecs);
+    assertTrue(shardingCodec.isPresent());
+  }
+
+  /**
    * Test invalid shard size.
    */
   @Test
