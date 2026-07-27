@@ -55,7 +55,11 @@ Installation
 
     https://github.com/glencoesoftware/bioformats2raw/releases
 
-2. OR, install via `conda` as described at [conda-bioformats2raw](https://github.com/ome/conda-bioformats2raw).
+2. OR, install it via `conda-forge` [bioformats2raw](https://anaconda.org/channels/conda-forge/packages/bioformats2raw/overview).
+
+    ```bash
+    conda install -c conda-forge bioformats2raw
+    ```
 
 Development Installation
 ========================
