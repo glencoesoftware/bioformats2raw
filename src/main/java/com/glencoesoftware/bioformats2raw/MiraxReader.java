@@ -13,6 +13,7 @@ import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
@@ -73,6 +74,8 @@ public class MiraxReader extends FormatReader {
 
   private static final String SLIDE_DATA = "Slidedat.ini";
   private static final String FILTER_LEVEL = "Slide filter level";
+  private static final String FOCUS_LEVEL = "Microscope focus level";
+  private static final String Z_STACK_LEVEL_PREFIX = "ZStackLevel_";
 
   /**
    * Maximum number of channels in a tile.  The assembled slide can
@@ -136,6 +139,8 @@ public class MiraxReader extends FormatReader {
   private transient JPEGXRCodec jpegxrCodec = new JPEGXRCodec();
 
   private transient Cache<TilePointer, byte[]> tileCache;
+  private int storedFocusLevels = 1;
+  private boolean useTilePositionCounterLookup = false;
 
   // -- Constructor --
 
@@ -214,6 +219,9 @@ public class MiraxReader extends FormatReader {
     throws FormatException, IOException
   {
     FormatTools.checkPlaneParameters(this, no, buf.length, x, y, w, h);
+    int[] zct = getZCTCoords(no);
+    int z = zct[0];
+    int c = zct[1];
 
     // set background color to black instead of the stored fill color
     // this is to match the default behavior of Pannoramic Viewer
@@ -254,12 +262,14 @@ public class MiraxReader extends FormatReader {
     for (int row=0; row<rowCount; row++) {
       for (int col=0; col<colCount; col++) {
         Region tileRegion = new Region(0, 0, width, height);
+        int lookupCounter = -1;
         if (tilePositions != null && index == 0) {
           int colIndex = (int) (minColIndex[index] + col * scale);
           int rowIndex = (int) (minRowIndex[index] + row * scale);
           int xp = (int) (colIndex / divPerSide);
           int yp = (int) (rowIndex / divPerSide);
           int tile = yp * (xTiles / divPerSide) + xp;
+          lookupCounter = tile;
           int correctX = colIndex % (int) div;
           int correctY = rowIndex % (int) div;
           LOGGER.debug("row = {}, col = {}, rowIndex = {}, " +
@@ -276,22 +286,18 @@ public class MiraxReader extends FormatReader {
             tileRegion);
           continue;
         }
+        int tileGroup = hasFocusStack() ? getTileGroupForPlane(z, c) :
+          no / MAX_CHANNELS;
         LOGGER.debug("Looking up tile for resolution = {}, x={}, y={}, c={}",
-          index, col, row, no / MAX_CHANNELS);
+          index, col, row, tileGroup);
         LOGGER.debug("  tileRegion = {}", tileRegion);
         LOGGER.debug("  intersection = {}", intersection);
 
-        TilePointer thisOffset = lookupTile(index, col, row, no / MAX_CHANNELS);
+        TilePointer thisOffset =
+          lookupTileForPlane(index, col, row, z, c, lookupCounter);
         if (thisOffset != null) {
-          int channel = no % MAX_CHANNELS;
-          // 2 channel JPEG data needs to have the channel index inverted
-          // 2 channel JPEG-2000 data should not have the channel index inverted
-          if (fluorescence &&
-            (getSizeC() != 2 || format.get(index).equals("JPEG")))
-          {
-            channel = MAX_CHANNELS - channel - 1;
-          }
-
+          int channel = hasFocusStack() ? getStoredChannel(index, c) :
+            getSingleLayerStoredChannel(index, no);
           String file = files.get(thisOffset.fileIndex + 1);
           LOGGER.debug("  * got file = {}, offset = {}",
             file, thisOffset.offset);
@@ -370,6 +376,8 @@ public class MiraxReader extends FormatReader {
       tilePositions = null;
       pngReader.close();
       fluorescence = false;
+      storedFocusLevels = 1;
+      useTilePositionCounterLookup = false;
     }
   }
 
@@ -453,13 +461,15 @@ public class MiraxReader extends FormatReader {
     files.add(indexFile);
 
     int nHierarchies = Integer.parseInt(hierarchy.get("HIER_COUNT"));
+    int totalHierarchicalValues = 0;
+    for (int i=0; i<nHierarchies; i++) {
+      totalHierarchicalValues +=
+        Integer.parseInt(hierarchy.get("HIER_" + i + "_COUNT"));
+    }
 
     pyramidDepth = Integer.parseInt(hierarchy.get("HIER_0_COUNT"));
 
-    core.clear();
-    for (int i=0; i<pyramidDepth; i++) {
-      core.add(new CoreMetadata());
-    }
+    initializeMainSeries(pyramidDepth);
 
     tileWidth = new int[pyramidDepth];
     tileHeight = new int[pyramidDepth];
@@ -481,97 +491,35 @@ public class MiraxReader extends FormatReader {
       files.add(f.getAbsolutePath());
     }
 
-    int pageSize = Integer.parseInt(hierarchy.get("PAGEELEMENTCOUNT"));
+    storedFocusLevels = getStoredFocusCount(hierarchy);
 
+    int originX = 0;
+    int originY = 0;
+    int metadataWidth = 0;
+    int metadataHeight = 0;
     RandomAccessInputStream indexData = new RandomAccessInputStream(indexFile);
     indexData.order(true);
     indexData.seek(37);
     long hierarchicalRoot = indexData.readInt();
     long nonHierarchicalRoot = indexData.readInt();
     indexData.seek(hierarchicalRoot);
-    long[][] listOffsets = new long[nHierarchies][];
-    for (int i=0; i<listOffsets.length; i++) {
-      listOffsets[i] = new long[pyramidDepth];
-      for (int d=0; d<pyramidDepth; d++) {
-        listOffsets[i][d] = indexData.readInt();
-        LOGGER.trace("Expect {} offsets for hierarchy #{}, level #{}",
-          listOffsets[i][d], i, d);
-      }
+    long[] listOffsets = new long[totalHierarchicalValues];
+    for (int value=0; value<totalHierarchicalValues; value++) {
+      listOffsets[value] = indexData.readInt();
+      LOGGER.trace("Expect {} offsets for value #{}", listOffsets[value], value);
     }
 
-    // read offsets to pyramid pixel data tiles
-    for (int h=0; h<nHierarchies; h++) {
-      for (int i=0; i<listOffsets[h].length; i++) {
-        LOGGER.trace("h = {}, i = {}", h, i);
-        if (i == format.size()) {
-          format.add("");
-        }
-
-        if (listOffsets[h][i] == 0) {
-          LOGGER.trace("Skipping hierarchy #{} level #{}", h, i);
-          continue;
-        }
-        indexData.seek(listOffsets[h][i]);
-        int nItems = indexData.readInt();
-        if (nItems != 0) {
-          LOGGER.trace("First page size should be 0, was " + nItems +
-            "; skipping level " + i + " in hierarchy " + h);
-          continue;
-        }
-        listOffsets[h][i] = indexData.readInt();
-
-        if (listOffsets[h][i] == 0) {
-          LOGGER.trace("Found offset 0 for hierarchy #{} level #{}", h, i);
-          continue;
-        }
-        LOGGER.trace("Reading tile offsets for hierarchy #{} level #{} from {}",
-          h, i, listOffsets[h][i]);
-
-        indexData.seek(listOffsets[h][i]);
-        nItems = indexData.readInt();
-        int nextPointer = indexData.readInt();
-        int nextCounter = indexData.readInt();
-        int itemCounter = 0;
-        while (indexData.getFilePointer() <= indexData.length() - 16) {
-          if (itemCounter == nItems) {
-            if (nextPointer == 0) {
-              break;
-            }
-            indexData.seek(nextPointer);
-            nItems = indexData.readInt();
-            nextPointer = indexData.readInt();
-            nextCounter = indexData.readInt();
-            itemCounter = 0;
-          }
-          long nextOffset = indexData.readInt();
-          int length = indexData.readInt();
-          int fileNumber = indexData.readInt();
-
-          LOGGER.trace("nextOffset = {}, nextCounter = {}, " +
-            "length = {}, fileNumber = {}",
-            nextOffset, nextCounter, length, fileNumber);
-
-          if (i == 0) {
-            TilePointer key = new TilePointer(i, nextCounter);
-            List<TilePointer> resolutionOffsets =
-              getOrCreateResolutionOffsets(key);
-            resolutionOffsets.add(
-              new TilePointer(i, fileNumber, nextOffset, nextCounter, length));
-          }
-          nextCounter = indexData.readInt();
-          itemCounter++;
-        }
-      }
+    useTilePositionCounterLookup =
+      parseFocusBlocks(indexData, listOffsets, hierarchy);
+    if (!useTilePositionCounterLookup) {
+      offsets.clear();
+      parseSingleLayerRootOffsets(indexData, hierarchicalRoot, nHierarchies);
     }
 
     // read offset to barcode image
 
     int nonHierCount = Integer.parseInt(hierarchy.get("NONHIER_COUNT"));
     int totalCount = 0;
-    int originX = 0;
-    int originY = 0;
-    int metadataWidth = 0;
-    int metadataHeight = 0;
     for (int i=0; i<nonHierCount; i++) {
       String name = hierarchy.get("NONHIER_" + i + "_NAME");
       int count = Integer.parseInt(hierarchy.get("NONHIER_" + i + "_COUNT"));
@@ -597,7 +545,7 @@ public class MiraxReader extends FormatReader {
               List<TilePointer> resolutionOffsets =
                   getOrCreateResolutionOffsets(key);
               resolutionOffsets.add(new TilePointer(
-                pyramidDepth, fileNumber, nextOffset, 0, length));
+                pyramidDepth, fileNumber, nextOffset, 0, length, -1));
 
               String section =
                 hierarchy.get("NONHIER_" + i + "_VAL_" + q + "_SECTION");
@@ -826,9 +774,9 @@ public class MiraxReader extends FormatReader {
       CoreMetadata m = core.get(i);
       m.sizeC = getChannelCount(hierarchy);
       m.rgb = false;
-      m.sizeZ = 1;
+      m.sizeZ = getFocusCount(hierarchy);
       m.sizeT = 1;
-      m.imageCount = getSizeZ() * getSizeT() * getSizeC();
+      m.imageCount = m.sizeZ * m.sizeT * m.sizeC;
       m.dimensionOrder = "XYCZT";
 
       minRowIndex[i] = Integer.MAX_VALUE;
@@ -1055,6 +1003,10 @@ public class MiraxReader extends FormatReader {
         catch (NumberFormatException e) {
           LOGGER.debug("Could not parse physical pixel size Y {}", sizeY);
         }
+      }
+      Double zStep = getFocusStepMicrometers(hierarchy, data);
+      if (zStep != null && zStep > 0) {
+        store.setPixelsPhysicalSizeZ(new Length(zStep, UNITS.MICROM), 0);
       }
 
       // parse channel data
@@ -1284,26 +1236,303 @@ public class MiraxReader extends FormatReader {
   }
 
   private int getSlideHierarchyIndex(IniTable hierarchy) {
-    int hierarchyIndex = 1;
-    String nameKey = "HIER_%d_NAME";
+    // start at 1: HIER_0 is always the zoom hierarchy, never the filter level
+    return getHierarchyIndex(hierarchy, FILTER_LEVEL, 1, -1);
+  }
 
-    int hierCount = Integer.parseInt(hierarchy.get("HIER_COUNT"));
-    for (int i=hierarchyIndex; i<hierCount; i++) {
-      if (hierarchy.get(String.format(nameKey, i)).equals(FILTER_LEVEL)) {
-        hierarchyIndex = i;
-        break;
+  private boolean parseFocusBlocks(RandomAccessInputStream indexData,
+    long[] listOffsets, IniTable hierarchy) throws IOException
+  {
+    int sizeC = getChannelCount(hierarchy);
+    int focusHierarchyIndex = getHierarchyIndex(hierarchy, FOCUS_LEVEL, -1);
+    int channelGroups = (int) Math.ceil((double) sizeC / MAX_CHANNELS);
+    if (!fluorescence || storedFocusLevels <= 1 || focusHierarchyIndex < 0 ||
+      listOffsets.length < channelGroups * pyramidDepth)
+    {
+      return false;
+    }
+
+    long[][] blockOffsets = new long[channelGroups][pyramidDepth];
+    for (int group=0; group<channelGroups; group++) {
+      for (int resolution=0; resolution<pyramidDepth; resolution++) {
+        long blockOffset = listOffsets[(group * pyramidDepth) + resolution];
+        if (blockOffset == 0) {
+          return false;
+        }
+        blockOffsets[group][resolution] = blockOffset;
       }
     }
 
-    return hierarchyIndex;
+    int[] zStackSlots = new int[storedFocusLevels];
+    int zStackCount = 0;
+    for (int slot=0; slot<storedFocusLevels; slot++) {
+      String levelName = hierarchy.get(String.format(
+        "HIER_%d_VAL_%d", focusHierarchyIndex, slot));
+      if (isZStackLevel(levelName)) {
+        zStackSlots[zStackCount++] = slot;
+      }
+    }
+
+    for (int resolution=0; resolution<pyramidDepth; resolution++) {
+      for (int zIndex=0; zIndex<zStackCount; zIndex++) {
+        int slot = zStackSlots[zIndex];
+        for (int group=0; group<channelGroups; group++) {
+          long pageRecordOffset = blockOffsets[group][resolution] + (slot * 8L);
+          indexData.seek(pageRecordOffset);
+          int recordCount = indexData.readInt();
+          long pageOffset = indexData.readInt();
+          if (recordCount != 0 || pageOffset == 0) {
+            LOGGER.trace("Unexpected focus block record at {}: count={}, pageOffset={}",
+              pageRecordOffset, recordCount, pageOffset);
+            return false;
+          }
+          addPageOffsets(indexData, pageOffset, resolution, zIndex);
+        }
+      }
+    }
+    return true;
+  }
+
+  private void parseSingleLayerRootOffsets(RandomAccessInputStream indexData,
+    long hierarchicalRoot, int nHierarchies) throws IOException
+  {
+    indexData.seek(hierarchicalRoot);
+    long[][] hierarchyOffsets = new long[nHierarchies][];
+    for (int h=0; h<nHierarchies; h++) {
+      hierarchyOffsets[h] = new long[pyramidDepth];
+      for (int resolution=0; resolution<pyramidDepth; resolution++) {
+        hierarchyOffsets[h][resolution] = indexData.readInt();
+        LOGGER.trace("Expect {} offsets for hierarchy #{}, level #{}",
+          hierarchyOffsets[h][resolution], h, resolution);
+      }
+    }
+
+    for (int h=0; h<nHierarchies; h++) {
+      for (int resolution=0; resolution<pyramidDepth; resolution++) {
+        if (hierarchyOffsets[h][resolution] == 0) {
+          LOGGER.trace("Skipping hierarchy #{} level #{}", h, resolution);
+          continue;
+        }
+        indexData.seek(hierarchyOffsets[h][resolution]);
+        int nItems = indexData.readInt();
+        if (nItems != 0) {
+          LOGGER.trace("First page size should be 0, was {}; skipping level {} in hierarchy {}",
+            nItems, resolution, h);
+          continue;
+        }
+        long pageOffset = indexData.readInt();
+        if (pageOffset == 0) {
+          LOGGER.trace("Found offset 0 for hierarchy #{} level #{}", h, resolution);
+          continue;
+        }
+        LOGGER.trace("Reading tile offsets for hierarchy #{} level #{} from {}",
+          h, resolution, pageOffset);
+        if (resolution == 0) {
+          addPageOffsets(indexData, pageOffset, resolution, h);
+        }
+      }
+    }
+  }
+
+  private void addPageOffsets(RandomAccessInputStream indexData, long pageOffset,
+    int resolution, int sourceValue) throws IOException
+  {
+    indexData.seek(pageOffset);
+    int nItems = indexData.readInt();
+    int nextPointer = indexData.readInt();
+    int nextCounter = indexData.readInt();
+    int itemCounter = 0;
+    while (indexData.getFilePointer() <= indexData.length() - 16) {
+      if (itemCounter == nItems) {
+        if (nextPointer == 0) {
+          break;
+        }
+        indexData.seek(nextPointer);
+        nItems = indexData.readInt();
+        nextPointer = indexData.readInt();
+        nextCounter = indexData.readInt();
+        itemCounter = 0;
+      }
+      long nextOffset = indexData.readInt();
+      int length = indexData.readInt();
+      int fileNumber = indexData.readInt();
+
+      TilePointer key = new TilePointer(resolution, nextCounter);
+      List<TilePointer> resolutionOffsets = getOrCreateResolutionOffsets(key);
+      resolutionOffsets.add(
+        new TilePointer(resolution, fileNumber, nextOffset, nextCounter, length,
+          sourceValue));
+      nextCounter = indexData.readInt();
+      itemCounter++;
+    }
   }
 
   private int getChannelCount(IniTable hierarchy) {
     int hierarchyIndex = getSlideHierarchyIndex(hierarchy);
-    String countKey = "HIER_%d_COUNT";
-
-    String channelKey = String.format(countKey, hierarchyIndex);
+    if (hierarchyIndex < 0) {
+      LOGGER.warn("Missing filter hierarchy; defaulting channel count to 1");
+      return 1;
+    }
+    String channelKey = String.format("HIER_%d_COUNT", hierarchyIndex);
     return Integer.parseInt(hierarchy.get(channelKey));
+  }
+
+
+  int getFocusCount(IniTable hierarchy) {
+    int storedLevels = getStoredFocusCount(hierarchy);
+    int hierarchyIndex = getHierarchyIndex(hierarchy, FOCUS_LEVEL, -1);
+    if (hierarchyIndex < 0 || storedLevels <= 1) {
+      return 1;
+    }
+    int focusLevels = 0;
+    for (int i=0; i<storedLevels; i++) {
+      String levelName = hierarchy.get(String.format(
+        "HIER_%d_VAL_%d", hierarchyIndex, i));
+      if (isZStackLevel(levelName)) {
+        focusLevels++;
+      }
+    }
+    return focusLevels == 0 ? 1 : focusLevels;
+  }
+
+
+  int getStoredFocusCount(IniTable hierarchy) {
+    int hierarchyIndex = getHierarchyIndex(hierarchy, FOCUS_LEVEL, -1);
+    if (hierarchyIndex < 0) {
+      return 1;
+    }
+    String countValue = hierarchy.get(String.format("HIER_%d_COUNT", hierarchyIndex));
+    if (countValue == null) {
+      LOGGER.warn("Missing focus hierarchy count for HIER_{}", hierarchyIndex);
+      return 1;
+    }
+    try {
+      return Integer.parseInt(countValue);
+    }
+    catch (NumberFormatException e) {
+      LOGGER.warn("Could not parse focus hierarchy count: {}", countValue);
+      return 1;
+    }
+  }
+
+
+  Double getFocusStepMicrometers(IniTable hierarchy, IniList data) {
+    int storedLevels = getStoredFocusCount(hierarchy);
+    int hierarchyIndex = getHierarchyIndex(hierarchy, FOCUS_LEVEL, -1);
+    if (hierarchyIndex < 0 || storedLevels <= 1) {
+      return null;
+    }
+
+    Double previousOffset = null;
+    for (int i=0; i<storedLevels; i++) {
+      String levelName = hierarchy.get(String.format(
+        "HIER_%d_VAL_%d", hierarchyIndex, i));
+      if (!isZStackLevel(levelName)) {
+        continue;
+      }
+
+      String section = hierarchy.get(String.format(
+        "HIER_%d_VAL_%d_SECTION", hierarchyIndex, i));
+      IniTable focusTable = data.getTable(section);
+      if (focusTable == null) {
+        continue;
+      }
+
+      String offsetValue = focusTable.get("OFFSET_IN_MICROMETERS");
+      if (offsetValue == null) {
+        continue;
+      }
+
+      try {
+        double offset = Double.parseDouble(offsetValue);
+        if (previousOffset != null) {
+          double step = Math.abs(offset - previousOffset);
+          if (step > 0) {
+            return step;
+          }
+        }
+        previousOffset = offset;
+      }
+      catch (NumberFormatException e) {
+        LOGGER.debug("Could not parse focus offset {}", offsetValue);
+      }
+    }
+    return null;
+  }
+
+
+  static int getTileGroup(int z, int c, int sizeC) {
+    int channelGroups = (int) Math.ceil((double) sizeC / MAX_CHANNELS);
+    return (z * channelGroups) + (c / MAX_CHANNELS);
+  }
+
+  int getStoredChannel(int resolution, int c) {
+    int channelGroup = c / MAX_CHANNELS;
+    int channel = c % MAX_CHANNELS;
+    int storedChannels =
+      Math.min(MAX_CHANNELS, getSizeC() - (channelGroup * MAX_CHANNELS));
+    if (fluorescence &&
+      (storedChannels != 2 || format.get(resolution).equals("JPEG")))
+    {
+      return storedChannels - channel - 1;
+    }
+    return channel;
+  }
+
+  void initializeMainSeries(int pyramidDepth) {
+    core.clear();
+    format.clear();
+    for (int i=0; i<pyramidDepth; i++) {
+      core.add(new CoreMetadata());
+      format.add("");
+    }
+  }
+
+  private int getTileGroupForPlane(int z, int c) {
+    return getTileGroup(z, c, getSizeC());
+  }
+
+  TilePointer lookupTileForPlane(int resolution, int col, int row,
+    int z, int c, int lookupCounter)
+  {
+    int tileGroup = getTileGroupForPlane(z, c);
+    return useTilePositionCounterLookup && lookupCounter >= 0 ?
+      lookupTileByCounter(resolution, lookupCounter, tileGroup) :
+      lookupTile(resolution, col, row, tileGroup);
+  }
+
+  private boolean isZStackLevel(String levelName) {
+    return levelName != null && levelName.startsWith(Z_STACK_LEVEL_PREFIX);
+  }
+
+  private int getHierarchyIndex(IniTable hierarchy, String name, int fallback) {
+    return getHierarchyIndex(hierarchy, name, 0, fallback);
+  }
+
+  private int getHierarchyIndex(IniTable hierarchy, String name,
+      int startIndex, int fallback)
+  {
+    int hierCount = Integer.parseInt(hierarchy.get("HIER_COUNT"));
+    for (int i=startIndex; i<hierCount; i++) {
+      if (name.equals(hierarchy.get(String.format("HIER_%d_NAME", i)))) {
+        return i;
+      }
+    }
+    return fallback;
+  }
+
+  private boolean hasFocusStack() {
+    return storedFocusLevels > 1;
+  }
+
+  private int getSingleLayerStoredChannel(int resolution, int plane) {
+    int channel = plane % MAX_CHANNELS;
+    if (fluorescence &&
+      (getSizeC() != 2 || format.get(resolution).equals("JPEG")))
+    {
+      channel = MAX_CHANNELS - channel - 1;
+    }
+    return channel;
   }
 
   private TilePointer lookupTile(int resolution, int x, int y, int c) {
@@ -1314,6 +1543,10 @@ public class MiraxReader extends FormatReader {
         minRowIndex[resolution] * xTiles + minColIndex[resolution];
       counter = firstTile + resScale * (y * xTiles + x);
     }
+    return lookupTileByCounter(resolution, counter, c);
+  }
+
+  private TilePointer lookupTileByCounter(int resolution, int counter, int c) {
     TilePointer key = new TilePointer(resolution, counter);
     List<TilePointer> channelOffsets = offsets.get(key);
     if (channelOffsets == null || c >= channelOffsets.size()) {
@@ -1321,10 +1554,8 @@ public class MiraxReader extends FormatReader {
     }
     // there may be an extra invalid tile defined (for fluorescence data)
     // skip over it in favor of the correct tile
-    // not sure if there is a better way to detect this case,
-    // so this logic might need improving in the future
     int expectedOffsetCount =
-      (int) Math.ceil((double) getSizeC() / MAX_CHANNELS);
+      getTileGroup(storedFocusLevels - 1, getSizeC() - 1, getSizeC()) + 1;
     if (channelOffsets.size() > expectedOffsetCount && c > 0) {
       return channelOffsets.get(
         c + (channelOffsets.size() - expectedOffsetCount));
@@ -1412,6 +1643,7 @@ public class MiraxReader extends FormatReader {
     public final long offset;
     public final int counter;
     public final int length;
+    public final int sourceValue;
 
     /**
      * Tile pointer to a tile at a given logical offset at a given resolution.
@@ -1419,7 +1651,7 @@ public class MiraxReader extends FormatReader {
      * @param tileCounter logical offset of the tile
      */
     public TilePointer(int res, int tileCounter) {
-      this(res, 0, 0, tileCounter, 0);
+      this(res, 0, 0, tileCounter, 0, -1);
     }
 
     /**
@@ -1434,40 +1666,58 @@ public class MiraxReader extends FormatReader {
     public TilePointer(int res, int index, long tileOffset, int tileCounter,
       int length)
     {
+      this(res, index, tileOffset, tileCounter, length, -1);
+    }
+
+    /**
+     * Tile pointer with source hierarchy value preserved for debugging and
+     * stream classification.
+     * @param res resolution the file is at
+     * @param index physical index within the file
+     * @param tileOffset physical offset within the file
+     * @param tileCounter logical offset of the tile
+     * @param length number of valid bytes starting at tileOffset
+     * @param source hierarchy value index that produced this pointer, or -1
+     */
+    public TilePointer(int res, int index, long tileOffset, int tileCounter,
+      int length, int source)
+    {
       this.resolution = res;
       this.fileIndex = index;
       this.offset = tileOffset;
       this.counter = tileCounter;
       this.length = length;
+      this.sourceValue = source;
     }
 
     @Override
     public int compareTo(TilePointer o) {
-      if (equals(o)) {
-        return 0;
-      }
       if (o.resolution != this.resolution) {
-        return this.resolution - o.resolution;
+        return Integer.compare(this.resolution, o.resolution);
       }
       if (o.counter != this.counter) {
-        return this.counter - o.counter;
+        return Integer.compare(this.counter, o.counter);
       }
       if (o.fileIndex != this.fileIndex) {
-        return this.fileIndex - o.fileIndex;
+        return Integer.compare(this.fileIndex, o.fileIndex);
+      }
+      if (o.sourceValue != this.sourceValue) {
+        return Integer.compare(this.sourceValue, o.sourceValue);
       }
       if (this.offset != o.offset) {
         return this.offset < o.offset ? -1 : 1;
       }
-      if (this.length < o.length) {
-        return -1;
+      if (this.length != o.length) {
+        return Integer.compare(this.length, o.length);
       }
-      return 1;
+      return 0;
     }
 
     @Override
     public String toString() {
       return "resolution=" + resolution + ", fileIndex=" + fileIndex +
-        ", offset=" + offset + ", counter=" + counter;
+        ", offset=" + offset + ", counter=" + counter +
+        ", sourceValue=" + sourceValue;
     }
 
     @Override
@@ -1478,14 +1728,15 @@ public class MiraxReader extends FormatReader {
             && tilePointer.fileIndex == this.fileIndex
             && tilePointer.offset == this.offset
             && tilePointer.counter == this.counter
-            && tilePointer.length == this.length;
+            && tilePointer.length == this.length
+            && tilePointer.sourceValue == this.sourceValue;
       }
       return super.equals(obj);
     }
 
     @Override
     public int hashCode() {
-      return counter;
+      return Objects.hash(resolution, fileIndex, offset, counter, length, sourceValue);
     }
   }
 
