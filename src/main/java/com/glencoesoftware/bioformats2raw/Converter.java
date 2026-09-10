@@ -3254,7 +3254,9 @@ public class Converter implements Callable<Integer> {
           thisAxis.put("unit", unitName);
         }
       }
-      if (axisOrientations != null && orientationOrder != null) {
+      if (getNGFFVersion().supportsAnatomicalOrientation() &&
+        axisOrientations != null && orientationOrder != null)
+      {
         int orientationIndex = orientationOrder.indexOf(axis);
         if (orientationIndex >= 0) {
           Orientation axisOrientation = axisOrientations[orientationIndex];
