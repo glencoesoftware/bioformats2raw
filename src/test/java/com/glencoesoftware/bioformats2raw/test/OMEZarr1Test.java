@@ -9,11 +9,14 @@ package com.glencoesoftware.bioformats2raw.test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import dev.zarr.zarrjava.core.Attributes;
 import dev.zarr.zarrjava.utils.Utils;
 import dev.zarr.zarrjava.v3.Array;
+import dev.zarr.zarrjava.v3.Group;
 
 import loci.common.Constants;
 import loci.common.services.ServiceFactory;
@@ -23,10 +26,13 @@ import loci.formats.in.OMETiffReader;
 import loci.formats.ome.OMEXMLMetadata;
 import loci.formats.services.OMEXMLService;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OMEZarr1Test extends ZarrV3Test {
 
@@ -115,6 +121,69 @@ public class OMEZarr1Test extends ZarrV3Test {
 
         assertArrayEquals(src, destBytes,
           "plane #" + p + ", offset = " + Arrays.toString(offset));
+      }
+    }
+  }
+
+  /**
+   * Test anatomical orientation (RFC-4).
+   */
+  @Test
+  public void testAnatomicalOrientation() throws Exception {
+    HashMap<String, String> opts = new HashMap<String, String>();
+    opts.put("sizeZ", "4");
+    opts.put("sizeC", "3");
+    opts.put("sizeT", "2");
+    HashMap<String, String> seriesOpts = new HashMap<String, String>();
+    seriesOpts.put("AxisCount", "5");
+    seriesOpts.put("AxisOrientationType_0", "anatomical");
+    seriesOpts.put("AxisOrientationTerm_0", "left-to-right");
+    seriesOpts.put("AxisOrientationType_1", "anatomical");
+    seriesOpts.put("AxisOrientationTerm_1", "posterior-to-anterior");
+    seriesOpts.put("AxisOrientationType_2", "anatomical");
+    seriesOpts.put("AxisOrientationTerm_2", "rostral-to-caudal");
+    Map<Integer, Map<String, String>> allSeries =
+      new HashMap<Integer, Map<String, String>>();
+    allSeries.put(0, seriesOpts);
+    input = fake(opts, allSeries);
+
+    assertTool("--ngff-version", getNGFFVersion());
+
+    Array array = Array.open(store.resolve("0", "0"));
+    assertArrayEquals(new long[] {2, 3, 4, 512, 512}, array.metadata().shape);
+
+    Group rootGroup = Group.open(store.resolve("0"));
+    Attributes attrs = rootGroup.metadata().attributes;
+    Attributes omeAttrs = attrs.getAttributes("ome");
+
+    List<Map<String, Object>> multiscales =
+      (List<Map<String, Object>>) omeAttrs.get("multiscales");
+    assertEquals(1, multiscales.size());
+    Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "image");
+
+    List<Map<String, Object>> datasets =
+      (List<Map<String, Object>>) multiscale.get("datasets");
+    assertTrue(datasets.size() > 0);
+    assertEquals("0", datasets.get(0).get("path"));
+
+    List<Map<String, Object>> axes = getAxes(multiscale);
+    checkAxes(axes, "TCZYX", null);
+
+    for (int i=0; i<axes.size(); i++) {
+      Map<String, Object> axis = axes.get(i);
+      int originalAxisIndex = axes.size() - i - 1;
+      if (axis.get("orientation") == null) {
+        assertNull(seriesOpts.get("AxisOrientationType_" + originalAxisIndex));
+        assertNull(seriesOpts.get("AxisOrientationTerm_" + originalAxisIndex));
+      }
+      else {
+        Map<String, Object> orientation =
+          (Map<String, Object>) axis.get("orientation");
+        assertEquals(orientation.get("type"),
+          seriesOpts.get("AxisOrientationType_" + originalAxisIndex));
+        assertEquals(orientation.get("value"),
+          seriesOpts.get("AxisOrientationTerm_" + originalAxisIndex));
       }
     }
   }
