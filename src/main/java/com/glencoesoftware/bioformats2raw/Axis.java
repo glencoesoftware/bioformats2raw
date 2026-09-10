@@ -12,9 +12,10 @@ package com.glencoesoftware.bioformats2raw;
  */
 public class Axis {
 
-  private char type;
+  private String type;
   private int length;
   private int chunkSize;
+  private String dimensionType;
 
   /**
    * Create a new Axis.
@@ -22,17 +23,31 @@ public class Axis {
    * @param t axis type (e.g. 'X')
    * @param len axis length
    * @param chunk chunk length (expected to be in range [1, len])
+   * @param dimType Zarr dimension type e.g. 'space'
    */
-  public Axis(char t, int len, int chunk) {
+  public Axis(char t, int len, int chunk, String dimType) {
+    this(String.valueOf(t), len, chunk, dimType);
+  }
+
+  /**
+   * Create a new Axis.
+   *
+   * @param t axis type (e.g. 'X')
+   * @param len axis length
+   * @param chunk chunk length (expected to be in range [1, len])
+   * @param dimType Zarr dimension type e.g. 'space'
+   */
+  public Axis(String t, int len, int chunk, String dimType) {
     type = t;
     length = len;
     chunkSize = chunk;
+    dimensionType = dimType;
   }
 
   /**
    * @return axis type (e.g. 'X')
    */
-  public char getType() {
+  public String getType() {
     return type;
   }
 
@@ -48,6 +63,13 @@ public class Axis {
    */
   public int getChunkSize() {
     return chunkSize;
+  }
+
+  /**
+   * @return dimension type e.g. 'space'
+   */
+  public String getDimensionType() {
+    return dimensionType;
   }
 
 }
