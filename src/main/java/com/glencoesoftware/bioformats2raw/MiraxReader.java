@@ -1075,6 +1075,8 @@ public class MiraxReader extends FormatReader {
         String blue = channelTable.get("COLOR_B");
         String exposure = channelTable.get("EXPOSURE_TIME");
         String gain = channelTable.get("DIGITALGAIN");
+        String excitation = channelTable.get("EXCITATION_WAVELENGTH");
+        String emission = channelTable.get("EMISSION_WAVELENGTH");
         boolean useRed =
           Boolean.valueOf(channelTable.get("USE_RED_CHANNEL").toLowerCase());
         boolean useGreen =
@@ -1090,6 +1092,31 @@ public class MiraxReader extends FormatReader {
 
         if (name != null && !name.equals("Default")) {
           store.setChannelName(name, 0, c);
+        }
+        if (excitation != null) {
+          try {
+            double wavelength = Double.parseDouble(excitation);
+            if (wavelength > 0) {
+              store.setChannelExcitationWavelength(
+                FormatTools.getExcitationWavelength(wavelength), 0, c);
+            }
+          }
+          catch (NumberFormatException e) {
+            LOGGER.debug(
+              "Could not parse excitation wavelength {}", excitation);
+          }
+        }
+        if (emission != null) {
+          try {
+            double wavelength = Double.parseDouble(emission);
+            if (wavelength > 0) {
+              store.setChannelEmissionWavelength(
+                FormatTools.getEmissionWavelength(wavelength), 0, c);
+            }
+          }
+          catch (NumberFormatException e) {
+            LOGGER.debug("Could not parse emission wavelength {}", emission);
+          }
         }
         if (red != null && green != null && blue != null) {
           int r = 0;
