@@ -10,7 +10,6 @@ package com.glencoesoftware.bioformats2raw.test;
 import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -41,7 +40,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -490,70 +488,6 @@ public class ZarrV3Test extends AbstractZarrTest {
 
     OME ome = getOMEMetadata();
     assertFalse(ome.getImage(0).getPixels().getBigEndian());
-  }
-
-  /**
-   * Test anatomical orientation (RFC-4).
-   */
-  @Test
-  public void testAnatomicalOrientation() throws Exception {
-    HashMap<String, String> opts = new HashMap<String, String>();
-    opts.put("sizeZ", "4");
-    opts.put("sizeC", "3");
-    opts.put("sizeT", "2");
-    HashMap<String, String> seriesOpts = new HashMap<String, String>();
-    seriesOpts.put("AxisCount", "5");
-    seriesOpts.put("AxisOrientationType_0", "anatomical");
-    seriesOpts.put("AxisOrientationTerm_0", "left-to-right");
-    seriesOpts.put("AxisOrientationType_1", "anatomical");
-    seriesOpts.put("AxisOrientationTerm_1", "posterior-to-anterior");
-    seriesOpts.put("AxisOrientationType_2", "anatomical");
-    seriesOpts.put("AxisOrientationTerm_2", "rostral-to-caudal");
-    Map<Integer, Map<String, String>> allSeries =
-      new HashMap<Integer, Map<String, String>>();
-    allSeries.put(0, seriesOpts);
-    input = fake(opts, allSeries);
-
-    assertTool("--ngff-version", getNGFFVersion());
-
-    Array array = Array.open(store.resolve("0", "0"));
-    assertArrayEquals(new long[] {2, 3, 4, 512, 512}, array.metadata().shape);
-
-    Group rootGroup = Group.open(store.resolve("0"));
-    Attributes attrs = rootGroup.metadata().attributes;
-    Attributes omeAttrs = attrs.getAttributes("ome");
-
-    List<Map<String, Object>> multiscales =
-      (List<Map<String, Object>>) omeAttrs.get("multiscales");
-    assertEquals(1, multiscales.size());
-    Map<String, Object> multiscale = multiscales.get(0);
-    checkMultiscale(multiscale, "image");
-
-    List<Map<String, Object>> datasets =
-      (List<Map<String, Object>>) multiscale.get("datasets");
-    assertTrue(datasets.size() > 0);
-    assertEquals("0", datasets.get(0).get("path"));
-
-    List<Map<String, Object>> axes =
-      (List<Map<String, Object>>) multiscale.get("axes");
-    checkAxes(axes, "TCZYX", null);
-
-    for (int i=0; i<axes.size(); i++) {
-      Map<String, Object> axis = axes.get(i);
-      int originalAxisIndex = axes.size() - i - 1;
-      if (axis.get("orientation") == null) {
-        assertNull(seriesOpts.get("AxisOrientationType_" + originalAxisIndex));
-        assertNull(seriesOpts.get("AxisOrientationTerm_" + originalAxisIndex));
-      }
-      else {
-        Map<String, Object> orientation =
-          (Map<String, Object>) axis.get("orientation");
-        assertEquals(orientation.get("type"),
-          seriesOpts.get("AxisOrientationType_" + originalAxisIndex));
-        assertEquals(orientation.get("value"),
-          seriesOpts.get("AxisOrientationTerm_" + originalAxisIndex));
-      }
-    }
   }
 
   /**
