@@ -21,17 +21,17 @@ repositories {
     mavenLocal()
     mavenCentral()
     maven {
-        url 'https://artifacts.glencoesoftware.com/artifactory/ome.releases'
+        url = uri('https://artifacts.glencoesoftware.com/artifactory/ome.releases')
     }
     maven {
-        url 'https://artifacts.glencoesoftware.com/artifactory/ome.external'
+        url = uri('https://artifacts.glencoesoftware.com/artifactory/ome.external')
     }
     maven {
-        url 'https://artifacts.glencoesoftware.com/artifactory/scijava-thirdparty'
+        url = uri('https://artifacts.glencoesoftware.com/artifactory/scijava-thirdparty')
     }
     maven {
-        name 'Unidata'
-        url 'https://artifacts.glencoesoftware.com/artifactory/unidata-releases'
+        name = 'Unidata'
+        url = uri('https://artifacts.glencoesoftware.com/artifactory/unidata-releases')
     }
 }
 
@@ -50,7 +50,7 @@ dependencies {
     // implementation 'io.nextflow:nxf-s3fs:1.1.0'
     implementation 'org.lasersonlab:s3fs:2.2.3'
     implementation 'javax.xml.bind:jaxb-api:2.3.0'
-    implementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.5.32'
+    implementation 'ch.qos.logback:logback-classic:1.5.32'
 
     implementation 'org.openpnp:opencv:4.7.0-0'
     implementation 'me.tongfei:progressbar:0.10.2'
@@ -133,7 +133,7 @@ publishing {
 
     repositories {
         maven {
-            url 'https://repo.glencoesoftware.com/repository/bioformats2raw2ometiff/'
+            url = uri('https://repo.glencoesoftware.com/repository/bioformats2raw2ometiff/')
             credentials {
                username = project.properties.ArtifactoryUserName
                password = project.properties.ArtifactoryPassword
