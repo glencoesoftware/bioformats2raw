@@ -48,6 +48,7 @@ public class CQ1Reader extends OMETiffReader {
 
   private static final String MEASUREMENT_PROTOCOL = "MeasurementProtocol.xml";
   private static final String BRIGHTFIELD_NAME = "Brightfield";
+  private static final Color BRIGHTFIELD_COLOR = new Color(255, 255, 255, 255);
 
   private List<String> extraFiles = new ArrayList<String>();
   private transient boolean addPlateAcquisition = false;
@@ -131,7 +132,10 @@ public class CQ1Reader extends OMETiffReader {
           metadataStore.setChannelName(channelNames.get(c), i, c);
           // explicitly set brightfield channels to white
           if (channelNames.get(c).equals(BRIGHTFIELD_NAME)) {
-            metadataStore.setChannelColor(new Color(255, 255, 255, 255), i, c);
+            Color originalColor = meta.getChannelColor(i, c);
+            if (originalColor == null) {
+              metadataStore.setChannelColor(BRIGHTFIELD_COLOR, i, c);
+            }
           }
         }
       }
