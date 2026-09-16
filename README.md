@@ -16,15 +16,6 @@ Requirements
 
 As of 0.12.0, Java 11 or later is required to run bioformats2raw.
 
-libblosc (https://github.com/Blosc/c-blosc) version 1.9.0 or later must be installed separately.
-The native libraries are not packaged with any relevant jars.  See also note in jzarr readme (https://github.com/bcdev/jzarr/blob/master/README.md)
-
- * macOS: `brew install c-blosc` then set `JAVA_OPTS=-Djna.library.path=$(echo $(brew --cellar c-blosc)/*/lib/)`
- * Windows: Pre-built blosc DLLs are available from the [Fiji project](https://sites.imagej.net/N5/lib/win64/).  Rename the downloaded DLL to `blosc.dll` and place in a fixed location then set `JAVA_OPTS="-Djna.library.path=C:\path\to\blosc\folder"`.
- * Ubuntu: `apt-get install libblosc1`
- * RHEL/Rocky Linux: `dnf install blosc` after enabling the EPEL repository.
- * conda: Installing `bioformats2raw` via conda (see below) will include `blosc` as a dependency.
-
 If using features that rely on OpenCV (see the [Downsampling type](#downsampling-type) section below), minimum supported versions are:
 
  * Ubuntu 18.04
@@ -60,11 +51,9 @@ For additional information, please see:
 Installation
 ============
 
-1. Download and unpack a release artifact:
+Download and unpack a release artifact:
 
     https://github.com/glencoesoftware/bioformats2raw/releases
-
-2. OR, install via `conda` as described at [conda-bioformats2raw](https://github.com/ome/conda-bioformats2raw).
 
 Development Installation
 ========================
@@ -116,6 +105,7 @@ Run the conversion:
     bioformats2raw /path/to/file.svs /path/to/zarr-pyramid
 
 By default, the resolutions will be set so that the smallest resolution is no greater than 256x256.
+A scaling factor of 2 is used between consecutive resolutions.
 The target of the smallest resolution can be configured with `--target-min-size` e.g. to ensure
 that the smallest resolution is no greater than 128x128
 
@@ -180,7 +170,7 @@ Supported options for `blosc` are:
 * `clevel=<level>`, where the default is `clevel=5`. Valid values are integers from 0 to 9 inclusive, where 0 generally
   indicates no compression and 9 generally indicates most compression.
 * `blocksize=<blocksize>`, where the default is `blocksize=0`.
-* `shuffle=<shuffle type>`, where the default is `shuffle=byteshuffle`. Valid values are `noshuffle`, `shuffle`/`byteshuffle`, and `bitshuffle`.
+* `shuffle=<shuffle type>`, where the default is `shuffle=shuffle`. Valid values are `noshuffle`, `shuffle`, and `bitshuffle`.
 
 See also the blosc codec definition in the [Zarr v3 specification](https://zarr-specs.readthedocs.io/en/latest/v3/codecs/blosc/index.html#configuration-parameters).
 
@@ -411,8 +401,11 @@ conversions, but if they are needed for troubleshooting then the `--keep-memo-fi
 need to be created, `--keep-memo-files` will still result in no `.*.bfmemo` files at the end of conversion. This is particularly common
 for small datasets that can be read very quickly.
 
+Downsampling options
+====================
+
 Downsampling type
-=================
+-----------------
 
 By default, pyramid resolutions are generated using a [very simple downsampling algorithm](https://github.com/ome/ome-common-java/blob/master/src/main/java/loci/common/image/SimpleImageScaler.java).
 For some input data types, this may not be ideal. The `--downsample-type` option can be used to specify an alternative algorithm.
@@ -421,6 +414,17 @@ No additional downsampling algorithms are directly implemented in bioformats2raw
 
 If the minimum system requirements (see above) are not met, or the input data type is int8 or int32 (see https://github.com/glencoesoftware/bioformats2raw/pull/199),
 then any value of `--downsample-type` other than the default is expected to throw an exception.
+
+Converting an existing pyramid
+------------------------------
+
+Some input file formats will already contain pyramid resolutions. By default, all resolutions other than the largest will be ignored, and the pyramid will be recalculated.
+To preserve the existing pyramid instead of recalculating, use the `--use-existing-resolutions` option.
+
+If `--use-existing-resolutions` is specified for an image with no existing pyramid, then a pyramid will still be calculated according to the image dimensions.
+
+Note that an existing pyramid may not be ideal for viewing. It may have a scaling factor other than 2, use different scaling factors at different resolution levels,
+or contain fewer resolutions than are ideal. This can lead to sub-optimal viewing performance, especially for data imported into OMERO.
 
 Additional readers
 ==================
@@ -446,6 +450,11 @@ it is very important to include the entire corresponding directory when transfer
 
 The `mirax.use_metadata_dimensions` reader option can be used change how XY dimensions are calculated.
 By default, this option is `true`, but setting it to `false` may be helpful if the image size appears incorrect.
+
+`MiraxReader` keeps a cache of decompressed tiles as they are read from the input data. By default, at most 64 tiles
+will be stored in the cache. The cache size may be changed using the `--max-cached-tiles n` option, where `n` is the tile count.
+Increasing this option may improve performance if a large amount of memory is available, as it can reduce both the number of file reads
+and the number of times decompression is performed.
 
 BioTekReader
 ------------

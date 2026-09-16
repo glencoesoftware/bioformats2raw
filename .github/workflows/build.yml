@@ -28,9 +28,6 @@ jobs:
           java-version: ${{ matrix.java }}
           distribution: 'zulu'
           cache: "gradle"
-      - name: Install libraries
-        run: |
-          sudo apt-get install -y libblosc1
       - name: Run commands
         run: |
           ./gradlew ${{ env.gradle_commands }}
