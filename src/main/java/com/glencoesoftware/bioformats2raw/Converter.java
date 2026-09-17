@@ -2149,6 +2149,12 @@ public class Converter implements Callable<Integer> {
         activeTileHeight = blockSizes[i];
         yDim = dimensions[i];
       }
+      else if (axisType.equals("Z")) {
+        // correct for possible off-by-one if Z downsampling
+        if (offset[i] >= array.metadata().shape[i]) {
+          offset[i] = (int) (array.metadata().shape[i] - 1);
+        }
+      }
       else {
         LOGGER.trace("ignoring axis type {}", axes.get(i).getType());
       }
