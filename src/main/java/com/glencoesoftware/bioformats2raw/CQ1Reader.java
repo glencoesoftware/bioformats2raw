@@ -28,6 +28,7 @@ import ome.xml.model.Image;
 import ome.xml.model.Plate;
 import ome.xml.model.Well;
 import ome.xml.model.WellSample;
+import ome.xml.model.primitives.Color;
 import ome.xml.model.primitives.NonNegativeInteger;
 
 import org.w3c.dom.Element;
@@ -46,6 +47,8 @@ public class CQ1Reader extends OMETiffReader {
     LoggerFactory.getLogger(CQ1Reader.class);
 
   private static final String MEASUREMENT_PROTOCOL = "MeasurementProtocol.xml";
+  private static final String BRIGHTFIELD_NAME = "Brightfield";
+  private static final Color BRIGHTFIELD_COLOR = new Color(255, 255, 255, 255);
 
   private List<String> extraFiles = new ArrayList<String>();
   private transient boolean addPlateAcquisition = false;
@@ -127,6 +130,13 @@ public class CQ1Reader extends OMETiffReader {
       for (int c=0; c<getEffectiveSizeC(); c++) {
         if (c < channelNames.size()) {
           metadataStore.setChannelName(channelNames.get(c), i, c);
+          // explicitly set brightfield channels to white
+          if (channelNames.get(c).equals(BRIGHTFIELD_NAME)) {
+            Color originalColor = meta.getChannelColor(i, c);
+            if (originalColor == null) {
+              metadataStore.setChannelColor(BRIGHTFIELD_COLOR, i, c);
+            }
+          }
         }
       }
     }
@@ -297,7 +307,7 @@ public class CQ1Reader extends OMETiffReader {
             if (enabled == null || enabled.equalsIgnoreCase("true")) {
               String mode = channel.getAttribute("icm:Method");
               if (mode.equalsIgnoreCase("brightfield")) {
-                names.add("Brightfield");
+                names.add(BRIGHTFIELD_NAME);
               }
               else {
                 String lightSource = getAttribute(
