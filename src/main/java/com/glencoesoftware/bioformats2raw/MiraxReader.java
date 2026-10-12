@@ -284,10 +284,11 @@ public class MiraxReader extends FormatReader {
         TilePointer thisOffset = lookupTile(index, col, row, no / MAX_CHANNELS);
         if (thisOffset != null) {
           int channel = no % MAX_CHANNELS;
-          // 2 channel JPEG data needs to have the channel index inverted
+          // 2 channel JPEG or PNG data needs to have the channel index inverted
           // 2 channel JPEG-2000 data should not have the channel index inverted
           if (fluorescence &&
-            (getSizeC() != 2 || format.get(index).equals("JPEG")))
+            (getSizeC() != 2 || format.get(index).equals("JPEG") ||
+            format.get(index).equals("PNG")))
           {
             channel = MAX_CHANNELS - channel - 1;
           }
@@ -330,7 +331,12 @@ public class MiraxReader extends FormatReader {
                 System.arraycopy(tileBuf, src, buf, dest, copy);
               }
             }
-            tileCache.put(thisOffset, tileBuf);
+            // for PNG, only one channel is read at a time,
+            // instead of decompressing all channels and then unpacking
+            // this means tileBuf does not represent the entirety of thisOffset
+            if (!format.get(index).equals("PNG")) {
+              tileCache.put(thisOffset, tileBuf);
+            }
           }
           else {
             LOGGER.warn("null tile buffer for row={}, col={}", row, col);
