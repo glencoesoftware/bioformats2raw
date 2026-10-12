@@ -101,7 +101,6 @@ import dev.zarr.zarrjava.core.Group;
 import dev.zarr.zarrjava.core.chunkkeyencoding.Separator;
 import dev.zarr.zarrjava.store.FilesystemStore;
 import dev.zarr.zarrjava.store.StoreHandle;
-import dev.zarr.zarrjava.utils.IndexingUtils;
 import dev.zarr.zarrjava.utils.Utils;
 
 import dev.zarr.zarrjava.v3.ArrayMetadata;
@@ -245,8 +244,22 @@ public class Converter implements Callable<Integer> {
 
   private IProgressListener progressListener;
   private Map<Integer, int[]> tileCounts = new HashMap<Integer, int[]>();
-  private Map<String, List<long[]>> shardOffsets =
-    new HashMap<String, List<long[]>>();
+  private final ShardLockRegistry shardLocks;
+
+  /**
+   * Construct a converter.
+   */
+  public Converter() {
+    this(new ShardLockRegistry());
+  }
+
+  /**
+   * Construct a converter using the supplied shard lock registry.
+   * @param shardLocks registry for active Zarr v3 shard locks
+   */
+  Converter(ShardLockRegistry shardLocks) {
+    this.shardLocks = shardLocks;
+  }
 
   // Option setters
 
@@ -2021,36 +2034,24 @@ public class Converter implements Callable<Integer> {
 
     // if writing sharded data, we need to ensure that only one chunk
     // is written to each shard at a time (since one shard == one file)
-    if (shardOffsets.containsKey(pathName) &&
-      !isWholeShard(array, shape, offset))
-    {
-      dev.zarr.zarrjava.v3.Array v3Array = (dev.zarr.zarrjava.v3.Array) array;
+    if (!isWholeShard(array, shape, offset)) {
       int[] shardSizes = array.metadata().chunkShape();
       long[] shard = new long[shardSizes.length];
       for (int i=0; i<offset.length; i++) {
         shard[i] = offset[i] / shardSizes[i];
       }
-      // lock on one of the pre-computed shard offsets, as locking on
-      // 'shard' won't be sufficient
-      // this still allows chunks in other shards to be written,
-      // so minimizes the performance impact compared to just
-      // synchronizing the method
-      long[] shardLock = null;
-      for (long[] computedOffset : shardOffsets.get(pathName)) {
-        if (Arrays.equals(computedOffset, shard)) {
-          shardLock = computedOffset;
-          break;
-        }
-      }
-      synchronized (shardLock) {
-        array.write(Utils.toLongArray(offset), pixels);
+      // Lock on the shared stripe for these shard coordinates. The fixed
+      // number of stripes bounds memory use while still allowing writes to
+      // shards assigned to different stripes to proceed in parallel.
+      if (shardLocks.runWithLock(pathName, shard,
+        () -> array.write(Utils.toLongArray(offset), pixels)))
+      {
+        return;
       }
     }
-    else {
-      // if not writing sharded data, each chunk gets written to a separate file
-      // so we're not worried about conflicting writes to the same file
-      array.write(Utils.toLongArray(offset), pixels);
-    }
+    // if not writing sharded data, each chunk gets written to a separate file
+    // so we're not worried about conflicting writes to the same file
+    array.write(Utils.toLongArray(offset), pixels);
   }
 
   private boolean isWholeShard(Array array, int[] shape, int[] offset) {
@@ -2721,17 +2722,10 @@ public class Converter implements Callable<Integer> {
             .withCodecs(c -> builder)
             .build()
         );
-        // pre-compute a list of shard offsets
-        // these will get used when writing to ensure that
-        // only one chunk gets written to a shard at a time
-        if (useSharding) {
-          ArrayList<long[]> shards = new ArrayList<long[]>();
-          long[][] shardCoords =
-            IndexingUtils.computeChunkCoords(arrayShape, shardSizes);
-          for (long[] shard : shardCoords) {
-            shards.add(shard);
-          }
-          shardOffsets.put(resolutionString, shards);
+        // Set up bounded lock stripes so that only one chunk is written to a
+        // shard at a time without retaining one lock for every touched shard.
+        if (useSharding && writeImageData) {
+          shardLocks.register(resolutionString);
         }
       }
       else {
@@ -2782,6 +2776,7 @@ public class Converter implements Callable<Integer> {
 
       getProgressListener().notifyResolutionStart(resolution, tileCount);
 
+      boolean allTasksSubmitted = false;
       try {
         for (int j=0; j<scaledHeight; j+=tileHeight) {
           final int yy = j;
@@ -2833,6 +2828,7 @@ public class Converter implements Callable<Integer> {
             }
           }
         }
+        allTasksSubmitted = true;
 
         // Wait until the entire resolution has completed before proceeding to
         // the next one
@@ -2844,6 +2840,13 @@ public class Converter implements Callable<Integer> {
 
       }
       finally {
+        // allOf only returns or throws after every submitted task has
+        // completed, so removing the shared locks is safe in that case. If
+        // task submission itself failed, retain the locks for any tasks that
+        // may still be running.
+        if (allTasksSubmitted) {
+          shardLocks.remove(resolutionString);
+        }
         getProgressListener().notifyResolutionEnd(resolution);
       }
     }
