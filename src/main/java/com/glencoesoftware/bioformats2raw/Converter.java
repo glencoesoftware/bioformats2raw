@@ -99,7 +99,9 @@ import dev.zarr.zarrjava.core.Array;
 import dev.zarr.zarrjava.core.Attributes;
 import dev.zarr.zarrjava.core.Group;
 import dev.zarr.zarrjava.core.chunkkeyencoding.Separator;
+import dev.zarr.zarrjava.store.BufferedZipStore;
 import dev.zarr.zarrjava.store.FilesystemStore;
+import dev.zarr.zarrjava.store.Store;
 import dev.zarr.zarrjava.store.StoreHandle;
 import dev.zarr.zarrjava.utils.IndexingUtils;
 import dev.zarr.zarrjava.utils.Utils;
@@ -120,6 +122,8 @@ public class Converter implements Callable<Integer> {
    * Relative path to OME-XML metadata file.
    */
   private static final String METADATA_FILE = "METADATA.ome.xml";
+
+  private static final String ZIP_EXTENSION = ".ozx";
 
   /**
    * Minimum size of the largest XY dimension in the smallest resolution,
@@ -178,7 +182,7 @@ public class Converter implements Callable<Integer> {
 
   private volatile SupportedVersions ngffVersion = SupportedVersions.NGFF_04;
   private volatile boolean v3 = false;
-  private volatile FilesystemStore store = null;
+  private volatile Store store = null;
 
   private volatile int maxWorkers;
   private volatile int maxCachedTiles;
@@ -1509,6 +1513,7 @@ public class Converter implements Callable<Integer> {
              EnumerationException, ZarrException
   {
     checkOutputPaths();
+    initializeStore();
 
     Cache<TilePointer, byte[]> tileCache = CacheBuilder.newBuilder()
         .maximumSize(maxCachedTiles)
@@ -1638,13 +1643,9 @@ public class Converter implements Callable<Integer> {
           }
           String xml = service.getOMEXML(meta);
 
-          // write the original OME-XML to a file
-          Path metadataPath = getRootPath().resolve("OME");
-          if (!Files.exists(metadataPath)) {
-            Files.createDirectories(metadataPath);
-          }
-          Path omexmlFile = metadataPath.resolve(METADATA_FILE);
-          Files.write(omexmlFile, xml.getBytes(Constants.ENCODING));
+          // write the original OME-XML to the store
+          store.set(new String[] {"OME", METADATA_FILE},
+            ByteBuffer.wrap(xml.getBytes(Constants.ENCODING)));
         }
       }
       catch (ServiceException se) {
@@ -1706,6 +1707,9 @@ public class Converter implements Callable<Integer> {
           LOGGER.error("Exception while closing reader", e);
         }
       });
+      if (store != null && store instanceof BufferedZipStore) {
+        ((BufferedZipStore) store).close();
+      }
     }
 
     // delete the memo file if it was saved and it's not explicitly kept
@@ -1717,11 +1721,19 @@ public class Converter implements Callable<Integer> {
     }
   }
 
-  private void writeZarrMetadata() throws IOException, ZarrException {
+  private void initializeStore() throws IOException, ZarrException {
     if (store == null) {
-      store = new FilesystemStore(getRootPath());
+      Path rootPath = getRootPath();
+      if (rootPath.toString().endsWith(ZIP_EXTENSION) && getV3()) {
+        store = new BufferedZipStore(rootPath, true);
+      }
+      else {
+        store = new FilesystemStore(rootPath);
+      }
     }
+  }
 
+  private void writeZarrMetadata() throws IOException, ZarrException {
     // fileset level metadata
     if (!noRootGroup) {
       Attributes attributes = new Attributes();
