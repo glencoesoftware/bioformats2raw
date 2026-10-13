@@ -834,7 +834,7 @@ public class Converter implements Callable<Integer> {
    */
   @Option(
           names = "--downsample-type",
-          description = "Tile downsampling algorithm " +
+          description = "Tile downsampling algorithm (X and Y axes only) " +
             "(${COMPLETION-CANDIDATES})",
           defaultValue = "SIMPLE"
   )
@@ -851,7 +851,7 @@ public class Converter implements Callable<Integer> {
    */
   @Option(
           names = "--downsample-z",
-          description = "Downsample along Z axis",
+          description = "Downsample along Z axis using median values",
           defaultValue = "false"
   )
   public void setDownsampleZ(boolean canDownsampleZ) {
