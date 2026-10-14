@@ -437,6 +437,89 @@ public class ZarrV3Test extends AbstractZarrTest {
     }
   }
 
+  static Stream<Arguments> isCompact() {
+    return Stream.of(
+      Arguments.of(true),
+      Arguments.of(false)
+    );
+  }
+
+  /**
+   * Test 3D downsampling with a smaller Z axis, with and without compaction.
+   *
+   * @param compact true if axes with length 1 should be removed
+   */
+  @ParameterizedTest
+  @MethodSource("isCompact")
+  public void test3DDownsamplingShortStack(boolean compact) throws Exception {
+    int xySize = 8000;
+    int sizeZ = 4;
+    int sizeC = 1;
+    int sizeT = 1;
+    input = fake("sizeX", String.valueOf(xySize),
+      "sizeY", String.valueOf(xySize),
+      "sizeC", String.valueOf(sizeC),
+      "sizeZ", String.valueOf(sizeZ),
+      "sizeT", String.valueOf(sizeT));
+    assertTool("--ngff-version", getNGFFVersion(), "--downsample-z",
+      compact ? "--compact" : "");
+
+    Group rootGroup = Group.open(store.resolve(""));
+    Attributes attrs = rootGroup.metadata().attributes;
+    Attributes omeAttrs = attrs.getAttributes("ome");
+    assertEquals(getNGFFVersion(), omeAttrs.get("version"));
+    assertEquals(3, omeAttrs.get("bioformats2raw.layout"));
+
+    Array array = Array.open(store.resolve("0", "0"));
+    assertArrayEquals(new long[] {sizeT, sizeC, sizeZ, xySize, xySize},
+      array.metadata().shape);
+
+    rootGroup = Group.open(store.resolve("0"));
+    attrs = rootGroup.metadata().attributes;
+    omeAttrs = attrs.getAttributes("ome");
+    assertEquals(getNGFFVersion(), omeAttrs.get("version"));
+
+    List<Map<String, Object>> multiscales =
+      (List<Map<String, Object>>) omeAttrs.get("multiscales");
+    assertEquals(1, multiscales.size());
+    Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "image");
+
+    List<Map<String, Object>> datasets =
+      (List<Map<String, Object>>) multiscale.get("datasets");
+    // make sure enough resolutions were generated to test
+    // what happens when trying to scale SizeZ smaller than 1
+    assertTrue(datasets.size() > 2);
+
+    List<Map<String, Object>> axes = getAxes(multiscale);
+    checkAxes(axes, compact ? "ZYX" : "TCZYX", null);
+
+    for (int r=0; r<datasets.size(); r++) {
+      Map<String, Object> dataset = datasets.get(r);
+
+      assertEquals(String.valueOf(r), dataset.get("path"));
+
+      List<Map<String, Object>> transforms =
+        (List<Map<String, Object>>) dataset.get("coordinateTransformations");
+      assertEquals(1, transforms.size());
+      Map<String, Object> scale = transforms.get(0);
+      assertEquals("scale", scale.get("type"));
+      List<Double> axisValues = (List<Double>) scale.get("scale");
+
+      assertEquals(compact ? 3 : 5, axisValues.size());
+      double factor = Math.pow(2, r);
+      double zFactor = r <= 1 ? factor : sizeZ;
+      if (compact) {
+        assertEquals(axisValues, Arrays.asList(new Double[] {
+          zFactor, factor, factor}));
+      }
+      else {
+        assertEquals(axisValues, Arrays.asList(new Double[] {
+          1.0, 1.0, zFactor, factor, factor}));
+      }
+    }
+  }
+
   static Stream<Arguments> getShardSizes() {
     return Stream.of(
       Arguments.of(512, 512, 1),

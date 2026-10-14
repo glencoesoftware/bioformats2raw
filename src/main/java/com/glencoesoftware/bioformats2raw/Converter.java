@@ -1875,7 +1875,12 @@ public class Converter implements Callable<Integer> {
       int scaledHeight = sizeY / scale;
       int scaledDepth = sizeZ;
       if (getDownsampleZ()) {
-        scaledDepth /= scale;
+        if (scaledDepth >= scale) {
+          scaledDepth /= scale;
+        }
+        else {
+          scaledDepth = 1;
+        }
       }
 
       workingReader = readers.take();
@@ -2381,6 +2386,10 @@ public class Converter implements Callable<Integer> {
         Axis axis = axes.get(a);
         if (axis.getLength() == 1) {
           String type = axis.getType();
+          if (type.equals("Z") && getDownsampleZ()) {
+            // ensures that the Z axis is present across all resolutions
+            continue;
+          }
           if (type.equals("X") || type.equals("Y") || type.equals("Z")) {
             spatialDims--;
           }
@@ -2500,7 +2509,9 @@ public class Converter implements Callable<Integer> {
 
     boolean useModulo = getNGFFVersion().supportsExtraDimensions();
     Modulo mz = useModulo ? reader.getModuloZ() : null;
-    int[] zLengths = getModuloLengths(mz, reader.getSizeZ());
+    int[] zLengths = getDownsampleZ() ?
+      new int[mz != null && mz.length() > 1 ? 2 : 1] :
+      getModuloLengths(mz, reader.getSizeZ());
     int zLengthIndex = zLengths.length - 1;
     Modulo mc = useModulo ? reader.getModuloC() : null;
     int[] cLengths = getModuloLengths(mc, reader.getSizeC());
@@ -2732,7 +2743,12 @@ public class Converter implements Callable<Integer> {
       int scaledHeight = sizeY / scale;
       int scaledDepth = sizeZ;
       if (getDownsampleZ()) {
-        scaledDepth /= scale;
+        if (scaledDepth >= scale) {
+          scaledDepth /= scale;
+        }
+        else {
+          scaledDepth = 1;
+        }
       }
 
       workingReader = readers.take();
@@ -3221,7 +3237,12 @@ public class Converter implements Callable<Integer> {
           resolutionScalesX.add(scale);
           resolutionScalesY.add(scale);
           if (downsampleZ) {
-            resolutionScalesZ.add(scale);
+            if (baseZ / scale >= 1) {
+              resolutionScalesZ.add(scale);
+            }
+            else {
+              resolutionScalesZ.add((double) baseZ);
+            }
           }
         }
       }
@@ -3286,7 +3307,7 @@ public class Converter implements Callable<Integer> {
             axisValues.add(resolutionScalesY.get(r));
           }
           else if (downsampleZ && axisType.equals("z")) {
-            axisValues.add(resolutionScalesY.get(r));
+            axisValues.add(resolutionScalesZ.get(r));
           }
           else {
             axisValues.add(1.0);
