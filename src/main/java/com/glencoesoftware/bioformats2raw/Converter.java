@@ -76,6 +76,7 @@ import ome.xml.model.enums.UnitsLength;
 import ome.xml.model.enums.UnitsTime;
 import ome.xml.model.primitives.Color;
 import ome.xml.model.primitives.PositiveInteger;
+import ome.xml.model.primitives.Timestamp;
 
 import org.perf4j.slf4j.Slf4JStopWatch;
 import org.slf4j.Logger;
@@ -2908,9 +2909,32 @@ public class Converter implements Callable<Integer> {
 
     List<Map<String, Object>> acquisitions =
       new ArrayList<Map<String, Object>>();
+    Timestamp starttime;
+    Timestamp endtime;
+    PositiveInteger maximumFieldCount;
     for (int pa=0; pa<meta.getPlateAcquisitionCount(plate); pa++) {
       Map<String, Object> acquisition = new HashMap<String, Object>();
       acquisition.put("id", pa);
+      if (meta.getPlateAcquisitionName(plate, pa) != null) {
+        acquisition.put("name", meta.getPlateAcquisitionName(plate, pa));
+      }
+      if (meta.getPlateAcquisitionDescription(plate, pa) != null) {
+        acquisition.put("description",
+          meta.getPlateAcquisitionDescription(plate, pa));
+      }
+      maximumFieldCount = meta.getPlateAcquisitionMaximumFieldCount(plate, pa);
+      if (maximumFieldCount != null) {
+        acquisition.put("maximumfieldcount",
+          maximumFieldCount.getNumberValue().intValue());
+      }
+      starttime = meta.getPlateAcquisitionStartTime(plate, pa);
+      if (starttime != null) {
+        acquisition.put("starttime", starttime.asInstant().getMillis() / 1000L);
+      }
+      endtime = meta.getPlateAcquisitionEndTime(plate, pa);
+      if (endtime != null) {
+        acquisition.put("endtime", endtime.asInstant().getMillis() / 1000L);
+      }
       acquisitions.add(acquisition);
     }
     if (acquisitions.size() > 0) {
