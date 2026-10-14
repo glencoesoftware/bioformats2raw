@@ -461,8 +461,13 @@ public class ZarrV3Test extends AbstractZarrTest {
       "sizeC", String.valueOf(sizeC),
       "sizeZ", String.valueOf(sizeZ),
       "sizeT", String.valueOf(sizeT));
-    assertTool("--ngff-version", getNGFFVersion(), "--downsample-z",
-      compact ? "--compact" : "");
+    if (compact) {
+      assertTool("--ngff-version", getNGFFVersion(), "--downsample-z",
+        "--compact");
+    }
+    else {
+      assertTool("--ngff-version", getNGFFVersion(), "--downsample-z");
+    }
 
     Group rootGroup = Group.open(store.resolve(""));
     Attributes attrs = rootGroup.metadata().attributes;
