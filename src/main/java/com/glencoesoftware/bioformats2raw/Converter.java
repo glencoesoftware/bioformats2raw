@@ -36,6 +36,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import loci.common.Constants;
+import loci.common.DataTools;
 import loci.common.Region;
 import loci.common.image.IImageScaler;
 import loci.common.image.SimpleImageScaler;
@@ -198,6 +199,7 @@ public class Converter implements Callable<Integer> {
   private volatile File memoDirectory;
   private volatile boolean keepMemoFiles = false;
   private volatile Downsampling downsampling;
+  private volatile boolean downsampleZ = false;
   private volatile boolean overwrite = false;
   private volatile Short fillValue = null;
   private volatile List<String> readerOptions;
@@ -832,7 +834,7 @@ public class Converter implements Callable<Integer> {
    */
   @Option(
           names = "--downsample-type",
-          description = "Tile downsampling algorithm " +
+          description = "Tile downsampling algorithm (X and Y axes only) " +
             "(${COMPLETION-CANDIDATES})",
           defaultValue = "SIMPLE"
   )
@@ -840,6 +842,20 @@ public class Converter implements Callable<Integer> {
     if (downsampleType != null) {
       downsampling = downsampleType;
     }
+  }
+
+  /**
+   * Set whether or not to downsample along Z.
+   *
+   * @param canDownsampleZ true if downsampling in Z
+   */
+  @Option(
+          names = "--downsample-z",
+          description = "Downsample along Z axis using median values",
+          defaultValue = "false"
+  )
+  public void setDownsampleZ(boolean canDownsampleZ) {
+    downsampleZ = canDownsampleZ;
   }
 
   /**
@@ -1276,6 +1292,13 @@ public class Converter implements Callable<Integer> {
    */
   public Downsampling getDownsampling() {
     return downsampling;
+  }
+
+  /**
+   * @return true if Z downsampling enabled
+   */
+  public boolean getDownsampleZ() {
+    return downsampleZ;
   }
 
   /**
@@ -1851,6 +1874,14 @@ public class Converter implements Callable<Integer> {
       int scaledWidth = sizeX / scale;
       int scaledHeight = sizeY / scale;
       int scaledDepth = sizeZ;
+      if (getDownsampleZ()) {
+        if (scaledDepth >= scale) {
+          scaledDepth /= scale;
+        }
+        else {
+          scaledDepth = 1;
+        }
+      }
 
       workingReader = readers.take();
       try {
@@ -2123,6 +2154,12 @@ public class Converter implements Callable<Integer> {
         activeTileHeight = blockSizes[i];
         yDim = dimensions[i];
       }
+      else if (axisType.equals("Z")) {
+        // correct for possible off-by-one if Z downsampling
+        if (offset[i] >= array.metadata().shape[i]) {
+          offset[i] = (int) (array.metadata().shape[i] - 1);
+        }
+      }
       else {
         LOGGER.trace("ignoring axis type {}", axes.get(i).getType());
       }
@@ -2144,6 +2181,61 @@ public class Converter implements Callable<Integer> {
 
     return OpenCVTools.downsample(
       tileAsBytes, pixelType, width, height, PYRAMID_SCALE, downsampling);
+  }
+
+  private byte[][] getZTiles(int series, int resolution, int[] plane,
+    Region boundingBox, List<Axis> axes)
+          throws FormatException, IOException, InterruptedException,
+                 EnumerationException, InvalidRangeException,
+                 ZarrException
+  {
+    byte[][] zs = new byte[plane.length][];
+    for (int p=0; p<plane.length; p++) {
+      zs[p] = getTile(series, resolution, plane[p], boundingBox, axes);
+    }
+    return zs;
+  }
+
+  private byte[] downsampleZ(byte[][] zs) {
+    if (zs.length == 1) {
+      return zs[0];
+    }
+    int bpp = FormatTools.getBytesPerPixel(pixelType);
+    boolean isFloat = FormatTools.isFloatingPoint(pixelType);
+    Object[] arrays = new Object[zs.length];
+    for (int i=0; i<arrays.length; i++) {
+      arrays[i] = DataTools.makeDataArray(zs[i], bpp, isFloat, true);
+    }
+    int numPixels = java.lang.reflect.Array.getLength(arrays[0]);
+    Object rtn = arrays[0];
+    Object[] pixel = new Object[zs.length];
+    int middle = (int) Math.ceil(pixel.length / 2.0) - 1;
+    for (int p=0; p<numPixels; p++) {
+      for (int z=0; z<zs.length; z++) {
+        pixel[z] = java.lang.reflect.Array.get(arrays[z], p);
+      }
+      Arrays.sort(pixel);
+      java.lang.reflect.Array.set(rtn, p, pixel[middle]);
+    }
+    if (rtn instanceof byte[]) {
+      return (byte[]) rtn;
+    }
+    else if (rtn instanceof short[]) {
+      return DataTools.shortsToBytes((short[]) rtn, true);
+    }
+    else if (rtn instanceof int[]) {
+      return DataTools.intsToBytes((int[]) rtn, true);
+    }
+    else if (rtn instanceof long[]) {
+      return DataTools.longsToBytes((long[]) rtn, true);
+    }
+    else if (rtn instanceof float[]) {
+      return DataTools.floatsToBytes((float[]) rtn, true);
+    }
+    else if (rtn instanceof double[]) {
+      return DataTools.doublesToBytes((double[]) rtn, true);
+    }
+    return null;
   }
 
   private byte[] getTile(
@@ -2294,6 +2386,10 @@ public class Converter implements Callable<Integer> {
         Axis axis = axes.get(a);
         if (axis.getLength() == 1) {
           String type = axis.getType();
+          if (type.equals("Z") && getDownsampleZ()) {
+            // ensures that the Z axis is present across all resolutions
+            continue;
+          }
           if (type.equals("X") || type.equals("Y") || type.equals("Z")) {
             spatialDims--;
           }
@@ -2413,7 +2509,9 @@ public class Converter implements Callable<Integer> {
 
     boolean useModulo = getNGFFVersion().supportsExtraDimensions();
     Modulo mz = useModulo ? reader.getModuloZ() : null;
-    int[] zLengths = getModuloLengths(mz, reader.getSizeZ());
+    int[] zLengths = getDownsampleZ() ?
+      new int[mz != null && mz.length() > 1 ? 2 : 1] :
+      getModuloLengths(mz, reader.getSizeZ());
     int zLengthIndex = zLengths.length - 1;
     Modulo mc = useModulo ? reader.getModuloC() : null;
     int[] cLengths = getModuloLengths(mc, reader.getSizeC());
@@ -2532,17 +2630,27 @@ public class Converter implements Callable<Integer> {
     getProgressListener().notifyChunkStart(
       plane, xOffset, yOffset, zOffset);
     Slf4JStopWatch t0 = new Slf4JStopWatch("getChunk");
+    boolean reallyDownsampleZ = getDownsampleZ() && resolution > 0;
     try {
       for (int z = zOffset; z < zOffset + zShape; z++) {
         //Get plane index for current Z
         reader = readers.take();
-        int planeIndex;
+
+        // use 3 planes (not 2) so that median values are easy to pick
+        int zsToSample = reallyDownsampleZ ? PYRAMID_SCALE + 1 : 1;
+        int[] planeIndex = new int[zsToSample];
         try {
-          planeIndex = FormatTools.getIndex(reader, z, zct[1], zct[2]);
-          if (getNGFFVersion().supportsExtraDimensions()) {
-            Modulo mz = reader.getModuloZ();
-            if (mz != null && mz.length() > 1) {
-              planeIndex = plane;
+          for (int dz=0; dz<planeIndex.length; dz++) {
+            int zIndex = reallyDownsampleZ ? z * PYRAMID_SCALE + dz : z;
+            zIndex = (int) Math.min(zIndex, reader.getSizeZ() - 1);
+            planeIndex[dz] =
+              FormatTools.getIndex(reader, zIndex, zct[1], zct[2]);
+
+            if (getNGFFVersion().supportsExtraDimensions()) {
+              Modulo mz = reader.getModuloZ();
+              if (mz != null && mz.length() > 1) {
+                planeIndex[dz] = plane;
+              }
             }
           }
         }
@@ -2550,8 +2658,8 @@ public class Converter implements Callable<Integer> {
           readers.put(reader);
         }
         Region boundingBox = new Region(xOffset, yOffset, xShape, yShape);
-        byte[] tileAsBytes = getTile(series, resolution, planeIndex,
-                                    boundingBox, axes);
+        byte[] tileAsBytes = downsampleZ(
+          getZTiles(series, resolution, planeIndex, boundingBox, axes));
         if (tileAsBytes == null) {
           return;
         }
@@ -2634,6 +2742,14 @@ public class Converter implements Callable<Integer> {
       int scaledWidth = sizeX / scale;
       int scaledHeight = sizeY / scale;
       int scaledDepth = sizeZ;
+      if (getDownsampleZ()) {
+        if (scaledDepth >= scale) {
+          scaledDepth /= scale;
+        }
+        else {
+          scaledDepth = 1;
+        }
+      }
 
       workingReader = readers.take();
       try {
@@ -3091,6 +3207,7 @@ public class Converter implements Callable<Integer> {
 
     List<Double> resolutionScalesX = new ArrayList<Double>();
     List<Double> resolutionScalesY = new ArrayList<Double>();
+    List<Double> resolutionScalesZ = new ArrayList<Double>();
     try {
       v = readers.take();
       meta = (IMetadata) v.getMetadataStore();
@@ -3098,7 +3215,8 @@ public class Converter implements Callable<Integer> {
 
       int baseX = v.getSizeX();
       int baseY = v.getSizeY();
-      activeAxes = getDimensions(v, baseX, baseY, v.getSizeZ(), 1, 1, 1);
+      int baseZ = v.getSizeZ();
+      activeAxes = getDimensions(v, baseX, baseY, baseZ, 1, 1, 1);
 
       for (int r=0; r<resolutions; r++) {
         if (v.getResolutionCount() > 1 && reuseExistingResolutions) {
@@ -3106,16 +3224,26 @@ public class Converter implements Callable<Integer> {
           if (r == 0) {
             resolutionScalesX.add(1.0);
             resolutionScalesY.add(1.0);
+            resolutionScalesZ.add(1.0);
           }
           else {
             resolutionScalesX.add((double) baseX / v.getSizeX());
             resolutionScalesY.add((double) baseY / v.getSizeY());
+            resolutionScalesZ.add((double) baseZ / v.getSizeZ());
           }
         }
         else {
           double scale = Math.pow(PYRAMID_SCALE, r);
           resolutionScalesX.add(scale);
           resolutionScalesY.add(scale);
+          if (downsampleZ) {
+            if (baseZ / scale >= 1) {
+              resolutionScalesZ.add(scale);
+            }
+            else {
+              resolutionScalesZ.add((double) baseZ);
+            }
+          }
         }
       }
     }
@@ -3161,6 +3289,9 @@ public class Converter implements Callable<Integer> {
           else if (axisType.equals("y")) {
             axisValues.add(as * resolutionScalesY.get(r));
           }
+          else if (downsampleZ && axisType.equals("z")) {
+            axisValues.add(as * resolutionScalesZ.get(r));
+          }
           else {
             axisValues.add(as);
           }
@@ -3174,6 +3305,9 @@ public class Converter implements Callable<Integer> {
           }
           else if (axisType.equals("y")) {
             axisValues.add(resolutionScalesY.get(r));
+          }
+          else if (downsampleZ && axisType.equals("z")) {
+            axisValues.add(resolutionScalesZ.get(r));
           }
           else {
             axisValues.add(1.0);

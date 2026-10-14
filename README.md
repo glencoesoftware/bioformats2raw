@@ -408,12 +408,22 @@ Downsampling type
 -----------------
 
 By default, pyramid resolutions are generated using a [very simple downsampling algorithm](https://github.com/ome/ome-common-java/blob/master/src/main/java/loci/common/image/SimpleImageScaler.java).
-For some input data types, this may not be ideal. The `--downsample-type` option can be used to specify an alternative algorithm.
+For some input data types, this may not be ideal. The `--downsample-type` option can be used to specify an alternative algorithm for downsampling along the X and Y axes.
 Supported values are `SIMPLE` (default), `GAUSSIAN`, `AREA`, `LINEAR`, `CUBIC`, and `LANCZOS`, as declared in the [Downsampling enum](https://github.com/glencoesoftware/bioformats2raw/blob/master/src/main/java/com/glencoesoftware/bioformats2raw/Downsampling.java).
 No additional downsampling algorithms are directly implemented in bioformats2raw; OpenCV is used to for any value of `--downsample-type` other than the default.
 
 If the minimum system requirements (see above) are not met, or the input data type is int8 or int32 (see https://github.com/glencoesoftware/bioformats2raw/pull/199),
 then any value of `--downsample-type` other than the default is expected to throw an exception.
+
+Note `--downsample-type` does not currently impact Z downsampling (if enabled).
+
+3D downsampling
+---------------
+
+By default, only the X and Y axes are downsampled when calculating pyramid resolutions. The Z, C, and T axis dimensions will remain constant.
+The `--downsample-z` option is used to enable downsampling along the Z axis, in addition to X and Y. The scaling factor will be 2, and
+the Z downsampling uses a median value of the planes being downsampled. The Z downsampling algorithm is currently fixed, and not impacted
+by the use of `--downsample-type`.
 
 Converting an existing pyramid
 ------------------------------
