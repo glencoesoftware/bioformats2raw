@@ -476,8 +476,14 @@ public class ZarrV3Test extends AbstractZarrTest {
     assertEquals(3, omeAttrs.get("bioformats2raw.layout"));
 
     Array array = Array.open(store.resolve("0", "0"));
-    assertArrayEquals(new long[] {sizeT, sizeC, sizeZ, xySize, xySize},
-      array.metadata().shape);
+    if (compact) {
+      assertArrayEquals(new long[] {sizeZ, xySize, xySize},
+        array.metadata().shape);
+    }
+    else {
+      assertArrayEquals(new long[] {sizeT, sizeC, sizeZ, xySize, xySize},
+        array.metadata().shape);
+    }
 
     rootGroup = Group.open(store.resolve("0"));
     attrs = rootGroup.metadata().attributes;
