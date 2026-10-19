@@ -5,8 +5,7 @@ bioformats2raw converter
 ========================
 
 Java application to convert image file formats, including .mrxs,
-to an intermediate Zarr structure compatible with the OME-NGFF
-specification.
+to a Zarr structure compatible with the OME-NGFF specification.
 The [raw2ometiff](https://github.com/glencoesoftware/raw2ometiff)
 application can then be used to produce a
 Bio-Formats 5.9.x ("Faas") or Bio-Formats 6.x (true OME-TIFF) pyramid.
