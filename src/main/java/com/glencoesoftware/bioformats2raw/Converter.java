@@ -46,12 +46,17 @@ import loci.formats.ChannelSeparator;
 import loci.formats.ClassList;
 import loci.formats.FormatException;
 import loci.formats.FormatTools;
+import loci.formats.IAxisOrientationReader;
 import loci.formats.IFormatReader;
 import loci.formats.ImageReader;
 import loci.formats.Memoizer;
 import loci.formats.MinMaxCalculator;
 import loci.formats.MissingLibraryException;
 import loci.formats.Modulo;
+import loci.formats.Orientation;
+import loci.formats.OrientationTerm;
+import loci.formats.OrientationType;
+import loci.formats.ReaderWrapper;
 import loci.formats.in.DynamicMetadataOptions;
 import loci.formats.meta.IMetadata;
 import loci.formats.ome.OMEXMLMetadata;
@@ -3199,12 +3204,32 @@ public class Converter implements Callable<Integer> {
     }
     multiscale.put("datasets", datasets);
 
-    List<Map<String, String>> axes = new ArrayList<Map<String, String>>();
+    Orientation[] axisOrientations = null;
+    String orientationOrder = null;
+    try {
+      v = readers.take();
+      if (v instanceof ReaderWrapper) {
+        IFormatReader unwrapped = ((ReaderWrapper) v).unwrap();
+        if (unwrapped instanceof IAxisOrientationReader) {
+          axisOrientations =
+            ((IAxisOrientationReader) unwrapped).getAxisOrientations();
+          orientationOrder = unwrapped.getDimensionOrder().toLowerCase();
+        }
+      }
+    }
+    catch (FormatException e) {
+      LOGGER.error("Could not get axis orientations", e);
+    }
+    finally {
+      readers.put(v);
+    }
+
+    List<Map<String, Object>> axes = new ArrayList<Map<String, Object>>();
     for (int i=0; i<activeAxes.size(); i++) {
       String axis = String.valueOf(activeAxes.get(i).getType()).toLowerCase();
       String type = activeAxes.get(i).getDimensionType();
       Quantity scale = getScale(meta, series, axis);
-      Map<String, String> thisAxis = new HashMap<String, String>();
+      Map<String, Object> thisAxis = new HashMap<String, Object>();
       thisAxis.put("name", axis);
       if (type != null) {
         thisAxis.put("type", type);
@@ -3227,6 +3252,27 @@ public class Converter implements Callable<Integer> {
         }
         if (unitName != null) {
           thisAxis.put("unit", unitName);
+        }
+      }
+      if (getNGFFVersion().supportsAnatomicalOrientation() &&
+        axisOrientations != null && orientationOrder != null)
+      {
+        int orientationIndex = orientationOrder.indexOf(axis);
+        if (orientationIndex >= 0) {
+          Orientation axisOrientation = axisOrientations[orientationIndex];
+          Map<String, String> orientationMap = null;
+          if (axisOrientation != null) {
+            orientationMap = new HashMap<String, String>();
+            OrientationType orientType = axisOrientation.getOrientationType();
+            OrientationTerm orientTerm = axisOrientation.getOrientationTerm();
+            if (orientType != null) {
+              orientationMap.put("type", orientType.getDefinedType());
+            }
+            if (orientTerm != null) {
+              orientationMap.put("value", orientTerm.getDefinedTerm());
+            }
+          }
+          thisAxis.put("orientation", orientationMap);
         }
       }
       axes.add(thisAxis);
