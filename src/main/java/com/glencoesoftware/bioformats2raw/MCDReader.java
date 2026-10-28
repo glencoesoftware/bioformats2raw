@@ -287,10 +287,22 @@ public class MCDReader extends FormatReader {
       Acquisition acq = acquisitions.get(a);
       store.setImageName(acq.description, imageIndex);
 
-      Double px = acq.pixelSizeX != null ? acq.pixelSizeX : 1.0;
-      Double py = acq.pixelSizeY != null ? acq.pixelSizeY : 1.0;
-      store.setPixelsPhysicalSizeX(FormatTools.getPhysicalSizeX(px), imageIndex);
-      store.setPixelsPhysicalSizeY(FormatTools.getPhysicalSizeY(py), imageIndex);
+      if (acq.pixelSizeX == null) {
+        LOGGER.warn("Missing pixel size X definition, image #{}", imageIndex);
+      }
+      else {
+        store.setPixelsPhysicalSizeX(
+          FormatTools.getPhysicalSizeX(acq.pixelSizeX), imageIndex
+        );
+      }
+      if (acq.pixelSizeY == null) {
+        LOGGER.warn("Missing pixel size Y definition, image #{}", imageIndex);
+      }
+      else {
+        store.setPixelsPhysicalSizeY(
+          FormatTools.getPhysicalSizeY(acq.pixelSizeY), imageIndex
+        );
+      }
 
       for (int c=0; c<acq.channelIndexes.size(); c++) {
         int index = acq.channelIndexes.get(c);
