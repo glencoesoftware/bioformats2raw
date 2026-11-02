@@ -21,17 +21,17 @@ repositories {
     mavenLocal()
     mavenCentral()
     maven {
-        url = uri('https://artifacts.glencoesoftware.com/artifactory/ome.releases')
+        url = 'https://artifacts.glencoesoftware.com/artifactory/ome.releases'
     }
     maven {
-        url = uri('https://artifacts.glencoesoftware.com/artifactory/ome.external')
+        url = 'https://artifacts.glencoesoftware.com/artifactory/ome.external'
     }
     maven {
-        url = uri('https://artifacts.glencoesoftware.com/artifactory/scijava-thirdparty')
+        url = 'https://artifacts.glencoesoftware.com/artifactory/scijava-thirdparty'
     }
     maven {
         name = 'Unidata'
-        url = uri('https://artifacts.glencoesoftware.com/artifactory/unidata-releases')
+        url = 'https://artifacts.glencoesoftware.com/artifactory/unidata-releases'
     }
 }
 
@@ -133,7 +133,7 @@ publishing {
 
     repositories {
         maven {
-            url = uri('https://repo.glencoesoftware.com/repository/bioformats2raw2ometiff/')
+            url = 'https://repo.glencoesoftware.com/repository/bioformats2raw2ometiff/'
             credentials {
                username = project.properties.ArtifactoryUserName
                password = project.properties.ArtifactoryPassword
