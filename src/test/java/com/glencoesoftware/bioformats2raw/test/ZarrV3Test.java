@@ -259,6 +259,278 @@ public class ZarrV3Test extends AbstractZarrTest {
     }
   }
 
+  /**
+   * Test 3D downsampling.
+   */
+  @Test
+  public void test3DDownsampling() throws Exception {
+    int cubeSize = 1024;
+    int sizeC = 2;
+    int sizeT = 3;
+    input = fake("sizeX", String.valueOf(cubeSize),
+      "sizeY", String.valueOf(cubeSize),
+      "sizeC", String.valueOf(sizeC),
+      "sizeZ", String.valueOf(cubeSize),
+      "sizeT", String.valueOf(sizeT));
+    assertTool("--ngff-version", getNGFFVersion(), "--downsample-z");
+
+    Group rootGroup = Group.open(store.resolve(""));
+    Attributes attrs = rootGroup.metadata().attributes;
+    Attributes omeAttrs = attrs.getAttributes("ome");
+    assertEquals(getNGFFVersion(), omeAttrs.get("version"));
+    assertEquals(3, omeAttrs.get("bioformats2raw.layout"));
+
+    Array array = Array.open(store.resolve("0", "0"));
+    assertArrayEquals(new long[] {sizeT, sizeC, cubeSize, cubeSize, cubeSize},
+      array.metadata().shape);
+
+    rootGroup = Group.open(store.resolve("0"));
+    attrs = rootGroup.metadata().attributes;
+    omeAttrs = attrs.getAttributes("ome");
+    assertEquals(getNGFFVersion(), omeAttrs.get("version"));
+
+    List<Map<String, Object>> multiscales =
+      (List<Map<String, Object>>) omeAttrs.get("multiscales");
+    assertEquals(1, multiscales.size());
+    Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "image");
+
+    List<Map<String, Object>> datasets =
+      (List<Map<String, Object>>) multiscale.get("datasets");
+    assertTrue(datasets.size() > 0);
+
+    List<Map<String, Object>> axes = getAxes(multiscale);
+    checkAxes(axes, "TCZYX", null);
+
+    for (int r=0; r<datasets.size(); r++) {
+      Map<String, Object> dataset = datasets.get(r);
+
+      assertEquals(String.valueOf(r), dataset.get("path"));
+
+      List<Map<String, Object>> transforms =
+        (List<Map<String, Object>>) dataset.get("coordinateTransformations");
+      assertEquals(1, transforms.size());
+      Map<String, Object> scale = transforms.get(0);
+      assertEquals("scale", scale.get("type"));
+      List<Double> axisValues = (List<Double>) scale.get("scale");
+
+      assertEquals(5, axisValues.size());
+      double factor = Math.pow(2, r);
+      assertEquals(axisValues, Arrays.asList(new Double[] {
+        1.0, 1.0, factor, factor, factor}));
+    }
+  }
+
+  /**
+   * Test 3D downsampling where each input plane is a constant-value
+   * square centered, with a black border. The size of the center square
+   * is constant in the input, but the pixel value varies.
+   */
+  @Test
+  public void test3DDownsamplingSquares() throws Exception {
+    input = getTestFile("squares.ome.tiff");
+    assertTool("--ngff-version", getNGFFVersion(),
+      "--downsample-z", "--resolutions", "4");
+
+    Group rootGroup = Group.open(store.resolve(""));
+    Attributes attrs = rootGroup.metadata().attributes;
+    Attributes omeAttrs = attrs.getAttributes("ome");
+    assertEquals(getNGFFVersion(), omeAttrs.get("version"));
+    assertEquals(3, omeAttrs.get("bioformats2raw.layout"));
+
+    Array array = Array.open(store.resolve("0", "0"));
+    long[] expectedShape = new long[] {1, 1, 250, 256, 256};
+    assertArrayEquals(expectedShape, array.metadata().shape);
+
+    rootGroup = Group.open(store.resolve("0"));
+    attrs = rootGroup.metadata().attributes;
+    omeAttrs = attrs.getAttributes("ome");
+    assertEquals(getNGFFVersion(), omeAttrs.get("version"));
+
+    List<Map<String, Object>> multiscales =
+      (List<Map<String, Object>>) omeAttrs.get("multiscales");
+    assertEquals(1, multiscales.size());
+    Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "Series 0");
+
+    List<Map<String, Object>> datasets =
+      (List<Map<String, Object>>) multiscale.get("datasets");
+    assertTrue(datasets.size() > 0);
+
+    List<Map<String, Object>> axes = getAxes(multiscale);
+    checkAxes(axes, "TCZYX", null);
+
+    // plane indexes to check for each resolution
+    // this should include the first, last, and several middle planes
+    int[][] checkPlaneIndexes = new int[][] {
+      {0, 63, 124, 198, 249},
+      {0, 32, 63, 94, 124},
+      {0, 15, 30, 45, 61},
+      {0, 7, 15, 22, 30}
+    };
+    // expected center pixel value for each plane in checkPlaneIndexes
+    int[][] expectedPixels = new int[][] {
+      {128, 191, 252, 184, 133},
+      {129, 193, 254, 193, 133},
+      {131, 191, 251, 199, 135},
+      {135, 191, 251, 199, 135},
+    };
+
+    for (int r=0; r<datasets.size(); r++) {
+      Map<String, Object> dataset = datasets.get(r);
+
+      assertEquals(String.valueOf(r), dataset.get("path"));
+
+      List<Map<String, Object>> transforms =
+        (List<Map<String, Object>>) dataset.get("coordinateTransformations");
+      assertEquals(1, transforms.size());
+      Map<String, Object> scale = transforms.get(0);
+      assertEquals("scale", scale.get("type"));
+      List<Double> axisValues = (List<Double>) scale.get("scale");
+
+      assertEquals(5, axisValues.size());
+      double factor = Math.pow(2, r);
+      Double[] factors = new Double[] {1.0, 1.0, factor, factor, factor};
+      assertEquals(axisValues, Arrays.asList(factors));
+
+      array = Array.open(store.resolve("0", String.valueOf(r)));
+
+      long[] arrayShape = new long[axisValues.size()];
+      for (int v=0; v<arrayShape.length; v++) {
+        arrayShape[v] = (long) (expectedShape[v] / factors[v]);
+      }
+
+      assertArrayEquals(arrayShape, array.metadata().shape);
+
+      long[] shape = new long[] {1, 1, 1, 1, 1};
+      long[] offset = new long[5];
+      Arrays.fill(offset, 0);
+
+      for (int p=0; p<checkPlaneIndexes[r].length; p++) {
+        Arrays.fill(offset, 0);
+        offset[2] = checkPlaneIndexes[r][p];
+
+        String msg = "resolution " + r + ", z " + offset[2];
+        // check four corners are 0
+
+        ucar.ma2.Array topLeft = array.read(offset, shape);
+        assertEquals(topLeft.getByte(0), 0, msg);
+
+        offset[4] = arrayShape[4] - 1;
+        ucar.ma2.Array topRight = array.read(offset, shape);
+        assertEquals(topRight.getByte(0), 0, msg);
+
+        offset[3] = arrayShape[3] - 1;
+        ucar.ma2.Array bottomRight = array.read(offset, shape);
+        assertEquals(bottomRight.getByte(0), 0, msg);
+
+        offset[4] = 0;
+        ucar.ma2.Array bottomLeft = array.read(offset, shape);
+        assertEquals(bottomLeft.getByte(0), 0, msg);
+
+        // check center pixel is expected non-zero value
+        offset[3] = arrayShape[3] / 2;
+        offset[4] = arrayShape[4] / 2;
+        ucar.ma2.Array center = array.read(offset, shape);
+        assertEquals(center.getByte(0) & 0xff, expectedPixels[r][p], msg);
+      }
+    }
+  }
+
+  static Stream<Arguments> isCompact() {
+    return Stream.of(
+      Arguments.of(true),
+      Arguments.of(false)
+    );
+  }
+
+  /**
+   * Test 3D downsampling with a smaller Z axis, with and without compaction.
+   *
+   * @param compact true if axes with length 1 should be removed
+   */
+  @ParameterizedTest
+  @MethodSource("isCompact")
+  public void test3DDownsamplingShortStack(boolean compact) throws Exception {
+    int xySize = 8000;
+    int sizeZ = 4;
+    int sizeC = 1;
+    int sizeT = 1;
+    input = fake("sizeX", String.valueOf(xySize),
+      "sizeY", String.valueOf(xySize),
+      "sizeC", String.valueOf(sizeC),
+      "sizeZ", String.valueOf(sizeZ),
+      "sizeT", String.valueOf(sizeT));
+    if (compact) {
+      assertTool("--ngff-version", getNGFFVersion(), "--downsample-z",
+        "--compact");
+    }
+    else {
+      assertTool("--ngff-version", getNGFFVersion(), "--downsample-z");
+    }
+
+    Group rootGroup = Group.open(store.resolve(""));
+    Attributes attrs = rootGroup.metadata().attributes;
+    Attributes omeAttrs = attrs.getAttributes("ome");
+    assertEquals(getNGFFVersion(), omeAttrs.get("version"));
+    assertEquals(3, omeAttrs.get("bioformats2raw.layout"));
+
+    Array array = Array.open(store.resolve("0", "0"));
+    if (compact) {
+      assertArrayEquals(new long[] {sizeZ, xySize, xySize},
+        array.metadata().shape);
+    }
+    else {
+      assertArrayEquals(new long[] {sizeT, sizeC, sizeZ, xySize, xySize},
+        array.metadata().shape);
+    }
+
+    rootGroup = Group.open(store.resolve("0"));
+    attrs = rootGroup.metadata().attributes;
+    omeAttrs = attrs.getAttributes("ome");
+    assertEquals(getNGFFVersion(), omeAttrs.get("version"));
+
+    List<Map<String, Object>> multiscales =
+      (List<Map<String, Object>>) omeAttrs.get("multiscales");
+    assertEquals(1, multiscales.size());
+    Map<String, Object> multiscale = multiscales.get(0);
+    checkMultiscale(multiscale, "image");
+
+    List<Map<String, Object>> datasets =
+      (List<Map<String, Object>>) multiscale.get("datasets");
+    // make sure enough resolutions were generated to test
+    // what happens when trying to scale SizeZ smaller than 1
+    assertTrue(datasets.size() > 2);
+
+    List<Map<String, Object>> axes = getAxes(multiscale);
+    checkAxes(axes, compact ? "ZYX" : "TCZYX", null);
+
+    for (int r=0; r<datasets.size(); r++) {
+      Map<String, Object> dataset = datasets.get(r);
+
+      assertEquals(String.valueOf(r), dataset.get("path"));
+
+      List<Map<String, Object>> transforms =
+        (List<Map<String, Object>>) dataset.get("coordinateTransformations");
+      assertEquals(1, transforms.size());
+      Map<String, Object> scale = transforms.get(0);
+      assertEquals("scale", scale.get("type"));
+      List<Double> axisValues = (List<Double>) scale.get("scale");
+
+      assertEquals(compact ? 3 : 5, axisValues.size());
+      double factor = Math.pow(2, r);
+      double zFactor = r <= 1 ? factor : sizeZ;
+      if (compact) {
+        assertEquals(axisValues, Arrays.asList(new Double[] {
+          zFactor, factor, factor}));
+      }
+      else {
+        assertEquals(axisValues, Arrays.asList(new Double[] {
+          1.0, 1.0, zFactor, factor, factor}));
+      }
+    }
+  }
+
   static Stream<Arguments> getShardSizes() {
     return Stream.of(
       Arguments.of(512, 512, 1),
