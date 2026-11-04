@@ -16,15 +16,11 @@
          </WellSample>
       </Well>
       <PlateAcquisition EndTime="2006-05-04T18:13:51" ID="PlateAcquisition:0" Name="PlateAcquisition Name 0" StartTime="2006-05-04T18:13:51">
-         <Description>
-            PlateAcquisition 0 of 1
-         </Description>
+         <Description>PlateAcquisition 0 of 2</Description>
          <WellSampleRef ID="WellSample:0_0_0_0_0_0"/>
       </PlateAcquisition>
       <PlateAcquisition EndTime="2006-05-04T19:13:51" ID="PlateAcquisition:1" Name="PlateAcquisition Name 1" StartTime="2006-05-04T19:13:51">
-         <Description>
-            PlateAcquisition 0 of 1
-         </Description>
+         <Description>PlateAcquisition 1 of 2</Description>
          <WellSampleRef ID="WellSample:0_0_0_0_0_1"/>
       </PlateAcquisition>
    </Plate>

@@ -1295,6 +1295,18 @@ public class ZarrTest extends AbstractZarrTest {
       }
     }
 
+    // check acquisition metadata
+    List<Map<String, Object>> acquisitions =
+      (List<Map<String, Object>>) plate.get("acquisitions");
+    assertEquals(1, acquisitions.size());
+    assertEquals(0, acquisitions.get(0).get("id"));
+    assertEquals("PlateAcquisition Name 0", acquisitions.get(0).get("name"));
+    assertEquals("PlateAcquisition 0 of 1",
+      acquisitions.get(0).get("description"));
+    assertEquals(1146766431, acquisitions.get(0).get("starttime"));
+    assertEquals(1146766431, acquisitions.get(0).get("endtime"));
+    assertFalse(acquisitions.get(0).containsKey("maximumfieldcount"));
+
     // check OME metadata
     OME ome = getOMEMetadata();
     assertEquals(1, ome.sizeOfPlateList());
@@ -1559,6 +1571,12 @@ public class ZarrTest extends AbstractZarrTest {
 
     assertEquals(1, acquisitions.size());
     assertEquals(0, acquisitions.get(0).get("id"));
+    assertEquals("PlateAcquisition Name 0", acquisitions.get(0).get("name"));
+    assertEquals("PlateAcquisition 0 of 1",
+      acquisitions.get(0).get("description"));
+    assertEquals(1146766431, acquisitions.get(0).get("starttime"));
+    assertEquals(1146766431, acquisitions.get(0).get("endtime"));
+    assertEquals(1, acquisitions.get(0).get("maximumfieldcount"));
 
     assertEquals(rows.size(), rowCount);
     assertEquals(columns.size(), colCount);
@@ -1623,6 +1641,12 @@ public class ZarrTest extends AbstractZarrTest {
 
     assertEquals(1, acquisitions.size());
     assertEquals(0, acquisitions.get(0).get("id"));
+    assertEquals("PlateAcquisition Name 0", acquisitions.get(0).get("name"));
+    assertEquals("PlateAcquisition 0 of 1",
+      acquisitions.get(0).get("description"));
+    assertEquals(1146766431, acquisitions.get(0).get("starttime"));
+    assertEquals(1146766431, acquisitions.get(0).get("endtime"));
+    assertFalse(acquisitions.get(0).containsKey("maximumfieldcount"));
 
     assertEquals(rows.size(), rowCount);
     assertEquals(columns.size(), colCount);
@@ -1683,6 +1707,12 @@ public class ZarrTest extends AbstractZarrTest {
 
     assertEquals(1, acquisitions.size());
     assertEquals(0, acquisitions.get(0).get("id"));
+    assertEquals("PlateAcquisition Name 0", acquisitions.get(0).get("name"));
+    assertEquals("PlateAcquisition 0 of 1",
+      acquisitions.get(0).get("description"));
+    assertEquals(1146766431, acquisitions.get(0).get("starttime"));
+    assertEquals(1146766431, acquisitions.get(0).get("endtime"));
+    assertFalse(acquisitions.get(0).containsKey("maximumfieldcount"));
 
     assertEquals(rows.size(), rowCount);
     assertEquals(columns.size(), colCount);
@@ -1740,7 +1770,19 @@ public class ZarrTest extends AbstractZarrTest {
 
     assertEquals(2, acquisitions.size());
     assertEquals(0, acquisitions.get(0).get("id"));
+    assertEquals("PlateAcquisition Name 0", acquisitions.get(0).get("name"));
+    assertEquals("PlateAcquisition 0 of 2",
+      acquisitions.get(0).get("description"));
+    assertEquals(1146766431, acquisitions.get(0).get("starttime"));
+    assertEquals(1146766431, acquisitions.get(0).get("endtime"));
+    assertFalse(acquisitions.get(0).containsKey("maximumfieldcount"));
     assertEquals(1, acquisitions.get(1).get("id"));
+    assertEquals("PlateAcquisition Name 1", acquisitions.get(1).get("name"));
+    assertEquals("PlateAcquisition 1 of 2",
+      acquisitions.get(1).get("description"));
+    assertEquals(1146770031, acquisitions.get(1).get("starttime"));
+    assertEquals(1146770031, acquisitions.get(1).get("endtime"));
+    assertFalse(acquisitions.get(1).containsKey("maximumfieldcount"));
 
     assertEquals(rows.size(), rowCount);
     assertEquals(columns.size(), colCount);
