@@ -5,8 +5,7 @@ bioformats2raw converter
 ========================
 
 Java application to convert image file formats, including .mrxs,
-to an intermediate Zarr structure compatible with the OME-NGFF
-specification.
+to a Zarr structure compatible with the OME-NGFF specification.
 The [raw2ometiff](https://github.com/glencoesoftware/raw2ometiff)
 application can then be used to produce a
 Bio-Formats 5.9.x ("Faas") or Bio-Formats 6.x (true OME-TIFF) pyramid.
@@ -51,11 +50,9 @@ For additional information, please see:
 Installation
 ============
 
-1. Download and unpack a release artifact:
+Download and unpack a release artifact:
 
     https://github.com/glencoesoftware/bioformats2raw/releases
-
-2. OR, install via `conda` as described at [conda-bioformats2raw](https://github.com/ome/conda-bioformats2raw).
 
 Development Installation
 ========================
@@ -413,12 +410,22 @@ Downsampling type
 -----------------
 
 By default, pyramid resolutions are generated using a [very simple downsampling algorithm](https://github.com/ome/ome-common-java/blob/master/src/main/java/loci/common/image/SimpleImageScaler.java).
-For some input data types, this may not be ideal. The `--downsample-type` option can be used to specify an alternative algorithm.
+For some input data types, this may not be ideal. The `--downsample-type` option can be used to specify an alternative algorithm for downsampling along the X and Y axes.
 Supported values are `SIMPLE` (default), `GAUSSIAN`, `AREA`, `LINEAR`, `CUBIC`, and `LANCZOS`, as declared in the [Downsampling enum](https://github.com/glencoesoftware/bioformats2raw/blob/master/src/main/java/com/glencoesoftware/bioformats2raw/Downsampling.java).
 No additional downsampling algorithms are directly implemented in bioformats2raw; OpenCV is used to for any value of `--downsample-type` other than the default.
 
 If the minimum system requirements (see above) are not met, or the input data type is int8 or int32 (see https://github.com/glencoesoftware/bioformats2raw/pull/199),
 then any value of `--downsample-type` other than the default is expected to throw an exception.
+
+Note `--downsample-type` does not currently impact Z downsampling (if enabled).
+
+3D downsampling
+---------------
+
+By default, only the X and Y axes are downsampled when calculating pyramid resolutions. The Z, C, and T axis dimensions will remain constant.
+The `--downsample-z` option is used to enable downsampling along the Z axis, in addition to X and Y. The scaling factor will be 2, and
+the Z downsampling uses a median value of the planes being downsampled. The Z downsampling algorithm is currently fixed, and not impacted
+by the use of `--downsample-type`.
 
 Converting an existing pyramid
 ------------------------------
@@ -455,6 +462,11 @@ it is very important to include the entire corresponding directory when transfer
 
 The `mirax.use_metadata_dimensions` reader option can be used change how XY dimensions are calculated.
 By default, this option is `true`, but setting it to `false` may be helpful if the image size appears incorrect.
+
+`MiraxReader` keeps a cache of decompressed tiles as they are read from the input data. By default, at most 64 tiles
+will be stored in the cache. The cache size may be changed using the `--max-cached-tiles n` option, where `n` is the tile count.
+Increasing this option may improve performance if a large amount of memory is available, as it can reduce both the number of file reads
+and the number of times decompression is performed.
 
 BioTekReader
 ------------

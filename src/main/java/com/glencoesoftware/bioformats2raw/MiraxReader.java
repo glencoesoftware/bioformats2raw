@@ -284,10 +284,11 @@ public class MiraxReader extends FormatReader {
         TilePointer thisOffset = lookupTile(index, col, row, no / MAX_CHANNELS);
         if (thisOffset != null) {
           int channel = no % MAX_CHANNELS;
-          // 2 channel JPEG data needs to have the channel index inverted
+          // 2 channel JPEG or PNG data needs to have the channel index inverted
           // 2 channel JPEG-2000 data should not have the channel index inverted
           if (fluorescence &&
-            (getSizeC() != 2 || format.get(index).equals("JPEG")))
+            (getSizeC() != 2 || format.get(index).equals("JPEG") ||
+            format.get(index).equals("PNG")))
           {
             channel = MAX_CHANNELS - channel - 1;
           }
@@ -330,7 +331,12 @@ public class MiraxReader extends FormatReader {
                 System.arraycopy(tileBuf, src, buf, dest, copy);
               }
             }
-            tileCache.put(thisOffset, tileBuf);
+            // for PNG, only one channel is read at a time,
+            // instead of decompressing all channels and then unpacking
+            // this means tileBuf does not represent the entirety of thisOffset
+            if (!format.get(index).equals("PNG")) {
+              tileCache.put(thisOffset, tileBuf);
+            }
           }
           else {
             LOGGER.warn("null tile buffer for row={}, col={}", row, col);
@@ -1075,6 +1081,8 @@ public class MiraxReader extends FormatReader {
         String blue = channelTable.get("COLOR_B");
         String exposure = channelTable.get("EXPOSURE_TIME");
         String gain = channelTable.get("DIGITALGAIN");
+        String excitation = channelTable.get("EXCITATION_WAVELENGTH");
+        String emission = channelTable.get("EMISSION_WAVELENGTH");
         boolean useRed =
           Boolean.valueOf(channelTable.get("USE_RED_CHANNEL").toLowerCase());
         boolean useGreen =
@@ -1090,6 +1098,31 @@ public class MiraxReader extends FormatReader {
 
         if (name != null && !name.equals("Default")) {
           store.setChannelName(name, 0, c);
+        }
+        if (excitation != null) {
+          try {
+            double wavelength = Double.parseDouble(excitation);
+            if (wavelength > 0) {
+              store.setChannelExcitationWavelength(
+                FormatTools.getExcitationWavelength(wavelength), 0, c);
+            }
+          }
+          catch (NumberFormatException e) {
+            LOGGER.debug(
+              "Could not parse excitation wavelength {}", excitation);
+          }
+        }
+        if (emission != null) {
+          try {
+            double wavelength = Double.parseDouble(emission);
+            if (wavelength > 0) {
+              store.setChannelEmissionWavelength(
+                FormatTools.getEmissionWavelength(wavelength), 0, c);
+            }
+          }
+          catch (NumberFormatException e) {
+            LOGGER.debug("Could not parse emission wavelength {}", emission);
+          }
         }
         if (red != null && green != null && blue != null) {
           int r = 0;

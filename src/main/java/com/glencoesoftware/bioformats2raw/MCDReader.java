@@ -287,6 +287,23 @@ public class MCDReader extends FormatReader {
       Acquisition acq = acquisitions.get(a);
       store.setImageName(acq.description, imageIndex);
 
+      if (acq.pixelSizeX == null) {
+        LOGGER.warn("Missing pixel size X definition, image #{}", imageIndex);
+      }
+      else {
+        store.setPixelsPhysicalSizeX(
+          FormatTools.getPhysicalSizeX(acq.pixelSizeX), imageIndex
+        );
+      }
+      if (acq.pixelSizeY == null) {
+        LOGGER.warn("Missing pixel size Y definition, image #{}", imageIndex);
+      }
+      else {
+        store.setPixelsPhysicalSizeY(
+          FormatTools.getPhysicalSizeY(acq.pixelSizeY), imageIndex
+        );
+      }
+
       for (int c=0; c<acq.channelIndexes.size(); c++) {
         int index = acq.channelIndexes.get(c);
         if (index < 0) {
@@ -467,6 +484,12 @@ public class MCDReader extends FormatReader {
         else if ("ValueBytes".equals(currentElement)) {
           currentAcq.bpp = Integer.parseInt(value);
         }
+        else if ("AblationDistanceBetweenShotsX".equals(currentElement)) {
+          currentAcq.pixelSizeX = Double.parseDouble(value);
+        }
+        else if ("AblationDistanceBetweenShotsY".equals(currentElement)) {
+          currentAcq.pixelSizeY = Double.parseDouble(value);
+        }
       }
       else if (currentChannel != null) {
         if ("ID".equals(currentElement)) {
@@ -564,6 +587,10 @@ public class MCDReader extends FormatReader {
     public long end;
     public int sizeX;
     public int sizeY;
+
+    /** Shot spacing in micrometres; null if not present in the schema. */
+    public Double pixelSizeX = null;
+    public Double pixelSizeY = null;
 
     /** Pixel type; only "Float" recognized so far. */
     public String dataType;
