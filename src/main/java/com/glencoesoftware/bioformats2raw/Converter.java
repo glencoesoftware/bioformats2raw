@@ -1752,7 +1752,9 @@ public class Converter implements Callable<Integer> {
   private void initializeStore() throws IOException, ZarrException {
     if (store == null) {
       Path rootPath = getRootPath();
-      if (rootPath.toString().endsWith(ZIP_EXTENSION) && getV3()) {
+      if (getNGFFVersion().supportsExtraDimensions() &&
+        rootPath.toString().endsWith(ZIP_EXTENSION))
+      {
         store = new BufferedZipStore(rootPath, true);
       }
       else {

@@ -63,6 +63,13 @@ public enum SupportedVersions {
     return supportedRFCs != null && supportedRFCs.contains(5);
   }
 
+  /**
+   * @return true if zipped store (.ozx) (RFC-9) is supported
+   */
+  public boolean supportsZipStore() {
+    return supportedRFCs != null && supportedRFCs.contains(9);
+  }
+
   @Override
   public String toString() {
     return value;
