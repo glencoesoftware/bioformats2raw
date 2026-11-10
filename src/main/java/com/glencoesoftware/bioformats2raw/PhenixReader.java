@@ -414,7 +414,13 @@ public class PhenixReader extends FormatReader {
   }
 
   private Timestamp getTimestamp(String dateTime) {
+    if (dateTime == null) {
+      return null;
+    }
     String standardizedDateTime = DateTools.formatDate(dateTime, DATE_FORMATS);
+    if (standardizedDateTime == null) {
+      return null;
+    }
     try {
       return new Timestamp(standardizedDateTime);
     }
