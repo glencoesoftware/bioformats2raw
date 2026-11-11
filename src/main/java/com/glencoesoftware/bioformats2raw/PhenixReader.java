@@ -418,10 +418,10 @@ public class PhenixReader extends FormatReader {
       return null;
     }
     String standardizedDateTime = DateTools.formatDate(dateTime, DATE_FORMATS);
-    if (standardizedDateTime == null) {
-      return null;
-    }
     try {
+      if (standardizedDateTime == null) {
+        return new Timestamp(dateTime.replace(' ', 'T'));
+      }
       return new Timestamp(standardizedDateTime);
     }
     catch (IllegalArgumentException e) {
